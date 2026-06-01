@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Honua.Collect.Core</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Collect owns the field-collection PRODUCT surface. It consumes the
+    platform-neutral Honua SDK and the lower-level mobile primitives as Apache
+    NuGet packages (never vendored). The mobile field-collection adapters
+    (today Honua.Mobile.Field) are being consolidated INTO this repo, so that
+    package is intentionally NOT referenced here — see ROADMAP.md.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
+    <PackageReference Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
+  </ItemGroup>
+
+</Project>

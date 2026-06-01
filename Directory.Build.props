@@ -14,6 +14,7 @@
       of contracts. Bump in lockstep with honua-mobile's Directory.Build.props.
     -->
     <HonuaSdkDotNetTrainVersion>1.0.0</HonuaSdkDotNetTrainVersion>
+    <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>10.0.70</MauiVersion>
   </PropertyGroup>
 </Project>
