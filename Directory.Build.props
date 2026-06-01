@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      Honua Collect consumes the Honua platform as versioned NuGet packages from
+      the private github-honua feed (see NuGet.config):
+        - Honua.Sdk.*     platform-neutral SDK   (honua-io/honua-sdk-dotnet, Apache-2.0)
+        - Honua.Mobile.*  mobile SDK foundation  (honua-io/honua-mobile,     Apache-2.0)
+
+      This repository (the Honua Collect product) is licensed under the Elastic
+      License 2.0 — see LICENSE. The Apache-licensed SDK layers below are NOT
+      relicensed; they remain Apache-2.0 and are consumed, never vendored.
+
+      Pin the SDK train here so the whole product builds against one coherent set
+      of contracts. Bump in lockstep with honua-mobile's Directory.Build.props.
+    -->
+    <HonuaSdkDotNetTrainVersion>1.0.0</HonuaSdkDotNetTrainVersion>
+    <MauiVersion>10.0.70</MauiVersion>
+  </PropertyGroup>
+</Project>

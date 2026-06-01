@@ -1,0 +1,28 @@
+# .NET / MSBuild
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+
+# MAUI / mobile build outputs
+*.binlog
+artifacts/
+publish/
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# Node (web wrappers, if any)
+node_modules/
+
+# Local NuGet credentials produced by validation scripts
+NuGet.local.config
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
