@@ -22,9 +22,10 @@ testable without a device and unblocks every widget and screen above it:
 
 - **`Field/Forms/FormSession`** — the stateful form runtime: live cascading
   visibility, live calculated fields, live per-field validation, submit
-  readiness + SDK workflow transition, per-field media capture, and
-  default-from-previous seeding. Backs **C1–C6, F3, F5**, and is the host every
-  capture widget binds to.
+  readiness + SDK workflow transition, per-field media capture,
+  default-from-previous seeding, and **repeatable sections** (`RepeatGroup` /
+  `RepeatInstance` rows with per-row validation and record round-trip). Backs
+  **C1–C6, F3, F5** plus repeats, and is the host every capture widget binds to.
 - **`Records/`** — `RecordSyncState` (transport state, orthogonal to the SDK
   review workflow), `RecordBox` Drafts/Outbox/Sent classification,
   `CollectRecordEntry` upload lifecycle, and `SyncSummary`. Backs **S3, S4**.
