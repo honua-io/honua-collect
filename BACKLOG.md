@@ -112,11 +112,11 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
 | E1 | SSO (OIDC/SAML) | ⚠️ | Enterprise | collect |
-| E2 | Role enforcement on device | ⚠️ | Enterprise | collect |
-| E3 | Audit logging | ❌ | Enterprise | collect |
+| E2 | Role enforcement on device | 🧱 | Enterprise | collect |
+| E3 | Audit logging | 🧱 | Enterprise | collect |
 | E4 | MDM / white-labeling / app config | ❌ | Enterprise | collect |
 | E5 | Assignments / inbox & task dispatch | 🧱 | Pro | collect |
-| E6 | Push notifications (new assignment, sync done) | ❌ | Pro | collect |
+| E6 | Push notifications (new assignment, sync done) | 🧱 | Pro | collect |
 
 ## 8. Sensors / IoT (honua-mobile IoT module is interface-only today)
 
