@@ -103,9 +103,9 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| A1 | Voice-to-fields | 🧩 | Pro | collect |
-| A2 | Photo-to-fields (object/attribute extraction) | 🧩 | Pro | collect |
-| A3 | Media redaction / face-blur execution | 🧩 | Pro | collect |
+| A1 | Voice-to-fields | 🧱 | Pro | collect |
+| A2 | Photo-to-fields (object/attribute extraction) | 🧱 | Pro | collect |
+| A3 | Media redaction / face-blur execution | 🧱 | Pro | collect |
 
 ## 7. Enterprise auth & admin (Enterprise)
 
