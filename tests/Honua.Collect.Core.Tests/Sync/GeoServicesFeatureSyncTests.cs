@@ -112,9 +112,93 @@ public class GeoServicesFeatureSyncTests
             """{"updateResults":[{"objectId":99,"success":false,"error":{"code":1000,"description":"Feature not found."}}]}""");
         using var http = new HttpClient(handler);
 
-        var result = await new GeoServicesFeatureSync(http).UpdateAsync(99, Record(), new GeoServicesTarget("http://s", "svc", 9));
+        var result = await new GeoServicesFeatureSync(http, FeatureSyncRetryPolicy.None)
+            .UpdateAsync(99, Record(), new GeoServicesTarget("http://s", "svc", 9));
 
         Assert.False(result.Success);
         Assert.Equal("Feature not found.", result.Error);
+    }
+
+    private sealed class SequencedHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var (status, body) = responses[Math.Min(Calls, responses.Length - 1)];
+            Calls++;
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+        }
+    }
+
+    private static readonly FeatureSyncRetryPolicy FastRetry = new(MaxAttempts: 4, BaseDelay: TimeSpan.Zero);
+    private static readonly GeoServicesTarget T = new("http://s", "svc", 9);
+    // Mirrors the real server: code 1000 is reused for transient "Update failed."
+    // (retryable) and permanent "Feature not found." — so retryability is decided
+    // from the message, not the code.
+    private const string TransientFail = """{"updateResults":[{"objectId":9,"success":false,"error":{"code":1000,"description":"Update failed."}}]}""";
+    private const string OkUpdate = """{"updateResults":[{"objectId":9,"success":true}]}""";
+
+    [Fact]
+    public async Task Retries_transient_failure_then_succeeds()
+    {
+        var handler = new SequencedHandler((HttpStatusCode.OK, TransientFail), (HttpStatusCode.OK, TransientFail), (HttpStatusCode.OK, OkUpdate));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).UpdateAsync(9, Record(), T);
+
+        Assert.True(result.Success);
+        Assert.Equal(3, result.Attempts);
+        Assert.Equal(3, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Retries_transient_http_5xx()
+    {
+        var handler = new SequencedHandler((HttpStatusCode.InternalServerError, "boom"), (HttpStatusCode.OK, OkUpdate));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).UpdateAsync(9, Record(), T);
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Does_not_retry_permanent_not_found()
+    {
+        var notFound = """{"updateResults":[{"objectId":9,"success":false,"error":{"code":1000,"description":"Feature not found."}}]}""";
+        var handler = new SequencedHandler((HttpStatusCode.OK, notFound));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).UpdateAsync(9, Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Equal(1, handler.Calls); // permanent failure not retried
+    }
+
+    [Fact]
+    public async Task Does_not_retry_auth_failure_4xx()
+    {
+        var handler = new SequencedHandler((HttpStatusCode.Unauthorized, """{"error":{"code":401,"message":"unauthorized"}}"""));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).SubmitAsync(Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Equal(1, handler.Calls); // 401 not retried
+    }
+
+    [Fact]
+    public async Task Gives_up_after_max_attempts_on_persistent_transient_failure()
+    {
+        var handler = new SequencedHandler((HttpStatusCode.OK, TransientFail));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).UpdateAsync(9, Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Equal(4, result.Attempts);
+        Assert.Equal(4, handler.Calls);
     }
 }

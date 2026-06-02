@@ -53,16 +53,17 @@ live server:
 - **submit without credentials** — fails gracefully and writes nothing;
 - **concurrent adds (×12)** — all persist with distinct object ids (no id
   collision or lost write);
-- **concurrent updates to the same feature (×10)** — the server resolves the
-  write collision safely: at least one write lands, every losing write is
-  surfaced as a failure (never silently dropped), and exactly one consistent row
-  remains;
+- **concurrent updates to the same feature (×10)** — transient write contention
+  is retried with backoff, so **every** submission succeeds (no spurious
+  failures) and exactly one consistent row remains;
 - **duplicate submissions** — create two distinct rows (the Feature Server is not
   a dedup authority; client-side `DuplicateDetector` owns suppression).
 
-Two findings surfaced while writing these and are encoded in the assertions:
-concurrent same-row updates are conflict-rejected (not last-write-wins-all), and
-integer attributes stored in the shared `features` JSONB column round-trip as
-strings.
+Findings the suite surfaced (and the fix): concurrent same-row updates fail
+transiently under contention — the server reuses error code 1000 for both that
+and "feature not found", so `GeoServicesFeatureSync` now retries with backoff,
+classifying permanence by message; contended submissions all succeed. Separately,
+integer attributes in the shared `features` JSONB column round-trip as strings
+(asserted tolerantly; a server-side storage-mapping item).
 
 Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.

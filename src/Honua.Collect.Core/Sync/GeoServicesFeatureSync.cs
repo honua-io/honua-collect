@@ -19,7 +19,41 @@ public sealed record GeoServicesTarget(string BaseUrl, string ServiceId, int Lay
 /// <param name="Success">Whether the edit was applied.</param>
 /// <param name="ObjectId">Server-assigned object id, when successful.</param>
 /// <param name="Error">Error message, when not successful.</param>
-public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Error);
+/// <param name="ErrorCode">Server error code, when not successful.</param>
+/// <param name="Attempts">Number of attempts made (including retries).</param>
+public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Error, int? ErrorCode = null, int Attempts = 1);
+
+/// <summary>
+/// Controls automatic retry of transient submission failures (server-side write
+/// contention on a feature, HTTP 5xx/429/408, transient network errors). Field
+/// submissions are concurrent and contend on shared rows, so a single attempt
+/// can fail transiently; retrying with backoff lets the submission succeed
+/// instead of surfacing a spurious error to the user. Permanent failures
+/// (feature-not-found, auth, validation) are never retried.
+/// </summary>
+/// <param name="MaxAttempts">Total attempts, including the first. Defaults to 4.</param>
+/// <param name="BaseDelay">Base backoff delay; grows exponentially with jitter.</param>
+public sealed record FeatureSyncRetryPolicy(int MaxAttempts = 4, TimeSpan BaseDelay = default)
+{
+    /// <summary>The effective base delay (defaults to 150ms when unset).</summary>
+    public TimeSpan EffectiveBaseDelay => BaseDelay == default ? TimeSpan.FromMilliseconds(150) : BaseDelay;
+
+    /// <summary>The default policy (4 attempts, 150ms base backoff).</summary>
+    public static FeatureSyncRetryPolicy Default { get; } = new();
+
+    /// <summary>A policy that never retries (single attempt).</summary>
+    public static FeatureSyncRetryPolicy None { get; } = new(MaxAttempts: 1);
+
+    /// <summary>
+    /// Substrings (case-insensitive) in a server error message that mark a
+    /// failure as permanent. The GeoServices error <em>code</em> is unreliable —
+    /// the server reuses code 1000 for both "feature not found" (permanent) and
+    /// "update failed" (transient write contention) — so retryability is decided
+    /// from the message instead.
+    /// </summary>
+    internal static readonly string[] PermanentMessagePatterns =
+        ["not found", "does not exist", "invalid", "unauthorized", "forbidden", "permission", "not allowed", "not supported"];
+}
 
 /// <summary>
 /// Submits a captured <see cref="FieldRecord"/> to a Honua/ArcGIS GeoServices
@@ -28,16 +62,22 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
 /// feature attributes and <see cref="FieldRecord.Location"/> becomes the point
 /// geometry. The <see cref="HttpClient"/> is injected (the host configures the
 /// base address, the <c>X-API-Key</c>/token auth header, and the platform
-/// handler), so this is portable and unit-testable.
+/// handler), so this is portable and unit-testable. Transient failures are
+/// retried per the <see cref="FeatureSyncRetryPolicy"/>.
 /// </summary>
 public sealed class GeoServicesFeatureSync
 {
     private readonly HttpClient _http;
+    private readonly FeatureSyncRetryPolicy _retry;
 
     /// <summary>Creates the sync client over a configured HTTP client.</summary>
     /// <param name="http">HTTP client (base address/auth headers set by the host).</param>
-    public GeoServicesFeatureSync(HttpClient http)
-        => _http = http ?? throw new ArgumentNullException(nameof(http));
+    /// <param name="retryPolicy">Retry policy; defaults to <see cref="FeatureSyncRetryPolicy.Default"/>.</param>
+    public GeoServicesFeatureSync(HttpClient http, FeatureSyncRetryPolicy? retryPolicy = null)
+    {
+        _http = http ?? throw new ArgumentNullException(nameof(http));
+        _retry = retryPolicy ?? FeatureSyncRetryPolicy.Default;
+    }
 
     /// <summary>Submits a record as an <c>add</c> edit to the target layer.</summary>
     /// <param name="record">The record to submit.</param>
@@ -93,6 +133,43 @@ public sealed class GeoServicesFeatureSync
         string resultKey,
         CancellationToken cancellationToken)
     {
+        FeatureSyncResult result = new(false, null, "No attempt was made.");
+
+        for (var attempt = 1; attempt <= Math.Max(1, _retry.MaxAttempts); attempt++)
+        {
+            var isLast = attempt >= _retry.MaxAttempts;
+            try
+            {
+                result = (await AttemptAsync(target, editKey, editJson, resultKey, cancellationToken).ConfigureAwait(false))
+                    with { Attempts = attempt };
+
+                if (result.Success || isLast || !IsRetryable(result))
+                {
+                    return result;
+                }
+            }
+            catch (HttpRequestException ex) when (!isLast)
+            {
+                result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt);
+            }
+            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested && !isLast)
+            {
+                result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt); // request timeout
+            }
+
+            await Task.Delay(BackoffDelay(attempt), cancellationToken).ConfigureAwait(false);
+        }
+
+        return result;
+    }
+
+    private async Task<FeatureSyncResult> AttemptAsync(
+        GeoServicesTarget target,
+        string editKey,
+        string editJson,
+        string resultKey,
+        CancellationToken cancellationToken)
+    {
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["f"] = "json",
@@ -105,10 +182,39 @@ public sealed class GeoServicesFeatureSync
 
         if (!response.IsSuccessStatusCode)
         {
-            return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}");
+            // 5xx/429/408 are transient; mark them retryable via the HTTP status code.
+            return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
         }
 
         return ParseResult(body, resultKey);
+    }
+
+    private static bool IsRetryable(FeatureSyncResult result)
+    {
+        // HTTP-level failures carry their status as the code: only 408/429/5xx
+        // are transient; other 4xx (auth/validation) are permanent.
+        if (result.ErrorCode is >= 400 and < 600 and var http)
+        {
+            return http is 408 or 429 or (>= 500 and <= 599);
+        }
+
+        // Application/per-edit failures: permanent only when the message says so
+        // (e.g. "feature not found"); otherwise treat as transient contention.
+        var message = result.Error ?? string.Empty;
+        return !FeatureSyncRetryPolicy.PermanentMessagePatterns.Any(
+            p => message.Contains(p, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private TimeSpan BackoffDelay(int attempt)
+    {
+        if (_retry.EffectiveBaseDelay <= TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        // Exponential backoff with full jitter.
+        var max = _retry.EffectiveBaseDelay.TotalMilliseconds * Math.Pow(2, attempt - 1);
+        return TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * max);
     }
 
     /// <summary>Serializes a record to the GeoServices <c>adds</c> array JSON.</summary>
@@ -195,7 +301,8 @@ public sealed class GeoServicesFeatureSync
             if (root.TryGetProperty("error", out var error))
             {
                 var msg = error.TryGetProperty("message", out var m) ? m.GetString() : "Server error";
-                return new FeatureSyncResult(false, null, msg);
+                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+                return new FeatureSyncResult(false, null, msg, code);
             }
 
             if (root.TryGetProperty(resultKey, out var results) && results.GetArrayLength() > 0)
@@ -208,11 +315,16 @@ public sealed class GeoServicesFeatureSync
                     return new FeatureSyncResult(true, oid, null);
                 }
 
-                // Per-edit failure: surface the server's error message when present.
-                var detail = first.TryGetProperty("error", out var e) && e.TryGetProperty("description", out var d)
-                    ? d.GetString()
-                    : "Edit was not applied.";
-                return new FeatureSyncResult(false, oid, detail);
+                // Per-edit failure: surface the server's error message + code.
+                string? detail = "Edit was not applied.";
+                int? errCode = null;
+                if (first.TryGetProperty("error", out var e))
+                {
+                    detail = e.TryGetProperty("description", out var d) ? d.GetString() : detail;
+                    errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
+                }
+
+                return new FeatureSyncResult(false, oid, detail, errCode);
             }
 
             return new FeatureSyncResult(false, null, $"Unexpected response: no {resultKey}.");

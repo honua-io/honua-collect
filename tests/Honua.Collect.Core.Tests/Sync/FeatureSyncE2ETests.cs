@@ -223,7 +223,7 @@ public class FeatureSyncE2ETests
     }
 
     [Fact]
-    public async Task Concurrent_updates_to_same_feature_stay_consistent_and_surface_conflicts()
+    public async Task Concurrent_updates_to_same_feature_all_succeed_via_retry()
     {
         if (!Enabled)
         {
@@ -232,31 +232,27 @@ public class FeatureSyncE2ETests
 
         const int n = 10;
         using var http = Authed();
-        var sync = new GeoServicesFeatureSync(http);
+        var sync = new GeoServicesFeatureSync(http); // default retry policy
         var marker = Marker();
 
         var added = await sync.SubmitAsync(Site(marker), Target);
         var oid = added.ObjectId!.Value;
 
         // N concurrent writers each set notes to a distinct value — a write
-        // collision on a single row.
+        // collision on a single row. Transient contention is retried, so every
+        // submission succeeds rather than surfacing a spurious failure.
         var values = Enumerable.Range(0, n).Select(i => $"writer-{i}").ToArray();
         var results = await Task.WhenAll(values.Select(v =>
             sync.UpdateAsync(oid, Site(marker, r => r.Values["notes"] = v), Target)));
 
-        var winners = values.Where((_, i) => results[i].Success).ToArray();
-
-        // The server resolves the collision safely: at least one write lands, and
-        // every losing write is reported as a failure (never silently dropped).
-        Assert.NotEmpty(winners);
-        Assert.All(results.Where(r => !r.Success), r => Assert.False(string.IsNullOrEmpty(r.Error)));
+        Assert.All(results, r => Assert.True(r.Success, r.Error)); // retry resolves the contention
 
         // Consistency: exactly one row remains (no duplication) and its value
-        // comes from a writer that actually succeeded (no torn/interleaved write).
+        // comes from a writer that actually submitted it (last-write-wins, intact).
         var features = await QueryByNameAsync(http, marker);
         Assert.Equal(1, features.GetArrayLength());
         var finalNotes = features[0].GetProperty("attributes").GetProperty("notes").GetString();
-        Assert.Contains(finalNotes, winners);
+        Assert.Contains(finalNotes, values);
     }
 
     [Fact]
