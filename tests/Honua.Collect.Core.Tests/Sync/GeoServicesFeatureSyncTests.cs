@@ -75,4 +75,46 @@ public class GeoServicesFeatureSyncTests
         Assert.False(result.Success);
         Assert.Equal("bad geometry", result.Error);
     }
+
+    [Fact]
+    public async Task UpdateAsync_posts_updates_with_objectid_and_parses_updateResults()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, """{"updateResults":[{"objectId":42,"success":true}]}""");
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).UpdateAsync(42, Record(), new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        Assert.Equal(42, result.ObjectId);
+        Assert.Contains("updates=", handler.CapturedBody);
+        using var doc = JsonDocument.Parse(System.Net.WebUtility.UrlDecode(
+            handler.CapturedBody!.Split("updates=")[1].Split('&')[0]));
+        Assert.Equal(42, doc.RootElement[0].GetProperty("attributes").GetProperty("objectid").GetInt64());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_posts_deletes_and_parses_deleteResults()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, """{"deleteResults":[{"objectId":7,"success":true}]}""");
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).DeleteAsync(7, new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        Assert.Equal(7, result.ObjectId);
+        Assert.Contains("deletes=%5B7%5D", handler.CapturedBody); // [7] url-encoded
+    }
+
+    [Fact]
+    public async Task PerEdit_failure_surfaces_server_description()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """{"updateResults":[{"objectId":99,"success":false,"error":{"code":1000,"description":"Feature not found."}}]}""");
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).UpdateAsync(99, Record(), new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Equal("Feature not found.", result.Error);
+    }
 }

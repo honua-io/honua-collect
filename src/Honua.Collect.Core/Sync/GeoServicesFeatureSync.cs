@@ -44,19 +44,59 @@ public sealed class GeoServicesFeatureSync
     /// <param name="target">Target service/layer.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The sync result with the server-assigned object id on success.</returns>
-    public async Task<FeatureSyncResult> SubmitAsync(
+    public Task<FeatureSyncResult> SubmitAsync(
         FieldRecord record,
         GeoServicesTarget target,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
+        return PostEditsAsync(target, "adds", BuildFeaturesJson(record, null), "addResults", cancellationToken);
+    }
 
-        var adds = BuildAddsJson(record);
+    /// <summary>Updates an existing feature, identified by its object id.</summary>
+    /// <param name="objectId">Server object id to update.</param>
+    /// <param name="record">Record carrying the new attribute/geometry values.</param>
+    /// <param name="target">Target service/layer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result for the update.</returns>
+    public Task<FeatureSyncResult> UpdateAsync(
+        long objectId,
+        FieldRecord record,
+        GeoServicesTarget target,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(target);
+        return PostEditsAsync(target, "updates", BuildFeaturesJson(record, objectId), "updateResults", cancellationToken);
+    }
+
+    /// <summary>Deletes a feature by its object id.</summary>
+    /// <param name="objectId">Server object id to delete.</param>
+    /// <param name="target">Target service/layer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result for the delete.</returns>
+    public Task<FeatureSyncResult> DeleteAsync(
+        long objectId,
+        GeoServicesTarget target,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var deletes = $"[{objectId.ToString(CultureInfo.InvariantCulture)}]";
+        return PostEditsAsync(target, "deletes", deletes, "deleteResults", cancellationToken);
+    }
+
+    private async Task<FeatureSyncResult> PostEditsAsync(
+        GeoServicesTarget target,
+        string editKey,
+        string editJson,
+        string resultKey,
+        CancellationToken cancellationToken)
+    {
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["f"] = "json",
-            ["adds"] = adds,
+            [editKey] = editJson,
             ["rollbackOnFailure"] = "true",
         });
 
@@ -68,7 +108,7 @@ public sealed class GeoServicesFeatureSync
             return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}");
         }
 
-        return ParseResult(body);
+        return ParseResult(body, resultKey);
     }
 
     /// <summary>Serializes a record to the GeoServices <c>adds</c> array JSON.</summary>
@@ -77,7 +117,11 @@ public sealed class GeoServicesFeatureSync
     public static string BuildAddsJson(FieldRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
+        return BuildFeaturesJson(record, null);
+    }
 
+    private static string BuildFeaturesJson(FieldRecord record, long? objectId)
+    {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
@@ -96,9 +140,14 @@ public sealed class GeoServicesFeatureSync
             }
 
             writer.WriteStartObject("attributes");
+            if (objectId is { } oid)
+            {
+                writer.WriteNumber("objectid", oid);
+            }
+
             foreach (var (key, value) in record.Values)
             {
-                if (value is null)
+                if (value is null || string.Equals(key, "objectid", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -136,7 +185,7 @@ public sealed class GeoServicesFeatureSync
         }
     }
 
-    private static FeatureSyncResult ParseResult(string body)
+    private static FeatureSyncResult ParseResult(string body, string resultKey)
     {
         try
         {
@@ -149,17 +198,24 @@ public sealed class GeoServicesFeatureSync
                 return new FeatureSyncResult(false, null, msg);
             }
 
-            if (root.TryGetProperty("addResults", out var addResults) && addResults.GetArrayLength() > 0)
+            if (root.TryGetProperty(resultKey, out var results) && results.GetArrayLength() > 0)
             {
-                var first = addResults[0];
+                var first = results[0];
                 var success = first.TryGetProperty("success", out var s) && s.GetBoolean();
                 long? oid = first.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
-                return success
-                    ? new FeatureSyncResult(true, oid, null)
-                    : new FeatureSyncResult(false, oid, "Edit was not applied.");
+                if (success)
+                {
+                    return new FeatureSyncResult(true, oid, null);
+                }
+
+                // Per-edit failure: surface the server's error message when present.
+                var detail = first.TryGetProperty("error", out var e) && e.TryGetProperty("description", out var d)
+                    ? d.GetString()
+                    : "Edit was not applied.";
+                return new FeatureSyncResult(false, oid, detail);
             }
 
-            return new FeatureSyncResult(false, null, "Unexpected response: no addResults.");
+            return new FeatureSyncResult(false, null, $"Unexpected response: no {resultKey}.");
         }
         catch (JsonException ex)
         {

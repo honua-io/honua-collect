@@ -39,3 +39,30 @@ capture → `applyEdits` → read-back assertion against a running server (opt-i
 `HONUA_E2E_SERVER` / `HONUA_E2E_APIKEY`), so the path is regression-testable
 without the emulator. `GeoServicesFeatureSync` itself has unit tests for the
 request shape and response parsing.
+
+## Comprehensive scenario coverage
+
+`FeatureSyncE2ETests` (opt-in, gated on `HONUA_E2E_SERVER`) now covers, against a
+live server:
+
+- **add** — geometry + attribute round-trip and read-back;
+- **update** — attribute change reflected server-side;
+- **delete** — feature removed;
+- **update / delete of a non-existent feature** — rejected with the server's
+  message, not a crash;
+- **submit without credentials** — fails gracefully and writes nothing;
+- **concurrent adds (×12)** — all persist with distinct object ids (no id
+  collision or lost write);
+- **concurrent updates to the same feature (×10)** — the server resolves the
+  write collision safely: at least one write lands, every losing write is
+  surfaced as a failure (never silently dropped), and exactly one consistent row
+  remains;
+- **duplicate submissions** — create two distinct rows (the Feature Server is not
+  a dedup authority; client-side `DuplicateDetector` owns suppression).
+
+Two findings surfaced while writing these and are encoded in the assertions:
+concurrent same-row updates are conflict-rejected (not last-write-wins-all), and
+integer attributes stored in the shared `features` JSONB column round-trip as
+strings.
+
+Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.
