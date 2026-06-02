@@ -38,6 +38,9 @@ testable without a device and unblocks every widget and screen above it:
   submit task loop and the worker inbox. Backs **E5**.
 - **`Field/RecordLinkField`** — manages a parent record's related/child record
   links. Backs **F4**.
+- **`Field/Forms/FormLocalizer` + `FormTranslations`** — produces a localized
+  copy of a form (labels/help/choices) for a target language, with fallback to
+  authored text. Backs **F2**.
 - **`Editions/CollectEntitlements`** — runtime feature gate the product calls to
   enforce Pro/Enterprise capabilities (consumption side of the tier matrix).
 
@@ -74,7 +77,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
 | F1 | Form/survey builder (drag-drop or XLSForm import) | ❌ | Pro | sdk/server |
-| F2 | Multi-language / localized forms | ❌ | Pro | sdk |
+| F2 | Multi-language / localized forms | 🧱 | Pro | sdk |
 | F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | Community | sdk |
 | F4 | Related tables / record links UX | 🧱 | Pro | collect |
 | F5 | Default-from-previous / "favorites" answer reuse | 🧱 | Community | collect |
