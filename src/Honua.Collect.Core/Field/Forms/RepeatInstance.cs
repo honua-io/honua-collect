@@ -9,7 +9,7 @@ namespace Honua.Collect.Core.Field.Forms;
 /// calculated fields, validation, media — over a synthesized single-section
 /// form, so a repeat row behaves exactly like a mini-form.
 /// </summary>
-public sealed class RepeatInstance
+public sealed class RepeatInstance : ICaptureHost
 {
     private readonly FormSession _session;
 
@@ -46,6 +46,12 @@ public sealed class RepeatInstance
     /// <summary>Adds a captured media attachment to a field in the row.</summary>
     /// <param name="attachment">Captured media.</param>
     public void AddMedia(CapturedMediaAttachment attachment) => _session.AddMedia(attachment);
+
+    /// <summary>Removes a captured media attachment from a field in the row.</summary>
+    /// <param name="fieldId">Field the attachment is bound to.</param>
+    /// <param name="attachmentId">Attachment identifier.</param>
+    /// <returns><see langword="true"/> if an attachment was removed.</returns>
+    public bool RemoveMedia(string fieldId, string attachmentId) => _session.RemoveMedia(fieldId, attachmentId);
 
     /// <summary>Validates the row in isolation.</summary>
     /// <returns>The row's validation result.</returns>

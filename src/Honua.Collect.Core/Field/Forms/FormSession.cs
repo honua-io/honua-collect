@@ -27,7 +27,7 @@ namespace Honua.Collect.Core.Field.Forms;
 /// the flat <see cref="Fields"/>; repeatable sections are <see cref="RepeatGroups"/>.
 /// </para>
 /// </remarks>
-public sealed class FormSession
+public sealed class FormSession : ICaptureHost
 {
     private readonly Dictionary<string, FieldState> _states = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<FieldState> _ordered = [];
