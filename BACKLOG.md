@@ -66,12 +66,29 @@ testable without a device and unblocks every widget and screen above it:
 - **`Editions/CollectEntitlements`** — runtime feature gate the product calls to
   enforce Pro/Enterprise capabilities (consumption side of the tier matrix).
 
-These items are marked 🧱 below: Core model done, device UX still pending. What
-remains is genuinely device-bound (the MAUI widget/screen/map UX), hardware
-(external GNSS G5, sensors I1–I3, AR G6), an imaging library (image
-resize/compression C8), or a deliberate cross-repo package cut (promoting the
-repeat-storage and geometry conventions into the portable SDK record contract
-for native server round-trip).
+These items are marked 🧱 below: Core model done, device UX still pending.
+
+### Cross-repo updates (done — on branches, pending package cut)
+
+The repeat round-trip through native server sync is now landed upstream, not
+just via Collect's product-side convention:
+
+- **honua-sdk-dotnet** (`field-native-repeats`): `FieldRecord.Repeats` carries
+  `FieldRepeatInstance` rows natively; `FormValidator`/`CalculatedFieldEvaluator`
+  evaluate each row against its own values (errors as `sectionId[index].field`).
+  21 existing + 5 new Field tests green.
+- **honua-server** (`forms-repeatable-sections`): `FormSectionDefinition` gains
+  `Repeatable`/`MinInstances`/`MaxInstances`; `FormPackageValidator` enforces the
+  bounds, so a repeatable form authored/distributed/validated server-side
+  round-trips to the capture client. 13 existing + 4 new tests green.
+
+Once those branches merge and a new `Honua.Sdk.Field` package is cut, Collect's
+`FormSession` repeat storage swaps from its `List<Dictionary>` convention to the
+SDK's native `FieldRecord.Repeats`.
+
+What remains is genuinely device-bound (the MAUI widget/screen/map UX, which
+can't be built or verified headlessly), hardware (external GNSS G5, sensors
+I1–I3, AR G6), or an imaging library (image resize/compression C8).
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
