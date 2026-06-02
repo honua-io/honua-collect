@@ -1,4 +1,3 @@
-using System.Globalization;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -309,55 +308,12 @@ public sealed class FormSession
 
     private static bool Compare(object? actual, object? expected, ComparisonOperator op) => op switch
     {
-        ComparisonOperator.Equals => AreEqual(actual, expected),
-        ComparisonOperator.NotEquals => !AreEqual(actual, expected),
-        ComparisonOperator.GreaterThan => TryAsDouble(actual, out var a) && TryAsDouble(expected, out var b) && a > b,
-        ComparisonOperator.LessThan => TryAsDouble(actual, out var c) && TryAsDouble(expected, out var d) && c < d,
-        ComparisonOperator.Contains => ToText(actual).Contains(ToText(expected), StringComparison.OrdinalIgnoreCase),
+        ComparisonOperator.Equals => FieldValues.AreEqual(actual, expected),
+        ComparisonOperator.NotEquals => !FieldValues.AreEqual(actual, expected),
+        ComparisonOperator.GreaterThan => FieldValues.TryAsDouble(actual, out var a) && FieldValues.TryAsDouble(expected, out var b) && a > b,
+        ComparisonOperator.LessThan => FieldValues.TryAsDouble(actual, out var c) && FieldValues.TryAsDouble(expected, out var d) && c < d,
+        ComparisonOperator.Contains => FieldValues.ToText(actual).Contains(FieldValues.ToText(expected), StringComparison.OrdinalIgnoreCase),
         _ => true,
-    };
-
-    private static bool AreEqual(object? left, object? right)
-    {
-        if (left is null && right is null)
-        {
-            return true;
-        }
-
-        if (TryAsDouble(left, out var l) && TryAsDouble(right, out var r))
-        {
-            return Math.Abs(l - r) < 0.000001;
-        }
-
-        return string.Equals(ToText(left), ToText(right), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryAsDouble(object? value, out double parsed)
-    {
-        switch (value)
-        {
-            case null:
-                parsed = default;
-                return false;
-            case double d: parsed = d; return true;
-            case float f: parsed = f; return true;
-            case decimal m: parsed = (double)m; return true;
-            case int i: parsed = i; return true;
-            case long l: parsed = l; return true;
-            default:
-                return double.TryParse(
-                    Convert.ToString(value, CultureInfo.InvariantCulture),
-                    NumberStyles.Any,
-                    CultureInfo.InvariantCulture,
-                    out parsed);
-        }
-    }
-
-    private static string ToText(object? value) => value switch
-    {
-        null => string.Empty,
-        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
-        _ => value.ToString() ?? string.Empty,
     };
 
     private void SyncMediaIntoRecord()
