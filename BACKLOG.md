@@ -102,30 +102,33 @@ Once those branches merge and a new `Honua.Sdk.Field` package is cut, Collect's
 `FormSession` repeat storage swaps from its `List<Dictionary>` convention to the
 SDK's native `FieldRecord.Repeats`.
 
-### The MAUI app builds to a signed, installable APK
+### The MAUI app builds, installs, and runs — verified on an Android emulator
 
 The Android toolchain was bootstrapped into `$HOME` (Temurin JDK 17 + Android
-SDK cmdline-tools, platform android-36, build-tools 36.0.0, platform-tools).
-With it, the MAUI app **builds in Debug and Release with 0 warnings/0 errors**
-and packages to a signed APK — `io.honua.collect` ("Honua Collect"), minSdk 21 /
-targetSdk 36 — that `apksigner` verifies under the v1/v2/v3 signing schemes. The
-app launches to a home screen and opens the dynamic `FormPage` over a sample
-inspection form (scalar fields, conditional Notes, photo, repeatable Deficiency
-section). To build it:
+SDK: cmdline-tools, platform android-36, build-tools 36.0.0, platform-tools,
+emulator, and an API-35 x86_64 system image). The MAUI app **builds in Debug and
+Release (0/0)** and packages to a signed APK — `io.honua.collect` ("Honua
+Collect"), minSdk 21 / targetSdk 36 — that `apksigner` verifies under the
+v1/v2/v3 schemes.
 
-```bash
-export JAVA_HOME=$HOME/jdk17 ANDROID_HOME=$HOME/android-sdk
-dotnet build src/Honua.Collect.App -f net10.0-android -c Release \
-  -p:AndroidSdkDirectory=$HOME/android-sdk -p:JavaSdkDirectory=$HOME/jdk17
-```
+It was then **installed and run end-to-end on a KVM-accelerated Android-35
+emulator**, with screenshots captured in [`docs/verification/`](docs/verification/).
+Verified on-device: the home screen, the **dynamic form** rendering from a
+`FormDefinition`, **live required-field validation**, **conditional visibility**
+(the Notes field appears when Serviceable → No), **repeatable sections** (Add
+creates a Deficiency row with its own validated fields), the live error summary,
+and Submit gated on validity. See `docs/verification/README.md` for the exact
+build/run commands.
 
-What still can't be done **in this headless session** is *launching* the app on
-a screen: the Android emulator needs `/dev/kvm` access (the user is not in the
-`kvm` group and `sudo` is non-interactive here) or a physical device, and the
-native widget surfaces (camera/signature/sketch capture, the live map control)
-plus hardware (external GNSS G5, sensors I1–I3, AR G6) and an imaging library
-(image resize/compression C8) need real-device integration. The screen
-*behaviour* is unit-tested via the presentation view-models.
+What still needs a physical device (not an emulator) is the **native hardware
+widget plumbing**: real camera/microphone capture, signature/sketch ink
+surfaces, the live map control, external GNSS (G5), sensors (I1–I3), AR (G6),
+and image compression (C8). The form/validation/visibility/repeat/sync logic is
+proven; these are device-sensor integrations.
+
+> Note: enabling the emulator required granting `/dev/kvm` access (done via the
+> Docker daemon since the user isn't in the `kvm` group); this is a host
+> permission change that reverts on reboot.
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
