@@ -56,7 +56,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | C4 | Signature capture pad | 🧱 | Community | collect |
 | C5 | Sketch / freehand drawing widget | 🧱 | Community | collect |
 | C6 | Barcode / QR scanner | 🧱 | Community | collect |
-| C7 | Photo annotation / markup (Fulcrum parity) | ❌ | Pro | collect |
+| C7 | Photo annotation / markup (Fulcrum parity) | 🧱 | Pro | collect |
 | C8 | Image auto-resize/compression before upload | ❌ | Community | mobile |
 | C9 | Chunked/resumable large-media upload | ❌ | Community | mobile |
 
