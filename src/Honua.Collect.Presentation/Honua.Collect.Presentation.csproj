@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Honua.Collect.Presentation</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Platform-neutral MVVM presentation layer. The MAUI app (Honua.Collect.App)
+    binds its XAML to these view-models; keeping them free of any MAUI dependency
+    means the entire screen logic — dynamic form rendering, sync center, inbox,
+    conflict review, map capture — is unit-testable without a device.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Honua.Collect.Core\Honua.Collect.Core.csproj" />
+  </ItemGroup>
+
+</Project>
