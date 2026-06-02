@@ -11,12 +11,11 @@ namespace Honua.Collect.Core.Field.Forms;
 /// validation, export, and sync.
 /// </summary>
 /// <remarks>
-/// Rows are stored on the parent record under the section id as a
-/// <c>List&lt;Dictionary&lt;string, object?&gt;&gt;</c>. This product-side
-/// storage convention is what lets repeats work today over the flat SDK
-/// <see cref="FieldRecord"/> contract; promoting it into the portable SDK record
-/// contract (so repeats round-trip through server sync natively) is the
-/// follow-up tracked for the next SDK package cut.
+/// Rows are stored on the parent record's native <see cref="FieldRecord.Repeats"/>
+/// (keyed by section id, each row a <see cref="FieldRepeatInstance"/>), so repeats
+/// are part of the portable SDK record contract and round-trip through
+/// serialization, sync, and export rather than relying on a product-side
+/// convention in the flat <see cref="FieldRecord.Values"/> bag.
 /// </remarks>
 public sealed class RepeatGroup
 {
@@ -86,17 +85,25 @@ public sealed class RepeatGroup
         return instance;
     }
 
-    /// <summary>Writes the rows back into the parent record under the section id.</summary>
+    /// <summary>Writes the rows back into the parent record's native repeat store.</summary>
     /// <param name="parent">Parent record to persist into.</param>
     internal void PersistInto(FieldRecord parent)
     {
+        // Retire any value left by the former flat-Values storage convention.
+        parent.Values.Remove(SectionId);
+
         if (_instances.Count == 0)
         {
-            parent.Values[SectionId] = null;
+            parent.Repeats.Remove(SectionId);
             return;
         }
 
-        parent.Values[SectionId] = _instances.Select(i => i.SnapshotValues()).ToList();
+        parent.Repeats[SectionId] = _instances
+            .Select(i => new FieldRepeatInstance
+            {
+                Values = new Dictionary<string, object?>(i.SnapshotValues(), StringComparer.OrdinalIgnoreCase),
+            })
+            .ToList<FieldRepeatInstance>();
     }
 
     /// <summary>Reads previously-persisted rows for a section from a parent record.</summary>
@@ -105,16 +112,13 @@ public sealed class RepeatGroup
     /// <returns>The stored rows, or an empty sequence.</returns>
     internal static IEnumerable<IReadOnlyDictionary<string, object?>> ReadRows(FieldRecord parent, string sectionId)
     {
-        if (!parent.Values.TryGetValue(sectionId, out var value) || value is null)
+        if (parent.Repeats.TryGetValue(sectionId, out var rows) && rows is not null)
         {
-            return [];
+            return rows
+                .Select(r => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>(r.Values, StringComparer.OrdinalIgnoreCase))
+                .ToList();
         }
 
-        return value switch
-        {
-            IEnumerable<IReadOnlyDictionary<string, object?>> typed => typed.ToList(),
-            IEnumerable<IDictionary<string, object?>> dicts => dicts.Select(d => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>(d, StringComparer.OrdinalIgnoreCase)).ToList(),
-            _ => [],
-        };
+        return [];
     }
 }

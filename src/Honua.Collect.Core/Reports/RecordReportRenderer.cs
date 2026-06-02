@@ -186,18 +186,14 @@ public sealed class RecordReportRenderer
 
     private static IReadOnlyList<IReadOnlyDictionary<string, object?>> ReadRows(FieldRecord record, string sectionId)
     {
-        if (!record.Values.TryGetValue(sectionId, out var value) || value is null)
+        if (record.Repeats.TryGetValue(sectionId, out var rows) && rows is not null)
         {
-            return [];
+            return rows
+                .Select(r => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>(r.Values, StringComparer.OrdinalIgnoreCase))
+                .ToList();
         }
 
-        return value switch
-        {
-            IEnumerable<IReadOnlyDictionary<string, object?>> typed => typed.ToList(),
-            IEnumerable<IDictionary<string, object?>> dicts =>
-                dicts.Select(d => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>(d, StringComparer.OrdinalIgnoreCase)).ToList(),
-            _ => [],
-        };
+        return [];
     }
 
     private static bool IsMediaField(FormFieldType type)
