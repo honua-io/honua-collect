@@ -3,7 +3,7 @@
 Gaps relative to Esri **Survey123** and **Fulcrum**, from the capability
 assessment of the Honua mobile stack. Each item is tagged with:
 
-- **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only
+- **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending
 - **Tier** — Community (free) · Pro · Enterprise
 - **Owner** — where it's built, which sets the license:
   - `collect` = this repo (ELv2)
@@ -14,6 +14,25 @@ assessment of the Honua mobile stack. Each item is tagged with:
 > fields, offline GeoPackage sync, conflict strategies, GPS/accuracy, geofencing,
 > background sync, offline basemaps, offline 3D scene packages, routing) are not
 > listed here — see the assessment. This file tracks only the gaps.
+
+## Implemented so far — `Honua.Collect.Core` (platform-neutral, unit-tested)
+
+The product "brain" the device UX binds to is landing first, since it is fully
+testable without a device and unblocks every widget and screen above it:
+
+- **`Field/Forms/FormSession`** — the stateful form runtime: live cascading
+  visibility, live calculated fields, live per-field validation, submit
+  readiness + SDK workflow transition, per-field media capture, and
+  default-from-previous seeding. Backs **C1–C6, F3, F5**, and is the host every
+  capture widget binds to.
+- **`Records/`** — `RecordSyncState` (transport state, orthogonal to the SDK
+  review workflow), `RecordBox` Drafts/Outbox/Sent classification,
+  `CollectRecordEntry` upload lifecycle, and `SyncSummary`. Backs **S3, S4**.
+- **`Export/RecordExporter`** — CSV + GeoJSON bulk export. Backs **R2**.
+- **`Sync/RecordConflictDetector` + `RecordConflict`** — field-level diff and
+  merge for the manual conflict-review screen. Backs **S1**.
+
+These items are marked 🧱 below: Core model done, device UX still pending.
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
@@ -47,25 +66,25 @@ assessment of the Honua mobile stack. Each item is tagged with:
 |---|---|---|---|---|
 | F1 | Form/survey builder (drag-drop or XLSForm import) | ❌ | Pro | sdk/server |
 | F2 | Multi-language / localized forms | ❌ | Pro | sdk |
-| F3 | Cascading/dependent selects beyond current visibility rules | ⚠️ | Community | sdk |
+| F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | Community | sdk |
 | F4 | Related tables / record links UX | ⚠️ | Pro | collect |
-| F5 | Default-from-previous / "favorites" answer reuse | ❌ | Community | collect |
+| F5 | Default-from-previous / "favorites" answer reuse | 🧱 | Community | collect |
 
 ## 4. Sync & offline (advanced)
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | ⚠️ | Pro | collect |
+| S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | Pro | collect |
 | S2 | Selective / partial sync (per-layer, per-area opt-in) | ❌ | Pro | collect |
-| S3 | Sync status center / per-record sync state UX | ⚠️ | Community | collect |
-| S4 | Outbox / Sent / Drafts boxes (Survey123 parity) | ⚠️ | Community | collect |
+| S3 | Sync status center / per-record sync state UX | 🧱 | Community | collect |
+| S4 | Outbox / Sent / Drafts boxes (Survey123 parity) | 🧱 | Community | collect |
 
 ## 5. Reporting & exports (Pro)
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
 | R1 | Per-record PDF/Word feature reports (templated) | ❌ | Pro | collect |
-| R2 | Bulk export (CSV/GeoJSON/GeoPackage/Shapefile) | ❌ | Pro | collect |
+| R2 | Bulk export (CSV/GeoJSON/GeoPackage/Shapefile) | 🧱 | Pro | collect |
 | R3 | Report template designer | ❌ | Pro | collect |
 
 ## 6. AI-assisted capture (Pro — differentiator; framework exists, provider stubbed)
