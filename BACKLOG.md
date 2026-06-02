@@ -64,9 +64,9 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| G1 | Point capture from map tap | ⚠️ | Community | collect |
-| G2 | Line/polygon drawing UI (vertex edit, undo) | ⚠️ | Community | collect |
-| G3 | GPS streaming/averaging for vertices | ⚠️ | Community | mobile |
+| G1 | Point capture from map tap | 🧱 | Community | collect |
+| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱 | Community | collect |
+| G3 | GPS streaming/averaging for vertices | 🧱 | Community | mobile |
 | G4 | Embedded 2D map rendering surface | ⚠️ | Community | collect |
 | G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | Pro | mobile |
 | G6 | On-device AR scene anchoring (physical device) | 🧩 | Pro | collect |
