@@ -35,6 +35,10 @@ testable without a device and unblocks every widget and screen above it:
   Backs **S2**.
 - **`Assignments/FieldAssignment` + `AssignmentInbox`** — dispatch → capture →
   submit task loop and the worker inbox. Backs **E5**.
+- **`Field/RecordLinkField`** — manages a parent record's related/child record
+  links. Backs **F4**.
+- **`Editions/CollectEntitlements`** — runtime feature gate the product calls to
+  enforce Pro/Enterprise capabilities (consumption side of the tier matrix).
 
 These items are marked 🧱 below: Core model done, device UX still pending.
 
@@ -71,7 +75,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | F1 | Form/survey builder (drag-drop or XLSForm import) | ❌ | Pro | sdk/server |
 | F2 | Multi-language / localized forms | ❌ | Pro | sdk |
 | F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | Community | sdk |
-| F4 | Related tables / record links UX | ⚠️ | Pro | collect |
+| F4 | Related tables / record links UX | 🧱 | Pro | collect |
 | F5 | Default-from-previous / "favorites" answer reuse | 🧱 | Community | collect |
 
 ## 4. Sync & offline (advanced)
