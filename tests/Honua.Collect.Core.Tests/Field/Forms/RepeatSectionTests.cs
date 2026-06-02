@@ -106,9 +106,9 @@ public class RepeatSectionTests
         // Validate() persists rows into the record (as a draft would be saved).
         session.Validate();
 
-        var rows = Assert.IsType<List<Dictionary<string, object?>>>(session.Record.Values["attachments"]);
+        var rows = session.Record.Repeats["attachments"];
         Assert.Single(rows);
-        Assert.Equal("transformer", rows[0]["kind"]);
+        Assert.Equal("transformer", rows[0].Values["kind"]);
 
         // Re-open the saved record: the row comes back.
         var reopened = FormSession.Open(Form(), session.Record);
@@ -125,11 +125,12 @@ public class RepeatSectionTests
         var row = session.AddRepeatInstance("attachments");
         row.SetValue("kind", "x");
         session.Validate();
-        Assert.NotNull(session.Record.Values["attachments"]);
+        Assert.True(session.Record.Repeats.ContainsKey("attachments"));
+        Assert.Single(session.Record.Repeats["attachments"]);
 
         session.GetRepeat("attachments").RemoveInstance(row.InstanceId);
         session.Validate();
 
-        Assert.Null(session.Record.Values["attachments"]);
+        Assert.False(session.Record.Repeats.ContainsKey("attachments"));
     }
 }

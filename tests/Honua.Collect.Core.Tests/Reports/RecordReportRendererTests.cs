@@ -41,10 +41,10 @@ public class RecordReportRendererTests
         r.Values["poleId"] = "P-7";
         r.Values["ok"] = true;
         // notes left empty
-        r.Values["attachments"] = new List<Dictionary<string, object?>>
+        r.Repeats["attachments"] = new List<FieldRepeatInstance>
         {
-            new() { ["kind"] = "transformer" },
-            new() { ["kind"] = "crossarm" },
+            new() { Values = { ["kind"] = "transformer" } },
+            new() { Values = { ["kind"] = "crossarm" } },
         };
         r.Media.Add(new FieldMediaAttachment { AttachmentId = "m1", FieldId = "photo", FileName = "p.jpg", MediaType = FieldMediaType.Photo });
         return r;
