@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Collect.App.Views.SyncPage"
+             Title="Sync">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="PendingItem">
+            <Grid Padding="16,8" ColumnDefinitions="*,Auto">
+                <Label Text="{Binding Record.RecordId}" VerticalOptions="Center" LineBreakMode="MiddleTruncation" />
+                <Label Grid.Column="1" Text="{Binding SyncState}" FontSize="12" TextColor="Gray" VerticalOptions="Center" />
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="0,12">
+
+        <Label Grid.Row="0" Padding="16,0" FontAttributes="Bold" Text="{Binding Header}" />
+
+        <Label Grid.Row="1" Padding="16,8,16,4" FontSize="13" TextColor="Gray" Text="Waiting to upload" />
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Pending}"
+                        ItemTemplate="{StaticResource PendingItem}"
+                        EmptyView="Nothing pending — everything is synced." />
+
+        <VerticalStackLayout Grid.Row="3" Padding="16,8" Spacing="8">
+            <Label x:Name="ResultLabel" />
+            <Button Text="Sync now" Command="{Binding SyncCommand}" />
+            <Button Text="Review a conflict (demo)" Clicked="OnReviewConflict" />
+        </VerticalStackLayout>
+
+    </Grid>
+
+</ContentPage>

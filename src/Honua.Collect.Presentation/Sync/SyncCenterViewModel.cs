@@ -43,8 +43,17 @@ public sealed class SyncCenterViewModel : ObservableObject
     public SyncSummary Summary
     {
         get => _summary;
-        private set => SetProperty(ref _summary, value);
+        private set
+        {
+            if (SetProperty(ref _summary, value))
+            {
+                OnPropertyChanged(nameof(Header));
+            }
+        }
     }
+
+    /// <summary>A formatted one-line status: "Outbox 1 · Sent 0 · Failed 1".</summary>
+    public string Header => $"Outbox {Summary.Outbox} · Sent {Summary.Sent} · Failed {Summary.Failed}";
 
     /// <summary>Records currently waiting to upload or retry.</summary>
     public ObservableCollection<CollectRecordEntry> Pending { get; }

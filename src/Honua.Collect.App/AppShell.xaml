@@ -12,6 +12,8 @@
                       ContentTemplate="{DataTemplate local:MainPage}" />
         <ShellContent Title="Records" Route="records"
                       ContentTemplate="{DataTemplate views:RecordsPage}" />
+        <ShellContent Title="Sync" Route="sync"
+                      ContentTemplate="{DataTemplate views:SyncPage}" />
         <ShellContent Title="Geometry" Route="geometry"
                       ContentTemplate="{DataTemplate views:GeometryCapturePage}" />
         <ShellContent Title="Signature" Route="signature"
