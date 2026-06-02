@@ -31,6 +31,10 @@ testable without a device and unblocks every widget and screen above it:
 - **`Export/RecordExporter`** — CSV + GeoJSON bulk export. Backs **R2**.
 - **`Sync/RecordConflictDetector` + `RecordConflict`** — field-level diff and
   merge for the manual conflict-review screen. Backs **S1**.
+- **`Sync/SelectiveSyncPlan`** — per-layer / per-area sync opt-in decision.
+  Backs **S2**.
+- **`Assignments/FieldAssignment` + `AssignmentInbox`** — dispatch → capture →
+  submit task loop and the worker inbox. Backs **E5**.
 
 These items are marked 🧱 below: Core model done, device UX still pending.
 
@@ -103,7 +107,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | E2 | Role enforcement on device | ⚠️ | Enterprise | collect |
 | E3 | Audit logging | ❌ | Enterprise | collect |
 | E4 | MDM / white-labeling / app config | ❌ | Enterprise | collect |
-| E5 | Assignments / inbox & task dispatch | ⚠️ | Pro | collect |
+| E5 | Assignments / inbox & task dispatch | 🧱 | Pro | collect |
 | E6 | Push notifications (new assignment, sync done) | ❌ | Pro | collect |
 
 ## 8. Sensors / IoT (honua-mobile IoT module is interface-only today)
