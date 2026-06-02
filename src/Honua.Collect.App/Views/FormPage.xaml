@@ -46,7 +46,11 @@
             <DataTemplate x:Key="MediaEditor">
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
-                    <Button Text="Capture media" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <Button Text="Add photo" Clicked="OnCaptureMedia" />
+                        <Label Grid.Column="1" Text="{Binding MediaCount, StringFormat='{0} attached'}"
+                               VerticalOptions="Center" FontSize="12" TextColor="Gray" />
+                    </Grid>
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>
             </DataTemplate>

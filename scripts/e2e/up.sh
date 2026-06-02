@@ -25,6 +25,8 @@ run_srv() {
     -e Kestrel__Endpoints__Http__Url="http://+:8080" -e Kestrel__Endpoints__Http__Protocols="Http1" \
     -e Security__ConnectionEncryption__MasterKey="$MK" -e Security__ConnectionEncryption__Salt="$SALT" \
     -e HONUA_ADMIN_PASSWORD="$ADMIN_PW" \
+    -e Geocoding__Enabled="false" \
+    -e Geocoding__Nominatim__BaseUrl="https://nominatim.openstreetmap.org/" \
     -p "${HTTPPORT}:8080" "$IMAGE" >/dev/null
 }
 wait_ready() { for _ in $(seq 1 40); do sleep 3; [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${HTTPPORT}/healthz/ready)" = "200" ] && return 0; done; return 1; }

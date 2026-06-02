@@ -1,3 +1,4 @@
+using Honua.Collect.Core.Field;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Collect.Presentation.Mvvm;
@@ -88,6 +89,28 @@ public sealed class FieldViewModel : ObservableObject
         }
     }
 
+    /// <summary>Number of media attachments captured for this field.</summary>
+    public int MediaCount => State.Media.Count;
+
+    /// <summary>
+    /// Registers a captured media file against this field (used by the photo/
+    /// signature/sketch widgets). Pushes through the host and refreshes.
+    /// </summary>
+    /// <param name="localPath">Host-local path to the captured file.</param>
+    /// <param name="contentType">Media content type, when known.</param>
+    public void CaptureMedia(string localPath, string? contentType = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        _host.AddMedia(new CapturedMediaAttachment
+        {
+            AttachmentId = Guid.NewGuid().ToString("n"),
+            FieldId = FieldId,
+            LocalPath = localPath,
+            ContentType = contentType,
+        });
+        _onChanged();
+    }
+
     /// <summary>Re-reads runtime state and raises change notification for all bound members.</summary>
     public void Refresh()
     {
@@ -96,5 +119,6 @@ public sealed class FieldViewModel : ObservableObject
         OnPropertyChanged(nameof(IsVisible));
         OnPropertyChanged(nameof(ErrorText));
         OnPropertyChanged(nameof(HasError));
+        OnPropertyChanged(nameof(MediaCount));
     }
 }

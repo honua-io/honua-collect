@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Collect.App.Views.ConflictReviewPage"
+             Title="Resolve conflict">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="ConflictItem">
+            <VerticalStackLayout Padding="16,10" Spacing="6">
+                <Label Text="{Binding Label}" FontAttributes="Bold" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Border Stroke="LightGray" Padding="8">
+                        <VerticalStackLayout>
+                            <Label Text="This device" FontSize="11" TextColor="Gray" />
+                            <Label Text="{Binding LocalText}" />
+                            <RadioButton Content="Keep this" GroupName="{Binding FieldId}"
+                                         IsChecked="{Binding KeepLocal, Mode=TwoWay}" />
+                        </VerticalStackLayout>
+                    </Border>
+                    <Border Grid.Column="1" Stroke="LightGray" Padding="8">
+                        <VerticalStackLayout>
+                            <Label Text="Server" FontSize="11" TextColor="Gray" />
+                            <Label Text="{Binding ServerText}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </Grid>
+            </VerticalStackLayout>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="0,12">
+        <Label Grid.Row="0" Padding="16,0,16,8" Text="Pick which value to keep for each conflicting field." />
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Conflicts}" ItemTemplate="{StaticResource ConflictItem}" />
+
+        <VerticalStackLayout Grid.Row="2" Padding="16,8" Spacing="8">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <Button Text="Keep all mine" Command="{Binding KeepAllLocalCommand}" />
+                <Button Grid.Column="1" Text="Keep all server" Command="{Binding KeepAllServerCommand}" />
+            </Grid>
+            <Button Text="Resolve" Clicked="OnResolve" />
+            <Label x:Name="ResultLabel" />
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>
