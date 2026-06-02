@@ -74,6 +74,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Honua.Collect.Core\Honua.Collect.Core.csproj" />
+		<ProjectReference Include="..\Honua.Collect.Presentation\Honua.Collect.Presentation.csproj" />
 	</ItemGroup>
 
 </Project>
