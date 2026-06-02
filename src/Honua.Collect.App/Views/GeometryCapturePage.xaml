@@ -8,17 +8,22 @@
 
         <HorizontalStackLayout Grid.Row="0" Spacing="8">
             <Label Text="Type:" VerticalOptions="Center" />
-            <Picker x:Name="TypePicker" SelectedIndexChanged="OnTypeChanged" WidthRequest="140">
+            <Picker x:Name="TypePicker" SelectedIndexChanged="OnTypeChanged" WidthRequest="130">
                 <Picker.Items>
                     <x:String>Point</x:String>
                     <x:String>Line</x:String>
                     <x:String>Polygon</x:String>
                 </Picker.Items>
             </Picker>
+            <Button Text="–" Clicked="OnZoomOut" WidthRequest="44" />
+            <Button Text="+" Clicked="OnZoomIn" WidthRequest="44" />
         </HorizontalStackLayout>
 
         <Border Grid.Row="1" Stroke="LightGray" StrokeThickness="1">
-            <GraphicsView x:Name="Canvas" StartInteraction="OnCanvasTapped" />
+            <GraphicsView x:Name="Canvas"
+                          StartInteraction="OnStart"
+                          DragInteraction="OnDrag"
+                          EndInteraction="OnEnd" />
         </Border>
 
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">

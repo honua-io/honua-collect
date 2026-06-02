@@ -1,24 +1,40 @@
+using Honua.Collect.App.Maps;
 using Honua.Collect.Core.Field.Geometry;
 using Honua.Collect.Presentation.Geometry;
-using Microsoft.Maui.Graphics;
+using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.App.Views;
 
 /// <summary>
-/// Geometry capture surface: tap the canvas to drop vertices for a point, line,
-/// or polygon. Backed by the tested <see cref="MapCaptureViewModel"/>; canvas
-/// taps are mapped to lat/lon so the same runtime produces GeoJSON.
+/// Geometry capture over a live OpenStreetMap basemap (BACKLOG G1/G2/G4): pan by
+/// dragging, zoom with the +/– buttons, and tap to drop a vertex for a point,
+/// line, or polygon. Screen taps are projected to lat/lon through
+/// <see cref="WebMercator"/> (unit-tested in Core), so the captured vertices —
+/// and the resulting GeoJSON from the tested <see cref="MapCaptureViewModel"/> —
+/// are real coordinates registered to the basemap.
 /// </summary>
 public partial class GeometryCapturePage : ContentPage
 {
+    private const double TapThreshold = 12.0; // DIPs of movement under which a gesture is a tap
+    private const int MinZoom = 2;
+    private const int MaxZoom = 19;
+
+    private readonly OsmTileLoader _tiles = new();
+    private readonly SlippyMapDrawable _map;
     private MapCaptureViewModel _vm = new(CapturedGeometryType.Point);
-    private readonly GeometryDrawable _drawable = new();
-    private Rect _canvasBounds;
+
+    private PointF _gestureStart;
+    private PointF _lastDrag;
+    private double _moved;
 
     public GeometryCapturePage()
     {
         InitializeComponent();
-        Canvas.Drawable = _drawable;
+
+        _map = new SlippyMapDrawable(_tiles) { Vertices = _vm.Vertices };
+        Canvas.Drawable = _map;
+        _tiles.TileLoaded += (_, _) => MainThread.BeginInvokeOnMainThread(() => Canvas.Invalidate());
+
         TypePicker.SelectedIndex = 0;
         UpdateStatus();
     }
@@ -31,13 +47,27 @@ public partial class GeometryCapturePage : ContentPage
             2 => CapturedGeometryType.Polygon,
             _ => CapturedGeometryType.Point,
         };
+
         _vm = new MapCaptureViewModel(type);
-        _drawable.Points.Clear();
+        _map.Vertices = _vm.Vertices;
+        _map.IsPolygon = type == CapturedGeometryType.Polygon;
         Canvas.Invalidate();
         UpdateStatus();
     }
 
-    private void OnCanvasTapped(object? sender, TouchEventArgs e)
+    private void OnStart(object? sender, TouchEventArgs e)
+    {
+        if (e.Touches.Length == 0)
+        {
+            return;
+        }
+
+        _gestureStart = e.Touches[0];
+        _lastDrag = _gestureStart;
+        _moved = 0;
+    }
+
+    private void OnDrag(object? sender, TouchEventArgs e)
     {
         if (e.Touches.Length == 0)
         {
@@ -45,18 +75,40 @@ public partial class GeometryCapturePage : ContentPage
         }
 
         var p = e.Touches[0];
-        _canvasBounds = new Rect(0, 0, Canvas.Width, Canvas.Height);
+        var dx = p.X - _lastDrag.X;
+        var dy = p.Y - _lastDrag.Y;
+        _moved += Math.Abs(dx) + Math.Abs(dy);
+        _lastDrag = p;
 
-        // Map the canvas point to a lon/lat within a demo extent so the runtime
-        // (and resulting GeoJSON) sees real coordinates.
-        var lon = -158.05 + (p.X / Math.Max(1, Canvas.Width)) * 0.40;   // ~Oahu extent
-        var lat = 21.45 - (p.Y / Math.Max(1, Canvas.Height)) * 0.20;
-        _vm.AddVertex(new Honua.Sdk.Field.Records.FieldGeoPoint(lat, lon));
+        // Pan: shift the centre opposite the drag so the map follows the finger.
+        var (cx, cy) = WebMercator.ToWorldPixel(_map.Center, _map.Zoom);
+        _map.Center = WebMercator.FromWorldPixel(cx - dx, cy - dy, _map.Zoom);
+        Canvas.Invalidate();
+    }
 
-        _drawable.Points.Add(p);
-        _drawable.IsPolygon = _vm.GeometryType == CapturedGeometryType.Polygon;
+    private void OnEnd(object? sender, TouchEventArgs e)
+    {
+        // A gesture that barely moved is a tap → drop a vertex under the finger.
+        if (_moved > TapThreshold)
+        {
+            return;
+        }
+
+        var point = e.Touches.Length > 0 ? e.Touches[0] : _gestureStart;
+        var geo = WebMercator.FromScreen(point.X, point.Y, _map.Center, _map.Zoom, Canvas.Width, Canvas.Height);
+        _vm.AddVertex(geo);
         Canvas.Invalidate();
         UpdateStatus();
+    }
+
+    private void OnZoomIn(object? sender, EventArgs e) => SetZoom(_map.Zoom + 1);
+
+    private void OnZoomOut(object? sender, EventArgs e) => SetZoom(_map.Zoom - 1);
+
+    private void SetZoom(int zoom)
+    {
+        _map.Zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+        Canvas.Invalidate();
     }
 
     private void OnUndo(object? sender, EventArgs e)
@@ -64,11 +116,6 @@ public partial class GeometryCapturePage : ContentPage
         if (_vm.UndoCommand.CanExecute(null))
         {
             _vm.UndoCommand.Execute(null);
-            if (_drawable.Points.Count > 0)
-            {
-                _drawable.Points.RemoveAt(_drawable.Points.Count - 1);
-            }
-
             Canvas.Invalidate();
             UpdateStatus();
         }
@@ -77,7 +124,6 @@ public partial class GeometryCapturePage : ContentPage
     private void OnClear(object? sender, EventArgs e)
     {
         _vm.ClearCommand.Execute(null);
-        _drawable.Points.Clear();
         Canvas.Invalidate();
         UpdateStatus();
     }
@@ -95,49 +141,4 @@ public partial class GeometryCapturePage : ContentPage
 
     private void UpdateStatus()
         => StatusLabel.Text = $"{_vm.GeometryType}: {_vm.Vertices.Count} vertex(es){(_vm.IsComplete ? " ✓" : string.Empty)}";
-
-    /// <summary>Draws the captured vertices and the connecting line/ring.</summary>
-    private sealed class GeometryDrawable : IDrawable
-    {
-        public List<PointF> Points { get; } = [];
-
-        public bool IsPolygon { get; set; }
-
-        public void Draw(ICanvas canvas, RectF dirtyRect)
-        {
-            canvas.FillColor = Colors.White;
-            canvas.FillRectangle(dirtyRect);
-
-            if (Points.Count == 0)
-            {
-                return;
-            }
-
-            canvas.StrokeColor = Color.FromArgb("#3F51B5");
-            canvas.StrokeSize = 3;
-
-            if (Points.Count > 1)
-            {
-                var path = new PathF();
-                path.MoveTo(Points[0].X, Points[0].Y);
-                for (var i = 1; i < Points.Count; i++)
-                {
-                    path.LineTo(Points[i].X, Points[i].Y);
-                }
-
-                if (IsPolygon && Points.Count >= 3)
-                {
-                    path.Close();
-                }
-
-                canvas.DrawPath(path);
-            }
-
-            canvas.FillColor = Color.FromArgb("#FF5722");
-            foreach (var p in Points)
-            {
-                canvas.FillCircle(p.X, p.Y, 6);
-            }
-        }
-    }
 }

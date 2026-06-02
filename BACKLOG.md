@@ -3,7 +3,7 @@
 Gaps relative to Esri **Survey123** and **Fulcrum**, from the capability
 assessment of the Honua mobile stack. Each item is tagged with:
 
-- **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending
+- **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending · ✅ (suffix) verified working on a device/emulator
 - **Tier** — Community (free) · Pro · Enterprise
 - **Owner** — where it's built, which sets the license:
   - `collect` = this repo (ELv2)
@@ -148,10 +148,10 @@ proven; these are device-sensor integrations.
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| G1 | Point capture from map tap | 🧱 | Community | collect |
-| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱 | Community | collect |
+| G1 | Point capture from map tap | 🧱✅ | Community | collect |
+| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱✅ | Community | collect |
 | G3 | GPS streaming/averaging for vertices | 🧱 | Community | mobile |
-| G4 | Embedded 2D map rendering surface | ⚠️ | Community | collect |
+| G4 | Embedded 2D map rendering surface (OSM tiles, no API key) | 🧱✅ | Community | collect |
 | G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | Pro | mobile |
 | G6 | On-device AR scene anchoring (physical device) | 🧩 | Pro | collect |
 | G7 | Snap-to-feature / topology assist | 🧱 | Pro | sdk |
