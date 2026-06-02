@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Collect.App.Views.RecordsPage"
+             Title="Records">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="RecordItem">
+            <Grid Padding="16,10" ColumnDefinitions="*,Auto">
+                <Label Text="{Binding RecordId}" VerticalOptions="Center" />
+                <Label Grid.Column="1" Text="{Binding StatusText}" FontSize="12" TextColor="Gray" VerticalOptions="Center" />
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="0,8" Spacing="6">
+
+            <Label Text="{Binding Header}" Padding="16,4" FontAttributes="Bold" />
+
+            <Label Text="Drafts" Padding="16,6,16,2" FontSize="13" TextColor="Gray" />
+            <CollectionView ItemsSource="{Binding Drafts}" ItemTemplate="{StaticResource RecordItem}"
+                            EmptyView="No drafts." />
+
+            <Label Text="Outbox" Padding="16,10,16,2" FontSize="13" TextColor="Gray" />
+            <CollectionView ItemsSource="{Binding Outbox}" ItemTemplate="{StaticResource RecordItem}"
+                            EmptyView="Outbox is empty." />
+
+            <Label Text="Sent" Padding="16,10,16,2" FontSize="13" TextColor="Gray" />
+            <CollectionView ItemsSource="{Binding Sent}" ItemTemplate="{StaticResource RecordItem}"
+                            EmptyView="Nothing sent yet." />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

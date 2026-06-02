@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Collect.App.Views.GeometryCapturePage"
+             Title="Capture geometry">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="12" RowSpacing="10">
+
+        <HorizontalStackLayout Grid.Row="0" Spacing="8">
+            <Label Text="Type:" VerticalOptions="Center" />
+            <Picker x:Name="TypePicker" SelectedIndexChanged="OnTypeChanged" WidthRequest="140">
+                <Picker.Items>
+                    <x:String>Point</x:String>
+                    <x:String>Line</x:String>
+                    <x:String>Polygon</x:String>
+                </Picker.Items>
+            </Picker>
+        </HorizontalStackLayout>
+
+        <Border Grid.Row="1" Stroke="LightGray" StrokeThickness="1">
+            <GraphicsView x:Name="Canvas" StartInteraction="OnCanvasTapped" />
+        </Border>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+            <Label x:Name="StatusLabel" VerticalOptions="Center" />
+            <Button Grid.Column="1" Text="Undo" Clicked="OnUndo" />
+            <Button Grid.Column="2" Text="Clear" Clicked="OnClear" />
+            <Button Grid.Column="3" Text="Done" Clicked="OnDone" />
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

@@ -39,19 +39,30 @@ public partial class MainPage : ContentPage
 
     private async void OnSubmitted(object? sender, FieldRecord record)
     {
-        // Stamp a capture location (the layer is point geometry) and push to the server.
+        // Stamp a capture location (the layer is point geometry), track it in the
+        // Outbox, and push to the server.
         record.Location = new FieldGeoPoint(21.31, -157.81);
+        var entry = CaptureStore.AddSubmitted(record);
+        entry.MarkUploading();
         StatusLabel.Text = "Submitting to server…";
         try
         {
             var result = await new GeoServicesFeatureSync(Http).SubmitAsync(record, Target);
-            StatusLabel.Text = result.Success
-                ? $"Synced to server — objectId {result.ObjectId}."
-                : $"Sync failed: {result.Error}";
+            if (result.Success)
+            {
+                entry.MarkSynced(result.ObjectId?.ToString());
+                StatusLabel.Text = $"Synced to server — objectId {result.ObjectId}. See the Records tab.";
+            }
+            else
+            {
+                entry.MarkFailed(result.Error ?? "Sync failed.");
+                StatusLabel.Text = $"Sync failed: {result.Error} (kept in Outbox).";
+            }
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = $"Sync error: {ex.Message}";
+            entry.MarkFailed(ex.Message);
+            StatusLabel.Text = $"Sync error: {ex.Message} (kept in Outbox).";
         }
     }
 }

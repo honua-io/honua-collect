@@ -17,4 +17,40 @@ public partial class FormPage : ContentPage
         InitializeComponent();
         BindingContext = viewModel;
     }
+
+    private async void OnCaptureMedia(object? sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: FieldViewModel field })
+        {
+            return;
+        }
+
+        try
+        {
+            if (!MediaPicker.Default.IsCaptureSupported)
+            {
+                var picked = await MediaPicker.Default.PickPhotoAsync();
+                if (picked is not null)
+                {
+                    field.CaptureMedia(picked.FullPath, picked.ContentType);
+                }
+
+                return;
+            }
+
+            var photo = await MediaPicker.Default.CapturePhotoAsync();
+            if (photo is not null)
+            {
+                field.CaptureMedia(photo.FullPath, photo.ContentType);
+            }
+        }
+        catch (FeatureNotSupportedException)
+        {
+            await DisplayAlert("Camera", "Media capture is not supported on this device.", "OK");
+        }
+        catch (PermissionException)
+        {
+            await DisplayAlert("Camera", "Permission to capture media was denied.", "OK");
+        }
+    }
 }
