@@ -76,7 +76,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| F1 | Form/survey builder (drag-drop or XLSForm import) | ❌ | Pro | sdk/server |
+| F1 | Form/survey builder (drag-drop or XLSForm import) | 🧱 | Pro | sdk/server |
 | F2 | Multi-language / localized forms | 🧱 | Pro | sdk |
 | F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | Community | sdk |
 | F4 | Related tables / record links UX | 🧱 | Pro | collect |
