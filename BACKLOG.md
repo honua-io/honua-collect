@@ -58,7 +58,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | C6 | Barcode / QR scanner | 🧱 | Community | collect |
 | C7 | Photo annotation / markup (Fulcrum parity) | 🧱 | Pro | collect |
 | C8 | Image auto-resize/compression before upload | ❌ | Community | mobile |
-| C9 | Chunked/resumable large-media upload | ❌ | Community | mobile |
+| C9 | Chunked/resumable large-media upload | 🧱 | Community | mobile |
 
 ## 2. Geometry / GIS capture
 
@@ -70,7 +70,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 | G4 | Embedded 2D map rendering surface | ⚠️ | Community | collect |
 | G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | Pro | mobile |
 | G6 | On-device AR scene anchoring (physical device) | 🧩 | Pro | collect |
-| G7 | Snap-to-feature / topology assist | ❌ | Pro | sdk |
+| G7 | Snap-to-feature / topology assist | 🧱 | Pro | sdk |
 
 ## 3. Forms & authoring
 
