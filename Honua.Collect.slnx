@@ -2,8 +2,10 @@
   <Folder Name="/src/">
     <Project Path="src/Honua.Collect.App/Honua.Collect.App.csproj" />
     <Project Path="src/Honua.Collect.Core/Honua.Collect.Core.csproj" />
+    <Project Path="src/Honua.Collect.Presentation/Honua.Collect.Presentation.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Honua.Collect.Core.Tests/Honua.Collect.Core.Tests.csproj" />
+    <Project Path="tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj" />
   </Folder>
 </Solution>
