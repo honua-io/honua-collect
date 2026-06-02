@@ -95,7 +95,7 @@ These items are marked 🧱 below: Core model done, device UX still pending.
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| R1 | Per-record PDF/Word feature reports (templated) | ❌ | Pro | collect |
+| R1 | Per-record PDF/Word feature reports (templated) | 🧱 | Pro | collect |
 | R2 | Bulk export (CSV/GeoJSON/GeoPackage/Shapefile) | 🧱 | Pro | collect |
 | R3 | Report template designer | ❌ | Pro | collect |
 
