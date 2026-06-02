@@ -41,3 +41,22 @@ in [`../README.md`](../README.md).
 | `01-login.png` | The **Account** tab renders the `LoginViewModel`-bound sign-in page; tapping **Sign in** with empty fields shows live validation. |
 | `02-records-rehydrated.png` | After force-stop + cold relaunch, the Outbox record is **restored from SQLite** with its failed sync state. |
 | `03-home-download-form.png` | Home screen with the **Download Latest Form** action (form-package client) alongside Start New Inspection. |
+
+## Embedded map + geometry capture (G4 / G1 / G2)
+
+The Geometry tab now captures over a **live OpenStreetMap basemap** — no
+third-party map SDK and no API key. Tiles are fetched by `OsmTileLoader` and
+drawn by `SlippyMapDrawable`; all screen↔geographic mapping goes through the
+unit-tested `WebMercator` projection in Core, so taps produce real coordinates
+and the overlay stays registered to the basemap as you pan and zoom.
+
+| File | Demonstrates |
+| --- | --- |
+| `04-map-basemap.png` | Real OSM basemap (Honolulu/Oʻahu) with the Point/Line/Polygon picker and zoom controls. |
+| `05-map-polygon.png` | A 4-vertex **polygon** drawn with a translucent fill + ring, registered to the basemap; status `Polygon: 4 vertex(es) ✓`. |
+| `06-map-geojson.png` | **Done** emits valid RFC 7946 GeoJSON with real coordinates (`{"type":"Polygon","coordinates":[[[-157.834…,21.332…], …]]}`) — proving tap → `WebMercator.FromScreen` → `GeometryCaptureSession` → GeoJSON. |
+
+Point capture drops a marker at the tapped location; zooming keeps the overlay
+geographically registered. 12 `WebMercator` projection tests back the math
+(round-trip lat/lon↔world-pixel↔screen, known OSM tile indices, hemisphere
+orientation).
