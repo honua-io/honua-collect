@@ -26,3 +26,6 @@ NuGet.local.config
 .DS_Store
 Thumbs.db
 *.swp
+
+# Claude Code session worktrees/state
+.claude/

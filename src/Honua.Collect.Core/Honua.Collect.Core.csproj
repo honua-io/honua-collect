@@ -20,6 +20,7 @@
     <PackageReference Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageReference Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageReference Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
   </ItemGroup>
 
 </Project>

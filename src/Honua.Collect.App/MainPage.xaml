@@ -19,6 +19,11 @@
                     Clicked="OnNewInspectionClicked"
                     HorizontalOptions="Fill" />
 
+            <Button x:Name="DownloadFormBtn"
+                    Text="Download Latest Form"
+                    Clicked="OnDownloadFormClicked"
+                    HorizontalOptions="Fill" />
+
             <Label x:Name="StatusLabel" />
 
         </VerticalStackLayout>

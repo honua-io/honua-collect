@@ -18,6 +18,8 @@
                       ContentTemplate="{DataTemplate views:GeometryCapturePage}" />
         <ShellContent Title="Signature" Route="signature"
                       ContentTemplate="{DataTemplate views:SignaturePage}" />
+        <ShellContent Title="Account" Route="account"
+                      ContentTemplate="{DataTemplate views:LoginPage}" />
     </TabBar>
 
 </Shell>
