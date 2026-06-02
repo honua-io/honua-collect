@@ -38,7 +38,7 @@
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
                     <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}"
-                            SelectedItem="{Binding Value, Mode=TwoWay}" />
+                            SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" />
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>
             </DataTemplate>

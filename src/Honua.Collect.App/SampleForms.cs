@@ -5,63 +5,52 @@ namespace Honua.Collect.App;
 /// <summary>
 /// Built-in sample forms so the app launches into a working capture experience.
 /// In production these come from the server's form-package service; this keeps
-/// the app self-contained for a first run / demo.
+/// the app self-contained for a first run / demo. Field ids map 1:1 to the
+/// server's "Offline Field Sites" feature layer so a submission applies cleanly
+/// via GeoServices applyEdits.
 /// </summary>
 public static class SampleForms
 {
-    /// <summary>A field asset inspection with conditional fields and a repeatable section.</summary>
-    public static FormDefinition AssetInspection() => new()
+    /// <summary>A field-site inspection matching the server's editable layer schema.</summary>
+    public static FormDefinition FieldSite() => new()
     {
-        FormId = "asset-inspection",
-        Name = "Asset Inspection",
+        FormId = "field-site",
+        Name = "Field Site",
         Sections =
         [
             new FormSection
             {
                 SectionId = "details",
-                Label = "Details",
+                Label = "Site details",
                 Fields =
                 [
-                    new FormField { FieldId = "assetId", Label = "Asset ID", Type = FormFieldType.Text, Required = true },
+                    new FormField { FieldId = "site_name", Label = "Site name", Type = FormFieldType.Text, Required = true },
                     new FormField
                     {
-                        FieldId = "condition",
-                        Label = "Condition",
+                        FieldId = "status",
+                        Label = "Status",
                         Type = FormFieldType.SingleChoice,
                         Required = true,
                         Choices =
                         [
-                            new FieldChoice { Value = "good", Label = "Good" },
-                            new FieldChoice { Value = "fair", Label = "Fair" },
-                            new FieldChoice { Value = "poor", Label = "Poor" },
+                            new FieldChoice { Value = "new", Label = "New" },
+                            new FieldChoice { Value = "in_progress", Label = "In progress" },
+                            new FieldChoice { Value = "done", Label = "Done" },
                         ],
                     },
-                    new FormField { FieldId = "serviceable", Label = "Serviceable?", Type = FormFieldType.YesNo },
                     new FormField
                     {
-                        FieldId = "notes",
-                        Label = "Notes",
-                        Type = FormFieldType.Text,
-                        Required = true,
-                        VisibilityRule = new FieldVisibilityRule
-                        {
-                            DependsOnFieldId = "serviceable",
-                            Operator = ComparisonOperator.Equals,
-                            MatchValue = false,
-                        },
+                        FieldId = "priority",
+                        Label = "Priority",
+                        Type = FormFieldType.SingleChoice,
+                        Choices =
+                        [
+                            new FieldChoice { Value = "low", Label = "Low" },
+                            new FieldChoice { Value = "high", Label = "High" },
+                        ],
                     },
-                    new FormField { FieldId = "photo", Label = "Photo", Type = FormFieldType.Photo },
-                ],
-            },
-            new FormSection
-            {
-                SectionId = "deficiencies",
-                Label = "Deficiency",
-                Repeatable = true,
-                Fields =
-                [
-                    new FormField { FieldId = "kind", Label = "Kind", Type = FormFieldType.Text, Required = true },
-                    new FormField { FieldId = "severity", Label = "Severity (1-5)", Type = FormFieldType.Numeric },
+                    new FormField { FieldId = "assigned_to", Label = "Assigned to", Type = FormFieldType.Text },
+                    new FormField { FieldId = "notes", Label = "Notes", Type = FormFieldType.Text },
                 ],
             },
         ],

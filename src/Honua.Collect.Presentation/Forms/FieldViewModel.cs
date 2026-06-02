@@ -49,6 +49,22 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>Allowed choices for choice/classification fields.</summary>
     public IReadOnlyList<FieldChoice> Choices => State.Field.Choices;
 
+    /// <summary>
+    /// The selected choice for single-choice pickers. Maps between the stored
+    /// value (a choice <see cref="FieldChoice.Value"/> string) and the
+    /// <see cref="FieldChoice"/> a <c>Picker.SelectedItem</c> binds to, so the
+    /// field stores the value — not the choice object.
+    /// </summary>
+    public FieldChoice? SelectedChoice
+    {
+        get
+        {
+            var current = State.Value?.ToString();
+            return Choices.FirstOrDefault(c => string.Equals(c.Value, current, StringComparison.Ordinal));
+        }
+        set => Value = value?.Value;
+    }
+
     /// <summary>Whether the field is currently shown.</summary>
     public bool IsVisible => State.IsVisible;
 
@@ -76,6 +92,7 @@ public sealed class FieldViewModel : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(nameof(Value));
+        OnPropertyChanged(nameof(SelectedChoice));
         OnPropertyChanged(nameof(IsVisible));
         OnPropertyChanged(nameof(ErrorText));
         OnPropertyChanged(nameof(HasError));
