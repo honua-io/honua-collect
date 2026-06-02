@@ -41,10 +41,37 @@ testable without a device and unblocks every widget and screen above it:
 - **`Field/Forms/FormLocalizer` + `FormTranslations`** — produces a localized
   copy of a form (labels/help/choices) for a target language, with fallback to
   authored text. Backs **F2**.
+- **`Field/Forms/Authoring/XlsFormImporter`** — imports XLSForm survey/choices
+  rows (types, groups/repeats, choices, required, relevant, calculate) into a
+  `FormDefinition`. Backs **F1**.
+- **`Field/Capture/*`** — `ICaptureHost`, `MediaCaptureField` (policy-enforcing
+  photo/video/audio/signature/sketch), `BarcodeCaptureField`, and the
+  `CaptureWidget` kind map. Backs **C1–C6**.
+- **`Field/Geometry/*`** — `GeometryCaptureSession` (point/line/polygon, undo,
+  vertex edit, GeoJSON), `GpsAverager` (G3), and `GeoSnapping` (snap-to-feature).
+  Backs **G1–G3, G7**.
+- **`Field/Annotation/*`** — `PhotoAnnotationOverlay` markup stored as evidence
+  metadata without altering the image. Backs **C7**.
+- **`Ai/*`** — voice/photo-to-fields + redaction provider contracts and the
+  confidence/entitlement-gated `AiCaptureService`. Backs **A1–A3**.
+- **`Reports/RecordReportRenderer`** — templated per-record Markdown reports.
+  Backs **R1**.
+- **`Sync/RecordConflictDetector` + `RecordConflict`**, **`Sync/SelectiveSyncPlan`**,
+  **`Sync/ResumableUpload`** — manual conflict review, selective sync, and
+  chunked/resumable upload. Back **S1, S2, C9**.
+- **`Enterprise/*`** — `DevicePrincipal` RBAC, tamper-evident `AuditLog`,
+  `AuthSession` (SSO), `ManagedAppConfig` (MDM). Back **E1–E4**.
+- **`Notifications/*`** — push payloads + deterministic `PushNotificationRouter`.
+  Backs **E6**.
 - **`Editions/CollectEntitlements`** — runtime feature gate the product calls to
   enforce Pro/Enterprise capabilities (consumption side of the tier matrix).
 
-These items are marked 🧱 below: Core model done, device UX still pending.
+These items are marked 🧱 below: Core model done, device UX still pending. What
+remains is genuinely device-bound (the MAUI widget/screen/map UX), hardware
+(external GNSS G5, sensors I1–I3, AR G6), an imaging library (image
+resize/compression C8), or a deliberate cross-repo package cut (promoting the
+repeat-storage and geometry conventions into the portable SDK record contract
+for native server round-trip).
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
