@@ -66,7 +66,23 @@ testable without a device and unblocks every widget and screen above it:
 - **`Editions/CollectEntitlements`** — runtime feature gate the product calls to
   enforce Pro/Enterprise capabilities (consumption side of the tier matrix).
 
-These items are marked 🧱 below: Core model done, device UX still pending.
+### Presentation layer — `Honua.Collect.Presentation` (the screen logic, unit-tested)
+
+The MVVM view-models the MAUI app binds to, built without any MAUI dependency so
+the screen behaviour is testable headlessly:
+
+- **`Forms/FormPageViewModel` + `FieldViewModel` + `RepeatGroupViewModel`** — the
+  dynamic form-capture screen: live visibility/calculation/validation as fields
+  change, repeat add/remove, save-draft/submit.
+- **`Sync/SyncCenterViewModel`** — Drafts/Outbox/Sent + upload lifecycle.
+- **`Sync/ConflictReviewViewModel`** — per-field local/server resolution.
+- **`Assignments/InboxViewModel`** — assignment lifecycle.
+- **`Geometry/MapCaptureViewModel`** — point/line/polygon capture.
+
+The MAUI app (`Honua.Collect.App/Views/FormPage.xaml` + `FieldWidgetTemplateSelector`)
+binds to these. The XAML is a thin surface; the logic is the view-models above.
+
+These items are marked 🧱 below: runtime + screen logic done and tested.
 
 ### Cross-repo updates (done — on branches, pending package cut)
 
@@ -86,9 +102,14 @@ Once those branches merge and a new `Honua.Sdk.Field` package is cut, Collect's
 `FormSession` repeat storage swaps from its `List<Dictionary>` convention to the
 SDK's native `FieldRecord.Repeats`.
 
-What remains is genuinely device-bound (the MAUI widget/screen/map UX, which
-can't be built or verified headlessly), hardware (external GNSS G5, sensors
-I1–I3, AR G6), or an imaging library (image resize/compression C8).
+What remains genuinely cannot be done in this environment: **compiling and
+running the MAUI app** (the Android head needs the Java SDK + Android SDK
+platform tools, which are absent — the `InstallAndroidDependencies` target
+fails on the missing Java SDK), so the XAML binding surface is authored but
+compile-pending, and on-device visual verification + the native widget plumbing
+(camera/signature/sketch surfaces, the map control) need a build host with the
+full toolchain. Beyond that: hardware (external GNSS G5, sensors I1–I3, AR G6)
+and an imaging library (image resize/compression C8).
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
