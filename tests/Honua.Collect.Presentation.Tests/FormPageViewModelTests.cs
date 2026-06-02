@@ -140,6 +140,48 @@ public class FormPageViewModelTests
     }
 
     [Fact]
+    public void Choice_SelectedChoice_maps_between_choice_object_and_stored_value()
+    {
+        var form = new FormDefinition
+        {
+            FormId = "f",
+            Name = "f",
+            Sections =
+            [
+                new FormSection
+                {
+                    SectionId = "s",
+                    Label = "s",
+                    Fields =
+                    [
+                        new FormField
+                        {
+                            FieldId = "status",
+                            Label = "Status",
+                            Type = FormFieldType.SingleChoice,
+                            Required = true,
+                            Choices =
+                            [
+                                new FieldChoice { Value = "new", Label = "New" },
+                                new FieldChoice { Value = "done", Label = "Done" },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+        var page = new FormPageViewModel(FormSession.CreateForNewRecord(form, "r1"));
+        var status = page.Fields.Single(f => f.FieldId == "status");
+
+        Assert.False(page.CanSubmit);
+        status.SelectedChoice = status.Choices.Single(c => c.Value == "new");
+
+        Assert.Equal("new", page.Record.Values["status"]); // stores the value string, not the object
+        Assert.Equal("new", status.SelectedChoice!.Value);
+        Assert.True(page.CanSubmit);                         // choice now validates
+    }
+
+    [Fact]
     public void Field_value_setter_raises_property_changed()
     {
         var page = NewPage();
