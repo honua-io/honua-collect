@@ -21,23 +21,31 @@ namespace Honua.Collect.Core.Field.Forms;
 ///   <item>Default-from-previous / "favorites" seeding (BACKLOG F5).</item>
 /// </list>
 /// <para>
-/// Repeatable sections are modelled in <see cref="FieldState.RepeatInstance"/>
-/// but only a single instance is materialised today; full repeat expansion
-/// requires the SDK record contract to carry nested values and is tracked
-/// separately.
+/// Repeatable sections (Survey123 "repeats" / Fulcrum "repeatable sections")
+/// are materialised as <see cref="RepeatGroup"/>s of <see cref="RepeatInstance"/>
+/// rows, each a self-contained capture scope. Scalar (non-repeating) fields are
+/// the flat <see cref="Fields"/>; repeatable sections are <see cref="RepeatGroups"/>.
 /// </para>
 /// </remarks>
 public sealed class FormSession
 {
     private readonly Dictionary<string, FieldState> _states = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<FieldState> _ordered = [];
+    private readonly Dictionary<string, RepeatGroup> _groups = new(StringComparer.OrdinalIgnoreCase);
+    private readonly FormDefinition _scalarForm;
 
     private FormSession(FormDefinition form, FieldRecord record)
     {
         Form = form;
         Record = record;
 
-        foreach (var section in form.Sections)
+        // Split scalar sections (flat fields) from repeatable sections (groups of
+        // rows). The SDK helpers operate on the scalar form so repeat-section
+        // fields are never validated or calculated at the top level.
+        var scalarSections = form.Sections.Where(s => !s.Repeatable).ToList();
+        _scalarForm = form with { Sections = scalarSections };
+
+        foreach (var section in scalarSections)
         {
             foreach (var field in section.Fields)
             {
@@ -49,7 +57,12 @@ public sealed class FormSession
             }
         }
 
-        Recompute();
+        foreach (var section in form.Sections.Where(s => s.Repeatable))
+        {
+            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId));
+        }
+
+        RecomputeScalar();
     }
 
     /// <summary>The form definition being captured.</summary>
@@ -68,8 +81,22 @@ public sealed class FormSession
     /// <summary>Field states that are currently visible, in form order.</summary>
     public IEnumerable<FieldState> VisibleFields => _ordered.Where(f => f.IsVisible);
 
+    /// <summary>Repeatable-section groups, keyed by section id.</summary>
+    public IReadOnlyCollection<RepeatGroup> RepeatGroups => _groups.Values;
+
     /// <summary>Raised after a value change has been applied and state recomputed.</summary>
     public event EventHandler<FieldChangedEventArgs>? FieldChanged;
+
+    /// <summary>Gets the repeat group for a repeatable section.</summary>
+    /// <param name="sectionId">Repeatable section id.</param>
+    /// <returns>The repeat group.</returns>
+    public RepeatGroup GetRepeat(string sectionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sectionId);
+        return _groups.TryGetValue(sectionId, out var group)
+            ? group
+            : throw new KeyNotFoundException($"Form '{Form.FormId}' has no repeatable section '{sectionId}'.");
+    }
 
     /// <summary>Opens a session over an existing record (for example, a saved draft).</summary>
     /// <param name="form">Form definition.</param>
@@ -146,7 +173,7 @@ public sealed class FormSession
 
         state.Value = value;
         Record.Values[fieldId] = value;
-        Recompute();
+        RecomputeScalar();
         FieldChanged?.Invoke(this, new FieldChangedEventArgs(fieldId));
     }
 
@@ -162,7 +189,7 @@ public sealed class FormSession
         var state = GetField(fieldId);
         state.AddMedia(attachment);
         SyncMediaIntoRecord();
-        Recompute();
+        RecomputeScalar();
         FieldChanged?.Invoke(this, new FieldChangedEventArgs(fieldId));
     }
 
@@ -180,17 +207,42 @@ public sealed class FormSession
         }
 
         SyncMediaIntoRecord();
-        Recompute();
+        RecomputeScalar();
         FieldChanged?.Invoke(this, new FieldChangedEventArgs(fieldId));
         return true;
     }
 
+    /// <summary>Adds a new, empty row to a repeatable section.</summary>
+    /// <param name="sectionId">Repeatable section id.</param>
+    /// <returns>The new row.</returns>
+    public RepeatInstance AddRepeatInstance(string sectionId) => GetRepeat(sectionId).AddInstance();
+
     /// <summary>
-    /// Re-applies calculated fields, recomputes visibility and validation, and
-    /// returns the result restricted to currently visible fields.
+    /// Re-applies calculated fields, recomputes visibility and validation across
+    /// the scalar fields and every repeat row, persists repeat rows into the
+    /// record, and returns the combined, visibility-filtered result. Repeat-row
+    /// errors are reported with field ids of the form <c>section[index].field</c>.
     /// </summary>
-    /// <returns>Validation result for the visible portion of the form.</returns>
-    public FormValidationResult Validate() => Recompute();
+    /// <returns>The combined validation result.</returns>
+    public FormValidationResult Validate()
+    {
+        var errors = new List<FormValidationError>(RecomputeScalar().Errors);
+
+        foreach (var group in _groups.Values)
+        {
+            group.PersistInto(Record);
+
+            for (var index = 0; index < group.Instances.Count; index++)
+            {
+                foreach (var error in group.Instances[index].Validate().Errors)
+                {
+                    errors.Add(new FormValidationError($"{group.SectionId}[{index}].{error.FieldId}", error.Message));
+                }
+            }
+        }
+
+        return new FormValidationResult(errors);
+    }
 
     /// <summary>Whether the form is currently complete and valid for submission.</summary>
     public bool CanSubmit => Validate().IsValid;
@@ -224,9 +276,9 @@ public sealed class FormSession
         return result;
     }
 
-    private FormValidationResult Recompute()
+    private FormValidationResult RecomputeScalar()
     {
-        CalculatedFieldEvaluator.ApplyCalculatedFields(Form, Record);
+        CalculatedFieldEvaluator.ApplyCalculatedFields(_scalarForm, Record);
 
         // Mirror calculated outputs back into the bound state.
         foreach (var state in _ordered)
@@ -239,7 +291,7 @@ public sealed class FormSession
 
         RecomputeVisibility();
 
-        var validation = FormValidator.Validate(Form, Record);
+        var validation = FormValidator.Validate(_scalarForm, Record);
 
         // The SDK validator uses flat visibility; restrict reported errors to
         // fields this session considers visible so cascaded-hidden fields never
@@ -336,7 +388,8 @@ public sealed class FormSession
     {
         var allow = seedFieldIds is null ? null : new HashSet<string>(seedFieldIds, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var field in form.Sections.SelectMany(s => s.Fields))
+        // Only scalar sections seed flatly; repeat rows are not carried forward.
+        foreach (var field in form.Sections.Where(s => !s.Repeatable).SelectMany(s => s.Fields))
         {
             // Never seed computed fields (they are recalculated) or media fields
             // (attachments are host-local and not reusable across records).
