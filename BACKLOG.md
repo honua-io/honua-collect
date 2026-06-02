@@ -102,14 +102,30 @@ Once those branches merge and a new `Honua.Sdk.Field` package is cut, Collect's
 `FormSession` repeat storage swaps from its `List<Dictionary>` convention to the
 SDK's native `FieldRecord.Repeats`.
 
-What remains genuinely cannot be done in this environment: **compiling and
-running the MAUI app** (the Android head needs the Java SDK + Android SDK
-platform tools, which are absent — the `InstallAndroidDependencies` target
-fails on the missing Java SDK), so the XAML binding surface is authored but
-compile-pending, and on-device visual verification + the native widget plumbing
-(camera/signature/sketch surfaces, the map control) need a build host with the
-full toolchain. Beyond that: hardware (external GNSS G5, sensors I1–I3, AR G6)
-and an imaging library (image resize/compression C8).
+### The MAUI app builds to a signed, installable APK
+
+The Android toolchain was bootstrapped into `$HOME` (Temurin JDK 17 + Android
+SDK cmdline-tools, platform android-36, build-tools 36.0.0, platform-tools).
+With it, the MAUI app **builds in Debug and Release with 0 warnings/0 errors**
+and packages to a signed APK — `io.honua.collect` ("Honua Collect"), minSdk 21 /
+targetSdk 36 — that `apksigner` verifies under the v1/v2/v3 signing schemes. The
+app launches to a home screen and opens the dynamic `FormPage` over a sample
+inspection form (scalar fields, conditional Notes, photo, repeatable Deficiency
+section). To build it:
+
+```bash
+export JAVA_HOME=$HOME/jdk17 ANDROID_HOME=$HOME/android-sdk
+dotnet build src/Honua.Collect.App -f net10.0-android -c Release \
+  -p:AndroidSdkDirectory=$HOME/android-sdk -p:JavaSdkDirectory=$HOME/jdk17
+```
+
+What still can't be done **in this headless session** is *launching* the app on
+a screen: the Android emulator needs `/dev/kvm` access (the user is not in the
+`kvm` group and `sudo` is non-interactive here) or a physical device, and the
+native widget surfaces (camera/signature/sketch capture, the live map control)
+plus hardware (external GNSS G5, sensors I1–I3, AR G6) and an imaging library
+(image resize/compression C8) need real-device integration. The screen
+*behaviour* is unit-tested via the presentation view-models.
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
