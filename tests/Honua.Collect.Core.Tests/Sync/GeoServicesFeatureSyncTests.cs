@@ -119,6 +119,139 @@ public class GeoServicesFeatureSyncTests
         Assert.Equal("Feature not found.", result.Error);
     }
 
+    private sealed class CapturingMultipartHandler(HttpStatusCode status, string responseBody) : HttpMessageHandler
+    {
+        public string? CapturedBody { get; private set; }
+        public string? CapturedMediaType { get; private set; }
+        public HttpMethod? CapturedMethod { get; private set; }
+        public Uri? CapturedUri { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            CapturedMethod = request.Method;
+            CapturedUri = request.RequestUri;
+            CapturedMediaType = request.Content?.Headers.ContentType?.MediaType;
+            CapturedBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(status) { Content = new StringContent(responseBody) };
+        }
+    }
+
+    private static string TempFileWithBytes()
+    {
+        var path = Path.GetTempFileName();
+        File.WriteAllBytes(path, new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 });
+        return path;
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_posts_multipart_to_addAttachment_and_parses_object_id()
+    {
+        var handler = new CapturingMultipartHandler(HttpStatusCode.OK, """{"addAttachmentResult":{"objectId":555,"success":true}}""");
+        using var http = new HttpClient(handler);
+        var sync = new GeoServicesFeatureSync(http);
+        var file = TempFileWithBytes();
+        try
+        {
+            var result = await sync.AddAttachmentAsync(42, file, "image/jpeg",
+                new GeoServicesTarget("http://server:18080", "mobile_offline_demo", 68910));
+
+            Assert.True(result.Success);
+            Assert.Equal(555, result.ObjectId);
+            Assert.Equal(HttpMethod.Post, handler.CapturedMethod);
+            Assert.EndsWith("/rest/services/mobile_offline_demo/FeatureServer/68910/42/addAttachment", handler.CapturedUri!.AbsoluteUri);
+            Assert.Equal("multipart/form-data", handler.CapturedMediaType);
+            Assert.Contains("name=attachment", handler.CapturedBody!.Replace("\"", ""));
+            Assert.Contains("name=f", handler.CapturedBody.Replace("\"", ""));
+            Assert.Contains("json", handler.CapturedBody);
+            Assert.Contains(Path.GetFileName(file), handler.CapturedBody);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_defaults_content_type_to_octet_stream()
+    {
+        var handler = new CapturingMultipartHandler(HttpStatusCode.OK, """{"addAttachmentResult":{"objectId":1,"success":true}}""");
+        using var http = new HttpClient(handler);
+        var file = TempFileWithBytes();
+        try
+        {
+            var result = await new GeoServicesFeatureSync(http)
+                .AddAttachmentAsync(1, file, null, new GeoServicesTarget("http://s", "svc", 9));
+
+            Assert.True(result.Success);
+            Assert.Contains("application/octet-stream", handler.CapturedBody);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_surfaces_server_error()
+    {
+        var handler = new CapturingMultipartHandler(HttpStatusCode.OK, """{"error":{"code":400,"message":"invalid attachment"}}""");
+        using var http = new HttpClient(handler);
+        var file = TempFileWithBytes();
+        try
+        {
+            var result = await new GeoServicesFeatureSync(http)
+                .AddAttachmentAsync(42, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
+
+            Assert.False(result.Success);
+            Assert.Equal("invalid attachment", result.Error);
+            Assert.Equal(400, result.ErrorCode);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_surfaces_failure_result_description()
+    {
+        var handler = new CapturingMultipartHandler(HttpStatusCode.OK,
+            """{"addAttachmentResult":{"objectId":0,"success":false,"error":{"code":500,"description":"Could not store attachment."}}}""");
+        using var http = new HttpClient(handler);
+        var file = TempFileWithBytes();
+        try
+        {
+            var result = await new GeoServicesFeatureSync(http)
+                .AddAttachmentAsync(42, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
+
+            Assert.False(result.Success);
+            Assert.Equal("Could not store attachment.", result.Error);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_validates_arguments()
+    {
+        using var http = new HttpClient(new CapturingMultipartHandler(HttpStatusCode.OK, "{}"));
+        var sync = new GeoServicesFeatureSync(http);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            sync.AddAttachmentAsync(1, "f", null, null!));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sync.AddAttachmentAsync(1, "  ", null, new GeoServicesTarget("http://s", "svc", 9)));
+    }
+
+    [Fact]
+    public void AttachmentUrl_builds_expected_endpoint()
+    {
+        var target = new GeoServicesTarget("http://server:18080/", "svc", 9);
+        Assert.Equal("http://server:18080/rest/services/svc/FeatureServer/9/42/addAttachment", target.AttachmentUrl(42));
+    }
+
     private sealed class SequencedHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
     {
         public int Calls { get; private set; }

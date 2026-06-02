@@ -13,6 +13,11 @@ public sealed record GeoServicesTarget(string BaseUrl, string ServiceId, int Lay
     /// <summary>The full applyEdits endpoint URL for this target.</summary>
     public string ApplyEditsUrl =>
         $"{BaseUrl.TrimEnd('/')}/rest/services/{ServiceId}/FeatureServer/{LayerId}/applyEdits";
+
+    /// <summary>The full addAttachment endpoint URL for a feature on this target.</summary>
+    /// <param name="objectId">Object id of the feature the attachment belongs to.</param>
+    public string AttachmentUrl(long objectId) =>
+        $"{BaseUrl.TrimEnd('/')}/rest/services/{ServiceId}/FeatureServer/{LayerId}/{objectId.ToString(CultureInfo.InvariantCulture)}/addAttachment";
 }
 
 /// <summary>Result of submitting a record to the server.</summary>
@@ -124,6 +129,50 @@ public sealed class GeoServicesFeatureSync
         ArgumentNullException.ThrowIfNull(target);
         var deletes = $"[{objectId.ToString(CultureInfo.InvariantCulture)}]";
         return PostEditsAsync(target, "deletes", deletes, "deleteResults", cancellationToken);
+    }
+
+    /// <summary>
+    /// Uploads a media file to a feature's <c>addAttachment</c> endpoint as a
+    /// <c>multipart/form-data</c> POST. Call this after <see cref="SubmitAsync"/>
+    /// returns the feature's object id, once per captured media attachment.
+    /// </summary>
+    /// <param name="objectId">Object id of the feature to attach the file to.</param>
+    /// <param name="filePath">Local file-system path of the media to upload.</param>
+    /// <param name="contentType">MIME type of the file; defaults to <c>application/octet-stream</c>.</param>
+    /// <param name="target">Target service/layer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result with the server-assigned attachment object id on success.</returns>
+    public async Task<FeatureSyncResult> AddAttachmentAsync(
+        long objectId,
+        string filePath,
+        string? contentType,
+        GeoServicesTarget target,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+        using var content = new MultipartFormDataContent();
+
+        var textPart = new StringContent("json");
+        content.Add(textPart, "f");
+
+        var fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+        var filePart = new ByteArrayContent(fileBytes);
+        filePart.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
+        content.Add(filePart, "attachment", Path.GetFileName(filePath));
+
+        using var response = await _http.PostAsync(target.AttachmentUrl(objectId), content, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
+        }
+
+        return ParseAttachmentResult(body);
     }
 
     private async Task<FeatureSyncResult> PostEditsAsync(
@@ -328,6 +377,49 @@ public sealed class GeoServicesFeatureSync
             }
 
             return new FeatureSyncResult(false, null, $"Unexpected response: no {resultKey}.");
+        }
+        catch (JsonException ex)
+        {
+            return new FeatureSyncResult(false, null, $"Invalid response: {ex.Message}");
+        }
+    }
+
+    private static FeatureSyncResult ParseAttachmentResult(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("error", out var error))
+            {
+                var msg = error.TryGetProperty("message", out var m) ? m.GetString() : "Server error";
+                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+                return new FeatureSyncResult(false, null, msg, code);
+            }
+
+            if (root.TryGetProperty("addAttachmentResult", out var result))
+            {
+                var success = result.TryGetProperty("success", out var s) && s.GetBoolean();
+                long? oid = result.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
+                if (success)
+                {
+                    return new FeatureSyncResult(true, oid, null);
+                }
+
+                // Attachment failure: surface the server's error message + code.
+                string? detail = "Attachment was not added.";
+                int? errCode = null;
+                if (result.TryGetProperty("error", out var e))
+                {
+                    detail = e.TryGetProperty("description", out var d) ? d.GetString() : detail;
+                    errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
+                }
+
+                return new FeatureSyncResult(false, oid, detail, errCode);
+            }
+
+            return new FeatureSyncResult(false, null, "Unexpected response: no addAttachmentResult.");
         }
         catch (JsonException ex)
         {
