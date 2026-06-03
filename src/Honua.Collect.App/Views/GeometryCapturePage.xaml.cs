@@ -1,8 +1,10 @@
 using Honua.Collect.App.Maps;
+using Honua.Collect.App.Services;
 using Honua.Collect.Core.Field.Geometry;
 using Honua.Collect.Core.Maps;
 using Honua.Collect.Presentation.Geometry;
 using Honua.Sdk.Field.Records;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
@@ -20,7 +22,9 @@ public partial class GeometryCapturePage : ContentPage
     private const int MinZoom = 2;
     private const int MaxZoom = 19;
 
-    private readonly OsmTileLoader _tiles = new(Path.Combine(FileSystem.AppDataDirectory, "tiles"));
+    private readonly OsmTileLoader _tiles = new(
+        Path.Combine(FileSystem.AppDataDirectory, "tiles"),
+        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.TileHttpClient));
     private readonly SlippyMapDrawable _map;
     private MapCaptureViewModel _vm = new(CapturedGeometryType.Point);
 

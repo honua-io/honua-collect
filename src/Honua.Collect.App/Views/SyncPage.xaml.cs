@@ -2,7 +2,6 @@ using Honua.Collect.App.Services;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Sync;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
@@ -16,8 +15,6 @@ public partial class SyncPage : ContentPage
 {
     private readonly AppSettings _settings = ServiceHelper.Get<AppSettings>();
     private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
-    private readonly HttpClient _http =
-        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.ServerHttpClient);
 
     public SyncPage()
     {
@@ -35,12 +32,14 @@ public partial class SyncPage : ContentPage
 
     private async Task<string?> UploadAsync(Core.Records.CollectRecordEntry entry, CancellationToken cancellationToken)
     {
-        var result = await new GeoServicesFeatureSync(_http).SubmitAsync(entry.Record, _settings.Target, cancellationToken);
+        var result = await ServiceHelper.Get<GeoServicesFeatureSync>()
+            .SubmitAsync(entry.Record, _settings.Target, cancellationToken);
         return result.Success ? result.ObjectId?.ToString() : null;
     }
 
     private async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)
-        => await new GeoServicesFeatureSync(_http).QueryAsync(_settings.Target, "1=1", cancellationToken);
+        => await ServiceHelper.Get<GeoServicesFeatureSync>()
+            .QueryAsync(_settings.Target, "1=1", cancellationToken);
 
     private async void OnPull(object? sender, EventArgs e)
     {

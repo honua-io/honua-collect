@@ -29,3 +29,7 @@ Thumbs.db
 
 # Claude Code session worktrees/state
 .claude/
+
+# Local dev config overrides (never commit credentials)
+appsettings.local.json
+**/appsettings.local.json

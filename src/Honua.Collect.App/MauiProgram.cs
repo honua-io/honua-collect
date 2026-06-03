@@ -1,6 +1,8 @@
 using Honua.Collect.App.Services;
 using Honua.Collect.Core.Enterprise;
 using Honua.Collect.Core.Storage;
+using Honua.Collect.Core.Sync;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Honua.Collect.App;
@@ -9,6 +11,12 @@ public static class MauiProgram
 {
 	/// <summary>The named HTTP client configured with the server base address and auth handler.</summary>
 	public const string ServerHttpClient = "honua";
+
+	/// <summary>Named HTTP client for OpenStreetMap tile requests (no server auth).</summary>
+	public const string TileHttpClient = "osm";
+
+	/// <summary>Named HTTP client for the Anthropic API (no server auth).</summary>
+	public const string AnthropicHttpClient = "anthropic";
 
 	public static MauiApp CreateMauiApp()
 	{
@@ -33,6 +41,15 @@ public static class MauiProgram
 		builder.Services.AddTransient<AuthHeaderHandler>();
 		builder.Services.AddHttpClient(ServerHttpClient, client => client.BaseAddress = settings.BaseUri)
 			.AddHttpMessageHandler<AuthHeaderHandler>();
+
+		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
+		builder.Services.AddHttpClient(TileHttpClient,
+			client => client.DefaultRequestHeaders.UserAgent.ParseAdd("HonuaCollect/1.0 (+https://honua.io)"));
+		builder.Services.AddHttpClient(AnthropicHttpClient);
+
+		// The feature-sync transport over the auth-aware server client.
+		builder.Services.AddTransient(sp =>
+			new GeoServicesFeatureSync(sp.GetRequiredService<IHttpClientFactory>().CreateClient(ServerHttpClient)));
 
 		// One durable record store + the shared, thread-safe record book.
 		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-records.db");
