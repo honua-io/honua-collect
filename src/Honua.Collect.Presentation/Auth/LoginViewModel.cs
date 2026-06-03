@@ -71,6 +71,9 @@ public sealed class LoginViewModel : ObservableObject
         private set => SetProperty(ref _errorMessage, value);
     }
 
+    /// <summary>Diagnostic detail of the last failure (for logging), not shown to the user.</summary>
+    public string? ErrorDetail { get; private set; }
+
     /// <summary>Whether a session has been established.</summary>
     public bool IsAuthenticated
     {
@@ -122,7 +125,9 @@ public sealed class LoginViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            // Don't surface raw server/transport detail to the UI; keep it for diagnostics.
+            ErrorDetail = ex.Message;
+            ErrorMessage = "Sign-in failed. Check your connection and try again.";
         }
         finally
         {

@@ -6,7 +6,9 @@ set -euo pipefail
 IMAGE="${HONUA_SERVER_IMAGE:-honua-server:esri-cert-trunk}"
 SERVER_REPO="${HONUA_SERVER_REPO:-/home/mike/honua-io/honua-server}"
 PGPORT="${PGPORT:-55432}"; HTTPPORT="${HTTPPORT:-18080}"
-ADMIN_PW="${HONUA_E2E_APIKEY:-AdminPass123!}"
+# Admin/API key for the ephemeral e2e server. No literal default is committed:
+# supply HONUA_E2E_APIKEY, else a random one is generated and printed below.
+ADMIN_PW="${HONUA_E2E_APIKEY:-$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')}"
 
 docker network create honua-e2e 2>/dev/null || true
 docker rm -f honua-e2e-pg honua-e2e-srv >/dev/null 2>&1 || true

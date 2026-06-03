@@ -19,7 +19,7 @@
                    Text="{Binding Username}" />
 
             <Entry x:Name="PasswordEntry"
-                   Placeholder="Password / API key"
+                   Placeholder="API key / token"
                    IsPassword="True"
                    Text="{Binding Password}" />
 
