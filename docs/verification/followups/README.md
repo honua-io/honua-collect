@@ -60,3 +60,28 @@ Point capture drops a marker at the tapped location; zooming keeps the overlay
 geographically registered. 12 `WebMercator` projection tests back the math
 (round-trip lat/lon↔world-pixel↔screen, known OSM tile indices, hemisphere
 orientation).
+
+## Community capture widgets (C1–C6, C8)
+
+The dynamic form now renders a real device capture control per widget kind
+(`FieldWidgetTemplateSelector` + a widget-aware capture dispatch in `FormPage`).
+A bundled **Capture Kit** demo form (home → "Capture Widgets Demo") exercises all
+six. No native map/scanner SDKs: photo/video use `MediaPicker`, audio uses
+`Plugin.Maui.Audio` (net10-android), ink is rasterized with MAUI Graphics, and
+barcodes are decoded from a still image with the pure-.NET ZXing core.
+
+| File | Demonstrates |
+| --- | --- |
+| `07-capture-widgets.png` | The Capture Kit form: barcode, photo, video, audio, signature, sketch widgets, with live attachment counts. |
+| `08-barcode-decoded.png` | **C6** — a scanned QR decoded to its exact payload `HONUA-ASSET-12345` into the field (`BarcodeDecoder` via ZXing). |
+| `09-signature-raster.png` | **C4/C5** — freehand ink rasterized to a 294×512 PNG (the same `InkCapturePage` backs signature and sketch). |
+
+Verified on the emulator:
+
+- **C1 photo + C8 compression** — a picked 3000×2000 / 677 KB image was downscaled to **1600×1067 / 95 KB** JPEG before storing (`ImageCompressor`).
+- **C2 audio** — recorded a clip to a WAV via `Plugin.Maui.Audio` (mic permission granted at runtime).
+- **C4 signature / C5 sketch** — strokes rasterized to a white-background PNG.
+- **C6 barcode** — QR decoded to `HONUA-ASSET-12345`.
+- **C3 video** uses the same `MediaPicker` capture/pick + import path as the verified photo widget.
+
+Manifest gains `CAMERA`, `RECORD_AUDIO`, and the scoped media-read permissions.

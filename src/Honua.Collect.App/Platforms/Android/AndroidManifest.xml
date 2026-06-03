@@ -3,4 +3,11 @@
 	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:usesCleartextTraffic="true"></application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.CAMERA" />
+	<uses-permission android:name="android.permission.RECORD_AUDIO" />
+	<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+	<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+	<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+	<uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

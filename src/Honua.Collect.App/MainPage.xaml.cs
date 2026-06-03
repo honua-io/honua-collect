@@ -48,6 +48,16 @@ public partial class MainPage : ContentPage
         await Navigation.PushAsync(new FormPage(viewModel));
     }
 
+    private async void OnCaptureKitClicked(object? sender, EventArgs e)
+    {
+        // A local-only demo of every capture widget; not synced to the server.
+        var session = FormSession.CreateForNewRecord(SampleForms.CaptureKit(), Guid.NewGuid().ToString("n"));
+        var viewModel = new FormPageViewModel(session);
+        viewModel.SubmitSucceeded += (_, record) =>
+            StatusLabel.Text = $"Capture kit: {record.Media.Count} attachment(s), asset tag “{record.Values.GetValueOrDefault("asset_tag")}”.";
+        await Navigation.PushAsync(new FormPage(viewModel));
+    }
+
     private async void OnDownloadFormClicked(object? sender, EventArgs e)
     {
         StatusLabel.Text = "Downloading latest form…";

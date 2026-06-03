@@ -55,4 +55,32 @@ public static class SampleForms
             },
         ],
     };
+
+    /// <summary>
+    /// A demo form exercising every capture widget (barcode, photo, video, audio,
+    /// signature, sketch). Used to verify the on-device capture pipelines; it is
+    /// not tied to a server layer.
+    /// </summary>
+    public static FormDefinition CaptureKit() => new()
+    {
+        FormId = "capture-kit",
+        Name = "Capture Kit",
+        Sections =
+        [
+            new FormSection
+            {
+                SectionId = "media",
+                Label = "Capture widgets",
+                Fields =
+                [
+                    new FormField { FieldId = "asset_tag", Label = "Asset tag (scan)", Type = FormFieldType.Barcode, HelpText = "Scan a barcode or QR code" },
+                    new FormField { FieldId = "photo", Label = "Photo", Type = FormFieldType.Photo },
+                    new FormField { FieldId = "video", Label = "Video", Type = FormFieldType.Video },
+                    new FormField { FieldId = "audio", Label = "Voice note", Type = FormFieldType.Audio },
+                    new FormField { FieldId = "signature", Label = "Signature", Type = FormFieldType.Signature },
+                    new FormField { FieldId = "sketch", Label = "Sketch", Type = FormFieldType.Sketch },
+                ],
+            },
+        ],
+    };
 }
