@@ -140,7 +140,7 @@ proven; these are device-sensor integrations.
 | C4 | Signature capture pad | 🧱✅ | Community | collect |
 | C5 | Sketch / freehand drawing widget | 🧱✅ | Community | collect |
 | C6 | Barcode / QR scanner (decode from image) | 🧱✅ | Community | collect |
-| C7 | Photo annotation / markup (Fulcrum parity) | 🧱 | Pro | collect |
+| C7 | Photo annotation / markup (Fulcrum parity) | 🧱✅ | Pro | collect |
 | C8 | Image auto-resize/compression before upload | ✅ | Community | collect |
 | C9 | Chunked/resumable large-media upload | 🧱 | Community | mobile |
 
@@ -179,8 +179,8 @@ proven; these are device-sensor integrations.
 
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
-| R1 | Per-record PDF/Word feature reports (templated) | 🧱 | Pro | collect |
-| R2 | Bulk export (CSV/GeoJSON/GeoPackage/Shapefile) | 🧱 | Pro | collect |
+| R1 | Per-record feature reports (templated Markdown) | 🧱✅ | Pro | collect |
+| R2 | Bulk export (CSV/GeoJSON) | 🧱✅ | Pro | collect |
 | R3 | Report template designer | ❌ | Pro | collect |
 
 ## 6. AI-assisted capture (Pro — differentiator; framework exists, provider stubbed)
@@ -188,7 +188,7 @@ proven; these are device-sensor integrations.
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
 | A1 | Voice-to-fields | 🧱 | Pro | collect |
-| A2 | Photo-to-fields (object/attribute extraction) | 🧱 | Pro | collect |
+| A2 | Photo-to-fields (Anthropic vision; needs API key) | 🧱 | Pro | collect |
 | A3 | Media redaction / face-blur execution | 🧱 | Pro | collect |
 
 ## 7. Enterprise auth & admin (Enterprise)
@@ -199,7 +199,7 @@ proven; these are device-sensor integrations.
 | E2 | Role enforcement on device | 🧱 | Enterprise | collect |
 | E3 | Audit logging | 🧱 | Enterprise | collect |
 | E4 | MDM / white-labeling / app config | 🧱 | Enterprise | collect |
-| E5 | Assignments / inbox & task dispatch | 🧱 | Pro | collect |
+| E5 | Assignments / inbox & task dispatch | 🧱✅ | Pro | collect |
 | E6 | Push notifications (new assignment, sync done) | 🧱 | Pro | collect |
 
 ## 8. Sensors / IoT (honua-mobile IoT module is interface-only today)

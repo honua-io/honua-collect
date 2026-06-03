@@ -32,14 +32,14 @@ public partial class ExportPage : ContentPage
             Edition);
     }
 
-    private Task OnExportCsv(object? sender, EventArgs e) =>
-        ShareTextAsync(vm => vm.ExportCsv(), "csv", "text/csv", "CSV export");
+    private async void OnExportCsv(object? sender, EventArgs e) =>
+        await ShareTextAsync(vm => vm.ExportCsv(), "csv", "text/csv", "CSV export");
 
-    private Task OnExportGeoJson(object? sender, EventArgs e) =>
-        ShareTextAsync(vm => vm.ExportGeoJson(), "geojson", "application/geo+json", "GeoJSON export");
+    private async void OnExportGeoJson(object? sender, EventArgs e) =>
+        await ShareTextAsync(vm => vm.ExportGeoJson(), "geojson", "application/geo+json", "GeoJSON export");
 
-    private Task OnReportLatest(object? sender, EventArgs e) =>
-        ShareTextAsync(vm => vm.RenderLatestReport(), "md", "text/markdown", "Record report");
+    private async void OnReportLatest(object? sender, EventArgs e) =>
+        await ShareTextAsync(vm => vm.RenderLatestReport(), "md", "text/markdown", "Record report");
 
     private async Task ShareTextAsync(Func<ExportViewModel, string> produce, string extension, string contentType, string title)
     {

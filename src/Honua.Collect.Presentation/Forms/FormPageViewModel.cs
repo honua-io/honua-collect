@@ -76,6 +76,12 @@ public sealed class FormPageViewModel : ObservableObject
     /// <summary>The underlying record (for persistence / navigation).</summary>
     public FieldRecord Record => _session.Record;
 
+    /// <summary>The underlying capture session (for AI-assisted fill, etc.).</summary>
+    public FormSession Session => _session;
+
+    /// <summary>Re-reads field state after the session is mutated externally (e.g. AI fill).</summary>
+    public void RefreshFields() => RefreshAll();
+
     /// <summary>Submits the form when valid.</summary>
     public ICommand SubmitCommand { get; }
 

@@ -187,13 +187,14 @@ public partial class PhotoAnnotationPage : ContentPage
                 continue;
             }
 
+            var strokeWidth = (float)PhotoAnnotationMapper.StrokeWidthPixels(annotation, width, height);
             canvas.StrokeColor = Color.FromArgb(annotation.Color);
-            canvas.StrokeSize = (float)PhotoAnnotationMapper.StrokeWidthPixels(annotation, width, height);
+            canvas.StrokeSize = strokeWidth;
 
             if (pixels.Count == 1)
             {
                 canvas.FillColor = Color.FromArgb(annotation.Color);
-                canvas.FillCircle((float)pixels[0].X, (float)pixels[0].Y, canvas.StrokeSize / 2f);
+                canvas.FillCircle((float)pixels[0].X, (float)pixels[0].Y, strokeWidth / 2f);
                 continue;
             }
 

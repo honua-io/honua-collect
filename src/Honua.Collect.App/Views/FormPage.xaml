@@ -120,6 +120,8 @@
 
             <Label Text="{Binding ErrorSummary}" TextColor="Red" />
 
+            <Button Text="✨ AI fill from photo" Clicked="OnAiFill" HorizontalOptions="Fill" />
+
             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                 <Button Text="Save draft" Command="{Binding SaveDraftCommand}" />
                 <Button Grid.Column="1" Text="Submit" Command="{Binding SubmitCommand}" />

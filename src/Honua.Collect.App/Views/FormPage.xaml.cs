@@ -1,4 +1,6 @@
 using Honua.Collect.App.Capture;
+using Honua.Collect.Core.Ai;
+using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Presentation.Forms;
 
@@ -108,6 +110,51 @@ public partial class FormPage : ContentPage
         }
     }
 
+    private static readonly HttpClient AiHttp = new();
+
+    private async void OnAiFill(object? sender, EventArgs e)
+    {
+        if (BindingContext is not FormPageViewModel vm)
+        {
+            return;
+        }
+
+        var apiKey = Preferences.Default.Get("anthropic_api_key", string.Empty);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            await DisplayAlert("AI fill", "Set an Anthropic API key first (preference 'anthropic_api_key').", "OK");
+            return;
+        }
+
+        try
+        {
+            var photo = MediaPicker.Default.IsCaptureSupported
+                ? await MediaPicker.Default.CapturePhotoAsync()
+                : await MediaPicker.Default.PickPhotoAsync();
+            if (photo is null)
+            {
+                return;
+            }
+
+            var path = await CaptureFiles.ImportAsync(photo);
+            var provider = new AnthropicPhotoToFieldsProvider(AiHttp, new AnthropicPhotoToFieldsOptions { ApiKey = apiKey });
+            var result = await provider.ExtractAsync(path, vm.Session.Form);
+            TryDelete(path);
+
+            var outcome = new AiCaptureService(new CollectEntitlements(CollectEdition.Pro)).Apply(vm.Session, result);
+            vm.RefreshFields();
+            await DisplayAlert("AI fill",
+                outcome.Applied.Count > 0
+                    ? $"Filled {outcome.Applied.Count} field(s) from the photo."
+                    : $"No fields filled. {result.Unmapped}",
+                "OK");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("AI fill", $"AI fill failed: {ex.Message}", "OK");
+        }
+    }
+
     private async Task CapturePhotoAsync(FieldViewModel field)
     {
         var action = await DisplayActionSheet("Add photo", "Cancel", null, "Take photo", "Choose from gallery");
@@ -129,6 +176,18 @@ public partial class FormPage : ContentPage
         var imported = await CaptureFiles.ImportAsync(photo);
         var compressed = await ImageCompressor.CompressAsync(imported);
         TryDelete(imported);
+
+        // Offer markup/annotation (C7) — keep the flattened image if the user draws.
+        if (await DisplayAlert("Photo", "Add markup to this photo?", "Annotate", "Skip"))
+        {
+            var annotated = await PhotoAnnotationPage.CaptureAsync(Navigation, compressed);
+            if (annotated is not null)
+            {
+                TryDelete(compressed);
+                compressed = annotated;
+            }
+        }
+
         field.CaptureMedia(compressed, "image/jpeg");
     }
 
