@@ -119,6 +119,64 @@ public class RepeatSectionTests
     }
 
     [Fact]
+    public void Min_instances_fails_below_the_bound_and_passes_at_or_above_it()
+    {
+        var bounds = new Dictionary<string, RepeatBounds>
+        {
+            ["attachments"] = new RepeatBounds(Min: 2),
+        };
+        var session = FormSession.CreateForNewRecord(Form(), "r1", repeatBounds: bounds);
+        session.SetValue("poleId", "P-1");
+
+        // Zero rows: below the minimum, keyed to the section.
+        var result = session.Validate();
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.FieldId == "attachments");
+
+        // Add two satisfied rows -> now valid.
+        var r1 = session.AddRepeatInstance("attachments");
+        r1.SetValue("kind", "transformer");
+        var r2 = session.AddRepeatInstance("attachments");
+        r2.SetValue("kind", "crossarm");
+
+        Assert.DoesNotContain(session.Validate().Errors, e => e.FieldId == "attachments");
+        Assert.True(session.CanSubmit);
+    }
+
+    [Fact]
+    public void Max_instances_fails_above_the_bound()
+    {
+        var bounds = new Dictionary<string, RepeatBounds>
+        {
+            ["attachments"] = new RepeatBounds(Max: 1),
+        };
+        var session = FormSession.CreateForNewRecord(Form(), "r1", repeatBounds: bounds);
+        session.SetValue("poleId", "P-1");
+
+        var r1 = session.AddRepeatInstance("attachments");
+        r1.SetValue("kind", "transformer");
+        Assert.DoesNotContain(session.Validate().Errors, e => e.FieldId == "attachments");
+
+        var r2 = session.AddRepeatInstance("attachments");
+        r2.SetValue("kind", "crossarm");
+
+        var result = session.Validate();
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.FieldId == "attachments" && e.Message.Contains("most"));
+    }
+
+    [Fact]
+    public void Sections_without_bounds_behave_as_before()
+    {
+        // No bounds supplied: zero rows remains valid (parity with the original behaviour).
+        var session = FormSession.CreateForNewRecord(Form(), "r1");
+        session.SetValue("poleId", "P-1");
+
+        Assert.DoesNotContain(session.Validate().Errors, e => e.FieldId == "attachments");
+        Assert.True(session.CanSubmit);
+    }
+
+    [Fact]
     public void Removing_all_rows_clears_the_record_value()
     {
         var session = FormSession.CreateForNewRecord(Form(), "r1");

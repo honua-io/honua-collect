@@ -27,7 +27,11 @@ public enum CapturedGeometryType
 /// </summary>
 public sealed class GeometryCaptureSession
 {
+    /// <summary>Default snap tolerance, in metres, when snapping is enabled without an explicit tolerance.</summary>
+    public const double DefaultSnapToleranceMeters = 5.0;
+
     private readonly List<FieldGeoPoint> _vertices = [];
+    private readonly List<SnapTarget> _snapTargets = [];
 
     /// <summary>Creates a capture session for a geometry type.</summary>
     /// <param name="type">Kind of geometry to capture.</param>
@@ -35,6 +39,21 @@ public sealed class GeometryCaptureSession
 
     /// <summary>The geometry type being captured.</summary>
     public CapturedGeometryType Type { get; }
+
+    /// <summary>
+    /// Whether incoming vertices snap to nearby feature vertices/edges (BACKLOG G7).
+    /// Off by default so behaviour is unchanged unless explicitly enabled.
+    /// </summary>
+    public bool SnapEnabled { get; set; }
+
+    /// <summary>
+    /// Maximum distance, in metres, a captured vertex may be moved to snap to a
+    /// target. Only used when <see cref="SnapEnabled"/> is <see langword="true"/>.
+    /// </summary>
+    public double SnapToleranceMeters { get; set; } = DefaultSnapToleranceMeters;
+
+    /// <summary>The snap target geometries currently in scope.</summary>
+    public IReadOnlyList<SnapTarget> SnapTargets => _snapTargets;
 
     /// <summary>The captured vertices, in order.</summary>
     public IReadOnlyList<FieldGeoPoint> Vertices => _vertices;
@@ -55,20 +74,42 @@ public sealed class GeometryCaptureSession
     };
 
     /// <summary>
+    /// Replaces the snap targets used when <see cref="SnapEnabled"/> is set
+    /// (BACKLOG G7). Passing an empty set (or <see langword="null"/>) clears them.
+    /// </summary>
+    /// <param name="targets">Candidate features to snap captured vertices to.</param>
+    public void SetSnapTargets(IEnumerable<SnapTarget>? targets)
+    {
+        _snapTargets.Clear();
+        if (targets is not null)
+        {
+            _snapTargets.AddRange(targets.Where(t => t is not null && t.Vertices.Count > 0));
+        }
+    }
+
+    /// <summary>
     /// Adds a vertex. For a point, the single vertex is replaced rather than
-    /// appended.
+    /// appended. When <see cref="SnapEnabled"/> is set and the vertex lies within
+    /// <see cref="SnapToleranceMeters"/> of a snap target, the snapped position is
+    /// stored instead (BACKLOG G7).
     /// </summary>
     /// <param name="vertex">Vertex position.</param>
-    public void AddVertex(FieldGeoPoint vertex)
+    /// <returns>The snap result describing whether (and how) the vertex was snapped.</returns>
+    public SnapResult AddVertex(FieldGeoPoint vertex)
     {
         ArgumentNullException.ThrowIfNull(vertex);
+
+        var snap = SnapEnabled && _snapTargets.Count > 0
+            ? GeoSnapping.Snap(vertex, _snapTargets, SnapToleranceMeters)
+            : new SnapResult(SnapKind.None, vertex, double.PositiveInfinity);
 
         if (Type == CapturedGeometryType.Point)
         {
             _vertices.Clear();
         }
 
-        _vertices.Add(vertex);
+        _vertices.Add(snap.Point);
+        return snap;
     }
 
     /// <summary>Adds the averaged position from a GPS averager as a vertex.</summary>
