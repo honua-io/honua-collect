@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Collect.App.Views.InboxPage"
+             Title="Inbox">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="AssignmentItem">
+            <Grid Padding="16,10" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                <Label Text="{Binding Title}" FontAttributes="Bold" VerticalOptions="Center" />
+                <Label Grid.Column="1" Grid.RowSpan="2" Text="Open ›" FontSize="13" TextColor="#2E7D32"
+                       VerticalOptions="Center" />
+                <Label Grid.Row="1" Text="{Binding DueText}" FontSize="12" TextColor="Gray" />
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="0,8" Spacing="6">
+
+            <Label Text="{Binding Header}" Padding="16,4" FontAttributes="Bold" />
+
+            <Label Text="Open assignments" Padding="16,6,16,2" FontSize="13" TextColor="Gray" />
+            <CollectionView ItemsSource="{Binding OpenRows}"
+                            SelectionMode="Single"
+                            SelectionChanged="OnAssignmentSelected"
+                            ItemTemplate="{StaticResource AssignmentItem}"
+                            EmptyView="No open assignments." />
+
+            <Label Text="Completed" Padding="16,10,16,2" FontSize="13" TextColor="Gray" />
+            <CollectionView ItemsSource="{Binding CompletedRows}"
+                            ItemTemplate="{StaticResource AssignmentItem}"
+                            EmptyView="Nothing completed yet." />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
