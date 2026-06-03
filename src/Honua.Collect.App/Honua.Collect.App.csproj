@@ -63,6 +63,10 @@
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- appsettings.json is read synchronously at startup, so embed it (a MauiAsset
+		     would require the async FileSystem API and risk an async-over-sync hang). -->
+		<MauiAsset Remove="Resources\Raw\appsettings.json" />
+		<EmbeddedResource Include="Resources\Raw\appsettings.json" />
 	</ItemGroup>
 
 	<ItemGroup>

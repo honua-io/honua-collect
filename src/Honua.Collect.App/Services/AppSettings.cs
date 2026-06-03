@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Honua.Collect.Core.Sync;
 
@@ -29,12 +30,20 @@ public sealed class AppSettings
     /// <summary>The GeoServices feature-layer target derived from settings.</summary>
     public GeoServicesTarget Target => new(ServerBaseUrl, ServiceId, LayerId);
 
-    /// <summary>Loads settings from the bundled <c>appsettings.json</c> app-package asset.</summary>
+    /// <summary>
+    /// Loads settings from the embedded <c>appsettings.json</c> resource. Fully
+    /// synchronous so it is safe to call during MAUI startup without blocking on an
+    /// async file API (which deadlocks the UI thread).
+    /// </summary>
     /// <returns>The parsed settings.</returns>
-    public static async Task<AppSettings> LoadAsync()
+    public static AppSettings Load()
     {
-        using var stream = await FileSystem.OpenAppPackageFileAsync("appsettings.json");
-        using var document = await JsonDocument.ParseAsync(stream);
+        var assembly = typeof(AppSettings).Assembly;
+        var resourceName = assembly.GetManifestResourceNames()
+            .First(n => n.EndsWith("appsettings.json", StringComparison.Ordinal));
+
+        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        using var document = JsonDocument.Parse(stream);
         var root = document.RootElement;
         var server = root.GetProperty("server");
 

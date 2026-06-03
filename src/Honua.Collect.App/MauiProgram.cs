@@ -21,8 +21,9 @@ public static class MauiProgram
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
 
-		// Configuration loaded from the bundled asset — no endpoints or keys in code.
-		var settings = AppSettings.LoadAsync().GetAwaiter().GetResult();
+		// Configuration loaded synchronously from the embedded asset — no endpoints or
+		// keys in code, and no async-over-sync blocking on the startup thread.
+		var settings = AppSettings.Load();
 		builder.Services.AddSingleton(settings);
 
 		// Auth: the session store holds the signed-in credential (falling back to the
