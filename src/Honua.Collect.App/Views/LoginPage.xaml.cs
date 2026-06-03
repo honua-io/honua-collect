@@ -1,18 +1,22 @@
+using Honua.Collect.App.Services;
 using Honua.Collect.Core.Enterprise;
 using Honua.Collect.Presentation.Auth;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
 /// <summary>
 /// Sign-in page. A thin host over the unit-tested <see cref="LoginViewModel"/>;
-/// the injected <see cref="CredentialVerifier"/> validates the
-/// entered credentials against the Honua server and produces an
-/// <see cref="AuthSession"/> on success.
+/// the injected <see cref="CredentialVerifier"/> validates the entered credentials
+/// against the Honua server and, on success, stores the resulting
+/// <see cref="AuthSession"/> in the shared <see cref="IAuthSessionStore"/> so every
+/// subsequent sync/upload request carries the signed-in user's token.
 /// </summary>
 public partial class LoginPage : ContentPage
 {
-    // The Android emulator reaches the host loopback at 10.0.2.2.
-    private const string ServerBaseUrl = "http://10.0.2.2:18080";
+    private readonly IAuthSessionStore _sessions = ServiceHelper.Get<IAuthSessionStore>();
+    private readonly AppSettings _settings = ServiceHelper.Get<AppSettings>();
+    private readonly IHttpClientFactory _httpFactory = ServiceHelper.Get<IHttpClientFactory>();
 
     private readonly LoginViewModel _viewModel;
 
@@ -26,21 +30,29 @@ public partial class LoginPage : ContentPage
 
     private void OnAuthenticated(object? sender, AuthSession session)
     {
-        SignedInLabel.Text = $"Signed in as {session.DisplayName ?? session.UserId}. Sync is enabled.";
+        // This is the seam that makes login functional: the transport handler now
+        // sends this token on every request.
+        _sessions.Set(session);
+        SignedInLabel.Text = $"Signed in as {session.DisplayName ?? session.UserId}. Sync uses your account.";
     }
 
     /// <summary>
-    /// Validates credentials by issuing an authenticated request to the server
-    /// with the supplied secret as the API key. A 2xx response yields a session;
-    /// any other status is treated as invalid credentials.
+    /// Validates credentials by issuing an authenticated request to the server with
+    /// the supplied secret. A 2xx response yields a session; any other status is
+    /// treated as invalid credentials.
     /// </summary>
-    private static async Task<AuthSession?> VerifyAsync(string username, string password, CancellationToken ct)
+    private async Task<AuthSession?> VerifyAsync(string username, string password, CancellationToken ct)
     {
-        using var http = new HttpClient { BaseAddress = new Uri(ServerBaseUrl) };
-        http.DefaultRequestHeaders.Add("X-API-Key", password);
+        var http = _httpFactory.CreateClient(MauiProgram.ServerHttpClient);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/rest/services/{_settings.ServiceId}/FeatureServer/{_settings.LayerId}?f=json");
 
-        using var response = await http.GetAsync(
-            "/rest/services/mobile_offline_demo/FeatureServer/68910?f=json", ct);
+        // Present the entered credential explicitly (the auth handler leaves an
+        // explicit header untouched), so we test the user's own credential.
+        request.Headers.Add(AuthHeaderHandler.HeaderName, password);
+
+        using var response = await http.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
         {
             return null;

@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The Honua.Sdk.* packages come from the private github-honua feed.
+      - name: Authenticate package feed
+        run: >-
+          dotnet nuget update source github-honua
+          --username ${{ github.actor }}
+          --password ${{ secrets.GITHUB_TOKEN }}
+          --store-password-in-clear-text
+          --configfile NuGet.config
+
+      - name: Build + test Core
+        run: dotnet test tests/Honua.Collect.Core.Tests/Honua.Collect.Core.Tests.csproj -c Release --logger "console;verbosity=minimal"
+
+      - name: Build + test Presentation
+        run: dotnet test tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj -c Release --logger "console;verbosity=minimal"

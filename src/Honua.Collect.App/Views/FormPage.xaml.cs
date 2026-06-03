@@ -119,10 +119,10 @@ public partial class FormPage : ContentPage
             return;
         }
 
-        var apiKey = Preferences.Default.Get("anthropic_api_key", string.Empty);
+        var apiKey = await SecureStorage.Default.GetAsync("anthropic_api_key");
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            await DisplayAlert("AI fill", "Set an Anthropic API key first (preference 'anthropic_api_key').", "OK");
+            await DisplayAlert("AI fill", "Set an Anthropic API key first (secure storage 'anthropic_api_key').", "OK");
             return;
         }
 
