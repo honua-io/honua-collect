@@ -1,4 +1,5 @@
 using Honua.Collect.Core.Sync;
+using Honua.Collect.Core.Tests.TestData;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -26,15 +27,7 @@ public class FeaturePullServiceTests
     };
 
     private static FieldRecord Local(string id, params (string Key, object? Value)[] values)
-    {
-        var r = new FieldRecord { RecordId = id, FormId = "f", Status = RecordStatus.Submitted };
-        foreach (var (key, value) in values)
-        {
-            r.Values[key] = value;
-        }
-
-        return r;
-    }
+        => FieldRecords.Create(id, status: RecordStatus.Submitted, values: values);
 
     private static PulledRecord Server(long objectId, params (string Key, object? Value)[] values)
     {

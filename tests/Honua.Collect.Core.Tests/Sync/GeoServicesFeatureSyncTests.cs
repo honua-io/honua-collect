@@ -448,4 +448,231 @@ public class GeoServicesFeatureSyncTests
         Assert.False(result.Success);
         Assert.Equal(500, result.ErrorCode);
     }
+
+    [Fact]
+    public async Task QueryAsync_surfaces_transport_exception_as_failure()
+    {
+        using var http = new HttpClient(new ThrowingHandler(new HttpRequestException("connection refused")));
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Contains("connection refused", result.Error);
+        Assert.Empty(result.Records);
+    }
+
+    [Fact]
+    public async Task QueryAsync_surfaces_invalid_json_body()
+    {
+        var handler = new QueryHandler((HttpStatusCode.OK, "this is not json"));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Contains("Invalid response", result.Error);
+    }
+
+    [Fact]
+    public async Task QueryAsync_blank_where_defaults_to_all_features()
+    {
+        var handler = new QueryHandler((HttpStatusCode.OK, """{"features":[]}"""));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9), "   ");
+
+        Assert.True(result.Success);
+        Assert.Contains("where=1%3D1", handler.CapturedUris[0].AbsoluteUri); // 1=1
+    }
+
+    [Fact]
+    public async Task QueryAsync_skips_features_without_attributes_or_object_id_and_decodes_value_kinds()
+    {
+        const string body = """
+        {
+          "objectIdFieldName": "fid",
+          "features": [
+            { "geometry": { "x": 1, "y": 2 } },
+            { "attributes": { "site_name": "no oid" } },
+            { "attributes": { "fid": 5, "flag": true, "off": false, "missing": null,
+                              "rate": 1.25, "tags": [ "a", "b" ] },
+              "geometry": { "spatialReference": { "wkid": 4326 } } }
+          ]
+        }
+        """;
+        var handler = new QueryHandler((HttpStatusCode.OK, body));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        var pulled = Assert.Single(result.Records); // first two are skipped
+        Assert.Equal(5, pulled.ObjectId);
+        Assert.False(pulled.Record.Values.ContainsKey("fid")); // custom oid field is metadata
+        Assert.True((bool)pulled.Record.Values["flag"]!);
+        Assert.False((bool)pulled.Record.Values["off"]!);
+        Assert.Null(pulled.Record.Values["missing"]);
+        Assert.Equal(1.25, (double)pulled.Record.Values["rate"]!, 5);
+        Assert.Equal("[\"a\",\"b\"]", ((string)pulled.Record.Values["tags"]!).Replace(" ", "")); // array -> raw text
+        Assert.Null(pulled.Record.Location); // geometry without x/y -> null location
+    }
+
+    [Fact]
+    public async Task SubmitAsync_handles_unexpected_response_with_no_results_array()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, """{"unrelated":true}""");
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FeatureSyncRetryPolicy.None)
+            .SubmitAsync(Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Contains("no addResults", result.Error);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_handles_invalid_json_response()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, "not json");
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FeatureSyncRetryPolicy.None)
+            .SubmitAsync(Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Contains("Invalid response", result.Error);
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_surfaces_http_failure_status()
+    {
+        var handler = new CapturingMultipartHandler(HttpStatusCode.BadGateway, "upstream down");
+        using var http = new HttpClient(handler);
+        var file = TempFileWithBytes();
+        try
+        {
+            var result = await new GeoServicesFeatureSync(http)
+                .AddAttachmentAsync(1, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
+
+            Assert.False(result.Success);
+            Assert.Equal(502, result.ErrorCode);
+            Assert.Contains("HTTP 502", result.Error);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task AddAttachmentAsync_handles_unexpected_and_invalid_json_responses()
+    {
+        var file = TempFileWithBytes();
+        try
+        {
+            using var http1 = new HttpClient(new CapturingMultipartHandler(HttpStatusCode.OK, """{"nope":1}"""));
+            var unexpected = await new GeoServicesFeatureSync(http1)
+                .AddAttachmentAsync(1, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
+            Assert.False(unexpected.Success);
+            Assert.Contains("no addAttachmentResult", unexpected.Error);
+
+            using var http2 = new HttpClient(new CapturingMultipartHandler(HttpStatusCode.OK, "garbage"));
+            var invalid = await new GeoServicesFeatureSync(http2)
+                .AddAttachmentAsync(1, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
+            Assert.False(invalid.Success);
+            Assert.Contains("Invalid response", invalid.Error);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void BuildAddsJson_encodes_bool_double_and_non_primitive_attributes()
+    {
+        var record = new FieldRecord { RecordId = "r", FormId = "f" }; // no location
+        record.Values["flag"] = true;
+        record.Values["rate"] = 2.5;
+        record.Values["when"] = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero); // non-primitive -> string
+        record.Values["objectid"] = 99; // reserved key is dropped
+
+        using var doc = JsonDocument.Parse(GeoServicesFeatureSync.BuildAddsJson(record));
+        var add = doc.RootElement[0];
+        Assert.False(add.TryGetProperty("geometry", out _)); // no location emitted
+        var attrs = add.GetProperty("attributes");
+        Assert.True(attrs.GetProperty("flag").GetBoolean());
+        Assert.Equal(2.5, attrs.GetProperty("rate").GetDouble(), 5);
+        Assert.Equal(JsonValueKind.String, attrs.GetProperty("when").ValueKind);
+        Assert.False(attrs.TryGetProperty("objectid", out _)); // reserved key not written from values
+    }
+
+    [Fact]
+    public void BuildAddsJson_validates_null_record()
+        => Assert.Throws<ArgumentNullException>(() => GeoServicesFeatureSync.BuildAddsJson(null!));
+
+    [Fact]
+    public async Task Submit_and_update_validate_null_arguments()
+    {
+        using var http = new HttpClient(new CapturingHandler(HttpStatusCode.OK, "{}"));
+        var sync = new GeoServicesFeatureSync(http);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => sync.SubmitAsync(null!, T));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => sync.SubmitAsync(Record(), null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => sync.UpdateAsync(1, null!, T));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => sync.UpdateAsync(1, Record(), null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => sync.DeleteAsync(1, null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => sync.QueryAsync(null!));
+    }
+
+    [Fact]
+    public void Constructor_rejects_null_http_client()
+        => Assert.Throws<ArgumentNullException>(() => new GeoServicesFeatureSync(null!));
+
+    [Fact]
+    public async Task Retries_transient_transport_exception_then_succeeds()
+    {
+        var handler = new FlakyHandler(
+            new HttpRequestException("reset"),
+            (HttpStatusCode.OK, OkUpdate));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).UpdateAsync(9, Record(), T);
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    private sealed class ThrowingHandler(Exception ex) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => throw ex;
+    }
+
+    // Throws the supplied exception on the first call, then returns the queued responses.
+    private sealed class FlakyHandler : HttpMessageHandler
+    {
+        private readonly Exception _first;
+        private readonly (HttpStatusCode Status, string Body)[] _rest;
+
+        public FlakyHandler(Exception first, params (HttpStatusCode Status, string Body)[] rest)
+        {
+            _first = first;
+            _rest = rest;
+        }
+
+        public int Calls { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var index = Calls++;
+            if (index == 0)
+            {
+                throw _first;
+            }
+
+            var (status, body) = _rest[Math.Min(index - 1, _rest.Length - 1)];
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+        }
+    }
 }

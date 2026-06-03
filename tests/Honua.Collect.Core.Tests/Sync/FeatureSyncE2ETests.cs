@@ -66,13 +66,11 @@ public class FeatureSyncE2ETests
 
     // ---- Add / update / delete happy paths -----------------------------------
 
-    [Fact]
+    [SkippableFact]
     public async Task Add_persists_and_round_trips_geometry_and_typed_attributes()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var http = Authed();
         var marker = Marker();
@@ -97,13 +95,11 @@ public class FeatureSyncE2ETests
         Assert.Equal(21.31, f.GetProperty("geometry").GetProperty("y").GetDouble(), 5);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Update_changes_attributes_server_side()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var http = Authed();
         var sync = new GeoServicesFeatureSync(http);
@@ -121,13 +117,11 @@ public class FeatureSyncE2ETests
         Assert.Equal("updated", attrs.GetProperty("notes").GetString());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Delete_removes_the_feature()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var http = Authed();
         var sync = new GeoServicesFeatureSync(http);
@@ -143,13 +137,11 @@ public class FeatureSyncE2ETests
 
     // ---- Error / rejection cases ---------------------------------------------
 
-    [Fact]
+    [SkippableFact]
     public async Task Update_of_nonexistent_feature_is_rejected_not_crashing()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var http = Authed();
         var result = await new GeoServicesFeatureSync(http).UpdateAsync(999_000_111, Site(Marker()), Target);
@@ -158,13 +150,11 @@ public class FeatureSyncE2ETests
         Assert.Contains("not found", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Delete_of_nonexistent_feature_is_rejected_not_crashing()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var http = Authed();
         var result = await new GeoServicesFeatureSync(http).DeleteAsync(999_000_222, Target);
@@ -173,13 +163,11 @@ public class FeatureSyncE2ETests
         Assert.Contains("not found", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Submit_without_credentials_fails_gracefully()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var anon = new HttpClient { BaseAddress = new Uri(ServerUrl!) }; // no X-API-Key
         var marker = Marker();
@@ -195,13 +183,11 @@ public class FeatureSyncE2ETests
 
     // ---- Collisions / concurrency --------------------------------------------
 
-    [Fact]
+    [SkippableFact]
     public async Task Concurrent_adds_all_persist_with_distinct_object_ids()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         const int n = 12;
         using var http = Authed();
@@ -222,13 +208,11 @@ public class FeatureSyncE2ETests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Concurrent_updates_to_same_feature_all_succeed_via_retry()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         const int n = 10;
         using var http = Authed();
@@ -255,13 +239,11 @@ public class FeatureSyncE2ETests
         Assert.Contains(finalNotes, values);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Duplicate_submissions_create_distinct_rows_server_side()
     {
-        if (!Enabled)
-        {
-            return;
-        }
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
 
         using var http = Authed();
         var sync = new GeoServicesFeatureSync(http);
