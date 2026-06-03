@@ -60,4 +60,33 @@ public class GeoSnappingTests
         Assert.Equal(0.0, result.Point.Longitude, 5);   // snapped onto the closing edge
         Assert.Equal(0.005, result.Point.Latitude, 5);  // kept its position along it
     }
+
+    [Fact]
+    public void Multi_target_snap_picks_the_closest_target()
+    {
+        // Two candidate features: a far one and a near one. The captured point is
+        // ~2 m from the near feature's vertex and far from the other.
+        var near = new SnapTarget([new(0.0, 0.0), new(0.0, 0.01)]);
+        var far = new SnapTarget([new(0.5, 0.5), new(0.5, 0.51)]);
+        var captured = new FieldGeoPoint(0.00002, 0.0);
+
+        var result = GeoSnapping.Snap(captured, [far, near], toleranceMeters: 5);
+
+        Assert.Equal(SnapKind.Vertex, result.Kind);
+        Assert.Equal(0.0, result.Point.Latitude, 6);
+        Assert.Equal(0.0, result.Point.Longitude, 6);
+    }
+
+    [Fact]
+    public void Multi_target_snap_returns_none_when_all_targets_are_far()
+    {
+        var t1 = new SnapTarget([new(0.0, 0.0), new(0.0, 0.01)]);
+        var t2 = new SnapTarget([new(1.0, 1.0), new(1.0, 1.01)]);
+        var captured = new FieldGeoPoint(0.5, 0.5);
+
+        var result = GeoSnapping.Snap(captured, [t1, t2], toleranceMeters: 5);
+
+        Assert.Equal(SnapKind.None, result.Kind);
+        Assert.Same(captured, result.Point);
+    }
 }

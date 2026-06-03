@@ -22,6 +22,15 @@ public enum SnapKind
 public sealed record SnapResult(SnapKind Kind, FieldGeoPoint Point, double DistanceMeters);
 
 /// <summary>
+/// A candidate feature to snap to: its ordered vertices and whether they form a
+/// closed ring (polygon). Lines and points pass <paramref name="Closed"/> as
+/// <see langword="false"/>.
+/// </summary>
+/// <param name="Vertices">Candidate geometry vertices, in order.</param>
+/// <param name="Closed">Whether the candidate is a closed ring (polygon).</param>
+public sealed record SnapTarget(IReadOnlyList<FieldGeoPoint> Vertices, bool Closed = false);
+
+/// <summary>
 /// Snaps a captured point to the vertices and edges of nearby features
 /// (BACKLOG G7 — snap-to-feature / topology assist). This keeps adjacent
 /// geometries coincident — shared boundaries, connected lines — which is what
@@ -113,6 +122,46 @@ public static class GeoSnapping
         }
 
         return new SnapResult(SnapKind.None, point, Math.Min(bestVertexDist, bestEdgeDist));
+    }
+
+    /// <summary>
+    /// Snaps <paramref name="point"/> to the nearest vertex or edge across several
+    /// candidate features within <paramref name="toleranceMeters"/>, returning the
+    /// closest snap found. A vertex hit wins ties with an equally-close edge hit.
+    /// </summary>
+    /// <param name="point">Captured point.</param>
+    /// <param name="targets">Candidate features to snap against.</param>
+    /// <param name="toleranceMeters">Maximum snap distance.</param>
+    /// <returns>The best snap result, or <see cref="SnapKind.None"/> if nothing is within tolerance.</returns>
+    public static SnapResult Snap(
+        FieldGeoPoint point,
+        IEnumerable<SnapTarget> targets,
+        double toleranceMeters)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        ArgumentNullException.ThrowIfNull(targets);
+
+        var best = new SnapResult(SnapKind.None, point, double.PositiveInfinity);
+        foreach (var target in targets)
+        {
+            if (target is null || target.Vertices.Count == 0)
+            {
+                continue;
+            }
+
+            var candidate = Snap(point, target.Vertices, toleranceMeters, target.Closed);
+
+            // Keep the closest hit; on equal distance prefer a vertex snap.
+            if (candidate.Kind != SnapKind.None &&
+                (candidate.DistanceMeters < best.DistanceMeters - 1e-6 ||
+                 (candidate.DistanceMeters <= best.DistanceMeters + 1e-6 &&
+                  candidate.Kind == SnapKind.Vertex && best.Kind != SnapKind.Vertex)))
+            {
+                best = candidate;
+            }
+        }
+
+        return best;
     }
 
     private static (double X, double Y, double Distance) ClosestOnSegment((double X, double Y) a, (double X, double Y) b)

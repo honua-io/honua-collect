@@ -122,4 +122,51 @@ public class GeometryCaptureTests
         Assert.Equal(5, session.Vertices[0].Latitude);
         Assert.Throws<InvalidOperationException>(() => new GpsAverager().Average());
     }
+
+    [Fact]
+    public void Snapping_disabled_by_default_keeps_the_captured_point()
+    {
+        var session = new GeometryCaptureSession(CapturedGeometryType.Line);
+        session.SetSnapTargets([new SnapTarget([new(0.0, 0.0), new(0.0, 0.01)])]);
+
+        // ~2 m north of an existing vertex, but snapping is off.
+        var result = session.AddVertex(new FieldGeoPoint(0.00002, 0.0));
+
+        Assert.Equal(SnapKind.None, result.Kind);
+        Assert.Equal(0.00002, session.Vertices[0].Latitude, 6);
+    }
+
+    [Fact]
+    public void Snapping_enabled_moves_a_near_vertex_onto_the_target()
+    {
+        var session = new GeometryCaptureSession(CapturedGeometryType.Line)
+        {
+            SnapEnabled = true,
+            SnapToleranceMeters = 5,
+        };
+        session.SetSnapTargets([new SnapTarget([new(0.0, 0.0), new(0.0, 0.01)])]);
+
+        var result = session.AddVertex(new FieldGeoPoint(0.00002, 0.0)); // ~2 m off
+
+        Assert.Equal(SnapKind.Vertex, result.Kind);
+        Assert.Equal(0.0, session.Vertices[0].Latitude, 6);
+        Assert.Equal(0.0, session.Vertices[0].Longitude, 6);
+    }
+
+    [Fact]
+    public void Snapping_enabled_leaves_a_far_vertex_untouched()
+    {
+        var session = new GeometryCaptureSession(CapturedGeometryType.Line)
+        {
+            SnapEnabled = true,
+            SnapToleranceMeters = 5,
+        };
+        session.SetSnapTargets([new SnapTarget([new(0.0, 0.0), new(0.0, 0.01)])]);
+
+        var captured = new FieldGeoPoint(0.01, 0.005); // ~1.1 km off the line
+        var result = session.AddVertex(captured);
+
+        Assert.Equal(SnapKind.None, result.Kind);
+        Assert.Equal(0.01, session.Vertices[0].Latitude, 6);
+    }
 }
