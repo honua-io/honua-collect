@@ -47,6 +47,18 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>The widget kind a renderer should present.</summary>
     public CaptureWidgetKind Widget { get; }
 
+    /// <summary>Label for the capture button, by widget kind.</summary>
+    public string CaptureActionLabel => Widget switch
+    {
+        CaptureWidgetKind.Photo => "Add photo",
+        CaptureWidgetKind.Video => "Record video",
+        CaptureWidgetKind.Audio => "Record audio",
+        CaptureWidgetKind.Signature => "Sign",
+        CaptureWidgetKind.Sketch => "Sketch",
+        CaptureWidgetKind.Barcode => "Scan barcode",
+        _ => "Add attachment",
+    };
+
     /// <summary>Allowed choices for choice/classification fields.</summary>
     public IReadOnlyList<FieldChoice> Choices => State.Field.Choices;
 

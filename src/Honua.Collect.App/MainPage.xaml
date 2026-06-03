@@ -24,6 +24,11 @@
                     Clicked="OnDownloadFormClicked"
                     HorizontalOptions="Fill" />
 
+            <Button x:Name="CaptureKitBtn"
+                    Text="Capture Widgets Demo"
+                    Clicked="OnCaptureKitClicked"
+                    HorizontalOptions="Fill" />
+
             <Label x:Name="StatusLabel" />
 
         </VerticalStackLayout>

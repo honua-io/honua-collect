@@ -47,9 +47,20 @@
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                        <Button Text="Add photo" Clicked="OnCaptureMedia" />
+                        <Button Text="{Binding CaptureActionLabel}" Clicked="OnCaptureMedia" />
                         <Label Grid.Column="1" Text="{Binding MediaCount, StringFormat='{0} attached'}"
                                VerticalOptions="Center" FontSize="12" TextColor="Gray" />
+                    </Grid>
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="BarcodeEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Entry Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
+                        <Button Grid.Column="1" Text="{Binding CaptureActionLabel}" Clicked="OnScanBarcode" />
                     </Grid>
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>
@@ -68,6 +79,7 @@
                 ToggleTemplate="{StaticResource ToggleEditor}"
                 ChoiceTemplate="{StaticResource ChoiceEditor}"
                 MediaTemplate="{StaticResource MediaEditor}"
+                BarcodeTemplate="{StaticResource BarcodeEditor}"
                 FallbackTemplate="{StaticResource FallbackEditor}" />
 
         </ResourceDictionary>

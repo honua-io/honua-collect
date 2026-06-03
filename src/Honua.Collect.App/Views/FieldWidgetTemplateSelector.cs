@@ -26,6 +26,9 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
     /// <summary>Template for media-capture fields (photo/video/audio/signature/sketch).</summary>
     public DataTemplate? MediaTemplate { get; set; }
 
+    /// <summary>Template for barcode/QR scan fields.</summary>
+    public DataTemplate? BarcodeTemplate { get; set; }
+
     /// <summary>Fallback template for any other field.</summary>
     public DataTemplate? FallbackTemplate { get; set; }
 
@@ -45,6 +48,7 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
             CaptureWidgetKind.Choice => ChoiceTemplate ?? FallbackTemplate,
             CaptureWidgetKind.Photo or CaptureWidgetKind.Video or CaptureWidgetKind.Audio
                 or CaptureWidgetKind.Signature or CaptureWidgetKind.Sketch => MediaTemplate ?? FallbackTemplate,
+            CaptureWidgetKind.Barcode => BarcodeTemplate ?? FallbackTemplate,
             _ => FallbackTemplate,
         };
     }
