@@ -1,4 +1,5 @@
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Forms.Expressions;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Field.Forms;
@@ -34,7 +35,10 @@ public sealed class FormSession : ICaptureHost
     private readonly Dictionary<string, RepeatGroup> _groups = new(StringComparer.OrdinalIgnoreCase);
     private readonly FormDefinition _scalarForm;
 
-    private FormSession(FormDefinition form, FieldRecord record)
+    private FormSession(
+        FormDefinition form,
+        FieldRecord record,
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null)
     {
         Form = form;
         Record = record;
@@ -59,7 +63,8 @@ public sealed class FormSession : ICaptureHost
 
         foreach (var section in form.Sections.Where(s => s.Repeatable))
         {
-            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId));
+            var bounds = repeatBounds is not null && repeatBounds.TryGetValue(section.SectionId, out var b) ? b : null;
+            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds);
         }
 
         RecomputeScalar();
@@ -101,12 +106,20 @@ public sealed class FormSession : ICaptureHost
     /// <summary>Opens a session over an existing record (for example, a saved draft).</summary>
     /// <param name="form">Form definition.</param>
     /// <param name="record">Existing record whose values seed the session.</param>
+    /// <param name="repeatBounds">
+    /// Optional per-section row-count bounds (keyed by section id), enforced by
+    /// <see cref="Validate"/>. The SDK <see cref="FormSection"/> does not carry
+    /// these in package 1.1.0, so they are supplied here (BACKLOG F-depth).
+    /// </param>
     /// <returns>A session bound to <paramref name="record"/>.</returns>
-    public static FormSession Open(FormDefinition form, FieldRecord record)
+    public static FormSession Open(
+        FormDefinition form,
+        FieldRecord record,
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(record);
-        return new FormSession(form, record);
+        return new FormSession(form, record, repeatBounds);
     }
 
     /// <summary>Starts a session for a brand-new record.</summary>
@@ -120,12 +133,18 @@ public sealed class FormSession : ICaptureHost
     /// When <paramref name="seedFrom"/> is supplied, restricts seeding to these
     /// fields. <see langword="null"/> seeds every non-calculated, non-media field.
     /// </param>
+    /// <param name="repeatBounds">
+    /// Optional per-section row-count bounds (keyed by section id), enforced by
+    /// <see cref="Validate"/>. The SDK <see cref="FormSection"/> does not carry
+    /// these in package 1.1.0, so they are supplied here (BACKLOG F-depth).
+    /// </param>
     /// <returns>A session for a new draft record.</returns>
     public static FormSession CreateForNewRecord(
         FormDefinition form,
         string recordId,
         FieldRecord? seedFrom = null,
-        IEnumerable<string>? seedFieldIds = null)
+        IEnumerable<string>? seedFieldIds = null,
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -137,7 +156,7 @@ public sealed class FormSession : ICaptureHost
             SeedDefaults(form, record, seedFrom, seedFieldIds);
         }
 
-        return new FormSession(form, record);
+        return new FormSession(form, record, repeatBounds);
     }
 
     /// <summary>Gets the live state for a field.</summary>
@@ -232,6 +251,26 @@ public sealed class FormSession : ICaptureHost
         {
             group.PersistInto(Record);
 
+            // Row-count bounds (min/max repeats) are enforced at the section level
+            // (BACKLOG F-depth). Errors are keyed to the section id so the UI can
+            // surface them on the repeat group header rather than a single row.
+            if (group.Bounds is { } bounds)
+            {
+                if (bounds.Min is { } min && group.Instances.Count < min)
+                {
+                    errors.Add(new FormValidationError(
+                        group.SectionId,
+                        $"Add at least {min} {(min == 1 ? "entry" : "entries")}."));
+                }
+
+                if (bounds.Max is { } max && group.Instances.Count > max)
+                {
+                    errors.Add(new FormValidationError(
+                        group.SectionId,
+                        $"At most {max} {(max == 1 ? "entry" : "entries")} allowed."));
+                }
+            }
+
             for (var index = 0; index < group.Instances.Count; index++)
             {
                 foreach (var error in group.Instances[index].Validate().Errors)
@@ -325,6 +364,14 @@ public sealed class FormSession : ICaptureHost
         if (!_states.TryGetValue(fieldId, out var state))
         {
             return false;
+        }
+
+        // A boolean relevance expression (e.g. "${a}='x' and ${b}>5") supersedes
+        // the single-comparison visibility rule when present.
+        var relevance = state.Field.RelevanceExpression;
+        if (!string.IsNullOrWhiteSpace(relevance))
+        {
+            return ExpressionEvaluator.EvaluateBoolean(relevance, Record.Values);
         }
 
         var rule = state.Field.VisibilityRule;

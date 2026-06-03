@@ -13,7 +13,7 @@
       Pin the SDK train here so the whole product builds against one coherent set
       of contracts. Bump in lockstep with honua-mobile's Directory.Build.props.
     -->
-    <HonuaSdkDotNetTrainVersion>1.1.0</HonuaSdkDotNetTrainVersion>
+    <HonuaSdkDotNetTrainVersion>1.2.0</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>10.0.70</MauiVersion>
   </PropertyGroup>

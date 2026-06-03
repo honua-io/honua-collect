@@ -58,6 +58,16 @@ public partial class MainPage : ContentPage
         await Navigation.PushAsync(new FormPage(viewModel));
     }
 
+    private async void OnSmartFormClicked(object? sender, EventArgs e)
+    {
+        // Local-only demo of the SDK 1.2.0 expression engine (calc/constraint/relevance).
+        var session = FormSession.CreateForNewRecord(SampleForms.SmartForm(), Guid.NewGuid().ToString("n"));
+        var viewModel = new FormPageViewModel(session);
+        viewModel.SubmitSucceeded += (_, record) =>
+            StatusLabel.Text = $"Smart form submitted — total {record.Values.GetValueOrDefault("total")}.";
+        await Navigation.PushAsync(new FormPage(viewModel));
+    }
+
     private async void OnDownloadFormClicked(object? sender, EventArgs e)
     {
         StatusLabel.Text = "Downloading latest form…";

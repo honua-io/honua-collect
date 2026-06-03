@@ -14,6 +14,10 @@ public sealed record GeoServicesTarget(string BaseUrl, string ServiceId, int Lay
     public string ApplyEditsUrl =>
         $"{BaseUrl.TrimEnd('/')}/rest/services/{ServiceId}/FeatureServer/{LayerId}/applyEdits";
 
+    /// <summary>The full query endpoint URL for this target (used to pull features).</summary>
+    public string QueryUrl =>
+        $"{BaseUrl.TrimEnd('/')}/rest/services/{ServiceId}/FeatureServer/{LayerId}/query";
+
     /// <summary>The full addAttachment endpoint URL for a feature on this target.</summary>
     /// <param name="objectId">Object id of the feature the attachment belongs to.</param>
     public string AttachmentUrl(long objectId) =>
@@ -27,6 +31,37 @@ public sealed record GeoServicesTarget(string BaseUrl, string ServiceId, int Lay
 /// <param name="ErrorCode">Server error code, when not successful.</param>
 /// <param name="Attempts">Number of attempts made (including retries).</param>
 public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Error, int? ErrorCode = null, int Attempts = 1);
+
+/// <summary>
+/// A single feature pulled back from the server, decoded into a portable
+/// <see cref="FieldRecord"/> plus the layer object id that identifies it remotely.
+/// This inverts the submit encoding (Esri attributes -> Values, point geometry ->
+/// Location) so a pulled feature can flow into the same conflict/merge model as a
+/// locally captured record.
+/// </summary>
+/// <param name="ObjectId">The layer object id of the feature on the server.</param>
+/// <param name="Record">The decoded record (attributes as Values, geometry as Location).</param>
+public sealed record PulledRecord(long ObjectId, FieldRecord Record);
+
+/// <summary>
+/// Result of a <see cref="GeoServicesFeatureSync.QueryAsync"/> pull. On success
+/// <see cref="Records"/> carries the decoded features (paging already followed);
+/// on failure <see cref="Error"/> describes the server/transport problem and
+/// <see cref="Records"/> is empty. A server <c>{"error":...}</c> response surfaces
+/// here as a failure rather than an exception.
+/// </summary>
+/// <param name="Success">Whether the query completed.</param>
+/// <param name="Records">The decoded features, when successful.</param>
+/// <param name="Error">Error message, when not successful.</param>
+/// <param name="ErrorCode">Server/HTTP error code, when not successful.</param>
+public sealed record FeatureQueryResult(bool Success, IReadOnlyList<PulledRecord> Records, string? Error, int? ErrorCode = null)
+{
+    /// <summary>An empty successful result.</summary>
+    public static FeatureQueryResult Empty { get; } = new(true, [], null);
+
+    /// <summary>Builds a failed result with no records.</summary>
+    public static FeatureQueryResult Fail(string error, int? code = null) => new(false, [], error, code);
+}
 
 /// <summary>
 /// Controls automatic retry of transient submission failures (server-side write
@@ -174,6 +209,206 @@ public sealed class GeoServicesFeatureSync
 
         return ParseAttachmentResult(body);
     }
+
+    /// <summary>
+    /// Pulls existing features from the target layer's <c>query</c> endpoint and
+    /// decodes them into <see cref="FieldRecord"/>s. This is the read side of
+    /// bidirectional sync: where <see cref="SubmitAsync"/> pushes a record up,
+    /// this fetches the server's current features so they can be merged into the
+    /// local store and fed into conflict review.
+    /// </summary>
+    /// <remarks>
+    /// Issues a <c>GET</c> with <c>f=json</c>, <c>outFields=*</c>,
+    /// <c>returnGeometry=true</c> and the supplied <paramref name="where"/> clause,
+    /// following server-side paging via <c>resultOffset</c>/<c>resultRecordCount</c>
+    /// while the server reports <c>exceededTransferLimit</c>. A server
+    /// <c>{"error":...}</c> response is returned as a failed
+    /// <see cref="FeatureQueryResult"/> rather than thrown.
+    /// </remarks>
+    /// <param name="target">Target service/layer to query.</param>
+    /// <param name="where">SQL-style filter; defaults to <c>1=1</c> (all features).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The decoded features, or a failure describing the problem.</returns>
+    public async Task<FeatureQueryResult> QueryAsync(
+        GeoServicesTarget target,
+        string where = "1=1",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var effectiveWhere = string.IsNullOrWhiteSpace(where) ? "1=1" : where;
+
+        var records = new List<PulledRecord>();
+        var offset = 0;
+        const int pageSize = 1000;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var query = new Dictionary<string, string?>
+            {
+                ["f"] = "json",
+                ["where"] = effectiveWhere,
+                ["outFields"] = "*",
+                ["returnGeometry"] = "true",
+                ["resultOffset"] = offset.ToString(CultureInfo.InvariantCulture),
+                ["resultRecordCount"] = pageSize.ToString(CultureInfo.InvariantCulture),
+            };
+
+            var url = $"{target.QueryUrl}?{BuildQueryString(query)}";
+
+            string body;
+            try
+            {
+                using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return FeatureQueryResult.Fail($"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                return FeatureQueryResult.Fail(ex.Message);
+            }
+
+            FeaturePage page;
+            try
+            {
+                page = ParseQueryPage(body);
+            }
+            catch (JsonException ex)
+            {
+                return FeatureQueryResult.Fail($"Invalid response: {ex.Message}");
+            }
+
+            if (page.Error is { } err)
+            {
+                return FeatureQueryResult.Fail(err.Message, err.Code);
+            }
+
+            records.AddRange(page.Records);
+
+            if (!page.ExceededTransferLimit || page.Records.Count == 0)
+            {
+                break;
+            }
+
+            offset += page.Records.Count;
+        }
+
+        return new FeatureQueryResult(true, records, null);
+    }
+
+    private static string BuildQueryString(IReadOnlyDictionary<string, string?> parameters)
+    {
+        var pairs = parameters
+            .Where(p => p.Value is not null)
+            .Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value!)}");
+        return string.Join('&', pairs);
+    }
+
+    private sealed record QueryError(string Message, int? Code);
+
+    private sealed record FeaturePage(IReadOnlyList<PulledRecord> Records, bool ExceededTransferLimit, QueryError? Error);
+
+    private static FeaturePage ParseQueryPage(string body)
+    {
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        if (root.TryGetProperty("error", out var error))
+        {
+            var msg = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
+            int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+            return new FeaturePage([], false, new QueryError(msg, code));
+        }
+
+        var objectIdField = root.TryGetProperty("objectIdFieldName", out var oidf) ? oidf.GetString() : null;
+
+        var records = new List<PulledRecord>();
+        if (root.TryGetProperty("features", out var features) && features.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var feature in features.EnumerateArray())
+            {
+                if (DecodeFeature(feature, objectIdField) is { } pulled)
+                {
+                    records.Add(pulled);
+                }
+            }
+        }
+
+        var exceeded = root.TryGetProperty("exceededTransferLimit", out var etl)
+            && etl.ValueKind == JsonValueKind.True;
+
+        return new FeaturePage(records, exceeded, null);
+    }
+
+    private static PulledRecord? DecodeFeature(JsonElement feature, string? objectIdField)
+    {
+        if (!feature.TryGetProperty("attributes", out var attributes) || attributes.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        long? objectId = null;
+
+        foreach (var attribute in attributes.EnumerateObject())
+        {
+            var isObjectId = (objectIdField is not null && string.Equals(attribute.Name, objectIdField, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(attribute.Name, "objectid", StringComparison.OrdinalIgnoreCase);
+
+            if (isObjectId && attribute.Value.ValueKind == JsonValueKind.Number && attribute.Value.TryGetInt64(out var oid))
+            {
+                objectId = oid;
+                continue; // the object id is transport metadata, not a captured value
+            }
+
+            values[attribute.Name] = ConvertJsonValue(attribute.Value);
+        }
+
+        if (objectId is null)
+        {
+            return null; // cannot key the feature without an object id
+        }
+
+        FieldGeoPoint? location = null;
+        if (feature.TryGetProperty("geometry", out var geometry) && geometry.ValueKind == JsonValueKind.Object
+            && geometry.TryGetProperty("x", out var x) && x.TryGetDouble(out var lon)
+            && geometry.TryGetProperty("y", out var y) && y.TryGetDouble(out var lat))
+        {
+            location = new FieldGeoPoint(lat, lon);
+        }
+
+        var record = new FieldRecord
+        {
+            RecordId = objectId.Value.ToString(CultureInfo.InvariantCulture),
+            FormId = string.Empty,
+            Location = location,
+            Status = RecordStatus.Submitted,
+        };
+
+        foreach (var (key, value) in values)
+        {
+            record.Values[key] = value;
+        }
+
+        return new PulledRecord(objectId.Value, record);
+    }
+
+    private static object? ConvertJsonValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Null or JsonValueKind.Undefined => null,
+        // Box each numeric branch separately: a unified ternary would widen the
+        // integer branch to double, losing the integral type the submit encoding round-trips.
+        JsonValueKind.Number => value.TryGetInt64(out var l) ? l : (object)value.GetDouble(),
+        _ => value.GetRawText(),
+    };
 
     private async Task<FeatureSyncResult> PostEditsAsync(
         GeoServicesTarget target,

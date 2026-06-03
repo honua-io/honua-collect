@@ -1,5 +1,6 @@
 using Honua.Collect.App.Maps;
 using Honua.Collect.Core.Field.Geometry;
+using Honua.Collect.Core.Maps;
 using Honua.Collect.Presentation.Geometry;
 using Honua.Sdk.Field.Records;
 
@@ -19,7 +20,7 @@ public partial class GeometryCapturePage : ContentPage
     private const int MinZoom = 2;
     private const int MaxZoom = 19;
 
-    private readonly OsmTileLoader _tiles = new();
+    private readonly OsmTileLoader _tiles = new(Path.Combine(FileSystem.AppDataDirectory, "tiles"));
     private readonly SlippyMapDrawable _map;
     private MapCaptureViewModel _vm = new(CapturedGeometryType.Point);
 
@@ -108,6 +109,27 @@ public partial class GeometryCapturePage : ContentPage
     private void SetZoom(int zoom)
     {
         _map.Zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+        Canvas.Invalidate();
+    }
+
+    private async void OnDownloadArea(object? sender, EventArgs e)
+    {
+        // Take this area offline: prefetch the visible viewport across the current
+        // zoom + 2 levels into the persistent tile cache.
+        var w = Canvas.Width;
+        var h = Canvas.Height;
+        var topLeft = WebMercator.FromScreen(0, 0, _map.Center, _map.Zoom, w, h);
+        var bottomRight = WebMercator.FromScreen(w, h, _map.Center, _map.Zoom, w, h);
+        var bbox = GeoBoundingBox.FromCorners(topLeft, bottomRight);
+
+        var progress = new Progress<TilePrefetchProgress>(p =>
+            StatusLabel.Text = $"Downloading offline area… {p.Completed}/{p.Total}");
+
+        StatusLabel.Text = "Preparing offline area…";
+        var plan = await _tiles.PrefetchAreaAsync(bbox, _map.Zoom, _map.Zoom + 2, progress);
+        StatusLabel.Text = plan.ExceedsCap
+            ? $"Area too large ({plan.Count} tiles) — zoom in and retry."
+            : $"Offline area ready: {plan.Count} tiles cached.";
         Canvas.Invalidate();
     }
 

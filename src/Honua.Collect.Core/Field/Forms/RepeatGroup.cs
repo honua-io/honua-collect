@@ -4,6 +4,17 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Core.Field.Forms;
 
 /// <summary>
+/// Optional row-count bounds for a repeatable section (Survey123 / Fulcrum
+/// min/max repeats — BACKLOG F-depth). The SDK <see cref="FormSection"/> in
+/// package 1.1.0 does not carry these, so they are supplied product-side (the
+/// form package wire format already declares <c>minInstances</c>/<c>maxInstances</c>)
+/// and enforced by <see cref="FormSession.Validate"/>.
+/// </summary>
+/// <param name="Min">Minimum required rows, or <see langword="null"/> for no lower bound.</param>
+/// <param name="Max">Maximum allowed rows, or <see langword="null"/> for no upper bound.</param>
+public sealed record RepeatBounds(int? Min = null, int? Max = null);
+
+/// <summary>
 /// A repeatable section and the rows captured against it (Survey123 "repeat" /
 /// Fulcrum "repeatable section"). The group owns the list of
 /// <see cref="RepeatInstance"/> rows, lets the UI add and remove them, and
@@ -24,9 +35,14 @@ public sealed class RepeatGroup
     private readonly List<RepeatInstance> _instances = [];
     private int _nextOrdinal;
 
-    internal RepeatGroup(FormDefinition parentForm, FormSection section, IEnumerable<IReadOnlyDictionary<string, object?>> seededRows)
+    internal RepeatGroup(
+        FormDefinition parentForm,
+        FormSection section,
+        IEnumerable<IReadOnlyDictionary<string, object?>> seededRows,
+        RepeatBounds? bounds = null)
     {
         _section = section;
+        Bounds = bounds;
 
         // A single-section, non-repeatable form that each row is captured against.
         _instanceForm = new FormDefinition
@@ -47,6 +63,9 @@ public sealed class RepeatGroup
 
     /// <summary>Section label for the UI.</summary>
     public string Label => _section.Label;
+
+    /// <summary>Optional row-count bounds enforced by <see cref="FormSession.Validate"/>; <see langword="null"/> when unbounded.</summary>
+    public RepeatBounds? Bounds { get; }
 
     /// <summary>The captured rows, in order.</summary>
     public IReadOnlyList<RepeatInstance> Instances => _instances;
