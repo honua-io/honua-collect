@@ -1,4 +1,5 @@
 using Honua.Collect.Core.Sync;
+using Honua.Collect.Core.Tests.TestData;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -28,15 +29,7 @@ public class RecordConflictTests
     };
 
     private static FieldRecord Record(string id, params (string Key, object? Value)[] values)
-    {
-        var r = new FieldRecord { RecordId = id, FormId = "f" };
-        foreach (var (key, value) in values)
-        {
-            r.Values[key] = value;
-        }
-
-        return r;
-    }
+        => FieldRecords.WithValues(id, values);
 
     [Fact]
     public void No_differences_yields_no_conflicts()
