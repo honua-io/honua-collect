@@ -55,6 +55,8 @@ public sealed record AppSettings
             DemoApiKey = ReadApiKey(root), // null in source — no credential ships in the binary
         };
 
+        // Fail fast on a cleartext endpoint to a non-loopback host (no credential leak).
+        EndpointSecurity.EnsureSecureTransport(settings.BaseUri);
         return ApplyLocalOverride(settings);
     }
 

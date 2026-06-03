@@ -283,6 +283,320 @@ public class AnthropicPhotoToFieldsProviderTests
         }
     }
 
+    [Fact]
+    public void Constructor_rejects_null_http_options_and_blank_key()
+    {
+        var http = new HttpClient();
+        Assert.Throws<ArgumentNullException>(() =>
+            new AnthropicPhotoToFieldsProvider(null!, new AnthropicPhotoToFieldsOptions { ApiKey = "k" }));
+        Assert.Throws<ArgumentNullException>(() =>
+            new AnthropicPhotoToFieldsProvider(http, null!));
+        Assert.Throws<ArgumentException>(() =>
+            new AnthropicPhotoToFieldsProvider(http, new AnthropicPhotoToFieldsOptions { ApiKey = "  " }));
+    }
+
+    [Fact]
+    public async Task Form_with_no_extractable_fields_fails_without_calling_api()
+    {
+        var form = new FormDefinition
+        {
+            FormId = "media-only",
+            Name = "Media",
+            Sections =
+            [
+                new FormSection
+                {
+                    SectionId = "s", Label = "s",
+                    Fields = [new FormField { FieldId = "p", Label = "P", Type = FormFieldType.Photo }],
+                },
+            ],
+        };
+        var ok = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(ToolUseResponse(), Encoding.UTF8, "application/json"),
+        };
+        var (provider, handler) = Provider(ok);
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, form);
+            Assert.Empty(result.Fields);
+            Assert.Contains("no extractable", result.Unmapped!, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(handler.LastRequest); // never reached the network
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Response_with_no_content_blocks_fails_gracefully()
+    {
+        var body = """{ "id":"m", "type":"message", "role":"assistant", "content": [] }""";
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            Assert.Empty(result.Fields);
+            Assert.Contains("no content", result.Unmapped!, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Response_without_the_expected_tool_block_fails_gracefully()
+    {
+        // A text block (model chatted instead of calling the tool) is not the tool output.
+        var body = """
+            { "content": [ { "type": "text", "text": "I cannot read this image." } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            Assert.Empty(result.Fields);
+            Assert.Contains("tool output", result.Unmapped!, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Tool_block_without_a_fields_array_yields_empty_success()
+    {
+        // tool_use input is an object but lacks the "fields" array -> empty, not a failure.
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "note": "nothing" } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            Assert.Empty(result.Fields);
+            Assert.Null(result.Unmapped);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Items_that_are_not_objects_or_lack_a_string_field_id_are_skipped()
+    {
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                "not-an-object",
+                { "value": "x", "confidence": 0.5 },
+                { "field_id": 123, "value": "x", "confidence": 0.5 },
+                { "field_id": "  ", "value": "x", "confidence": 0.5 },
+                { "field_id": "species", "value": "Oak", "confidence": 0.9 }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            var field = Assert.Single(result.Fields);
+            Assert.Equal("species", field.FieldId);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Numeric_value_coercion_handles_decimals_bools_nulls_and_non_numbers()
+    {
+        // count is Numeric; species is Text. Exercises number-as-json-number,
+        // decimal vs integral, null value, and a non-numeric string for a numeric field.
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                { "field_id": "count", "value": 5, "confidence": 0.7 },
+                { "field_id": "species", "value": null, "confidence": 0.2 }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            var count = result.Fields.Single(f => f.FieldId == "count");
+            Assert.Equal(5L, count.Value); // integral number -> long
+            var species = result.Fields.Single(f => f.FieldId == "species");
+            Assert.Null(species.Value); // null value preserved
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Numeric_field_with_non_numeric_text_keeps_the_text()
+    {
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                { "field_id": "count", "value": "lots", "confidence": 0.4 }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            Assert.Equal("lots", Assert.Single(result.Fields).Value);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("yes", true)]
+    [InlineData("y", true)]
+    [InlineData("1", true)]
+    [InlineData("true", true)]
+    [InlineData("no", false)]
+    [InlineData("n", false)]
+    [InlineData("0", false)]
+    [InlineData("false", false)]
+    public async Task YesNo_field_coerces_truthy_and_falsy_tokens(string token, bool expected)
+    {
+        var form = WithField(new FormField { FieldId = "ok", Label = "OK", Type = FormFieldType.YesNo });
+        var body = $$"""
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                { "field_id": "ok", "value": "{{token}}", "confidence": 0.9 }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, form);
+            Assert.Equal(expected, Assert.Single(result.Fields).Value);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task YesNo_field_keeps_unrecognized_text()
+    {
+        var form = WithField(new FormField { FieldId = "ok", Label = "OK", Type = FormFieldType.YesNo });
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                { "field_id": "ok", "value": "maybe", "confidence": 0.5 }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, form);
+            Assert.Equal("maybe", Assert.Single(result.Fields).Value);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Confidence_as_string_is_parsed_and_out_of_range_values_are_clamped()
+    {
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                { "field_id": "species", "value": "Oak", "confidence": "0.55" },
+                { "field_id": "count", "value": "3", "confidence": 9.9 }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            Assert.Equal(0.55, result.Fields.Single(f => f.FieldId == "species").Confidence, 3);
+            Assert.Equal(1.0, result.Fields.Single(f => f.FieldId == "count").Confidence, 3); // clamped to 1
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Missing_confidence_defaults_to_zero()
+    {
+        var body = """
+            { "content": [ { "type": "tool_use", "name": "provide_fields", "input": { "fields": [
+                { "field_id": "species", "value": "Oak" }
+            ] } } ] }
+            """;
+        var (provider, _) = Provider(Ok(body));
+        var path = WriteTempImage();
+        try
+        {
+            var result = await provider.ExtractAsync(path, Form());
+            Assert.Equal(0.0, Assert.Single(result.Fields).Confidence, 3);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(".png", "image/png")]
+    [InlineData(".gif", "image/gif")]
+    [InlineData(".webp", "image/webp")]
+    [InlineData(".jpg", "image/jpeg")]
+    [InlineData(".jpeg", "image/jpeg")]
+    [InlineData(".bmp", "image/jpeg")] // unknown extension falls back to jpeg
+    public async Task Media_type_is_derived_from_the_file_extension(string ext, string expectedMediaType)
+    {
+        var (provider, handler) = Provider(Ok(ToolUseResponse(("species", "Oak", 0.9))));
+        var path = WriteTempImage(ext);
+        try
+        {
+            await provider.ExtractAsync(path, Form());
+            using var doc = JsonDocument.Parse(handler.LastBody!);
+            var image = doc.RootElement.GetProperty("messages")[0].GetProperty("content")
+                .EnumerateArray().Single(b => b.GetProperty("type").GetString() == "image");
+            Assert.Equal(expectedMediaType, image.GetProperty("source").GetProperty("media_type").GetString());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static FormDefinition WithField(FormField field) => new()
+    {
+        FormId = "f",
+        Name = "F",
+        Sections = [new FormSection { SectionId = "s", Label = "s", Fields = [field] }],
+    };
+
+    private static HttpResponseMessage Ok(string body) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "application/json"),
+    };
+
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;

@@ -82,7 +82,7 @@ public class LoginViewModelTests
     }
 
     [Fact]
-    public async Task LoginAsync_VerifierThrows_SetsExceptionMessage()
+    public async Task LoginAsync_VerifierThrows_ShowsGenericMessage_KeepsDetailForDiagnostics()
     {
         var vm = new LoginViewModel((_, _, _) => throw new InvalidOperationException("server unreachable"))
         {
@@ -92,7 +92,9 @@ public class LoginViewModelTests
 
         await vm.LoginAsync();
 
-        Assert.Equal("server unreachable", vm.ErrorMessage);
+        // Raw transport detail is NOT surfaced to the user, only kept for diagnostics.
+        Assert.Equal("Sign-in failed. Check your connection and try again.", vm.ErrorMessage);
+        Assert.Equal("server unreachable", vm.ErrorDetail);
         Assert.False(vm.IsAuthenticated);
         Assert.Null(vm.Session);
     }

@@ -27,11 +27,34 @@ jobs:
           --store-password-in-clear-text
           --configfile NuGet.config
 
-      - name: Build + test Core
-        run: dotnet test tests/Honua.Collect.Core.Tests/Honua.Collect.Core.Tests.csproj -c Release --logger "console;verbosity=minimal"
+      # Coverage gate: coverlet (MSBuild integration) collects line + branch
+      # coverage and FAILS the build below the threshold. The per-type list maps
+      # positionally to ThresholdType (line, then branch); commas inside an
+      # MSBuild property value must be escaped as %2c. Thresholds are pinned
+      # at-or-below current coverage so they gate regressions without flapping.
+      # Core is well-covered (line ~94% / branch ~86%), so it gates at 85/65.
+      - name: Build + test Core (with coverage gate)
+        run: >-
+          dotnet test tests/Honua.Collect.Core.Tests/Honua.Collect.Core.Tests.csproj
+          -c Release --logger "console;verbosity=minimal"
+          /p:CollectCoverage=true
+          /p:Threshold=85%2c65
+          /p:ThresholdType=line%2cbranch
+          /p:ThresholdStat=total
+          /p:CoverletOutputFormat=cobertura
 
-      - name: Build + test Presentation
-        run: dotnet test tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj -c Release --logger "console;verbosity=minimal"
+      # Presentation (view models) is less covered today (line ~39% / branch
+      # ~25%); the gate pins it just below current so further regressions fail
+      # CI while leaving room to raise it as more view-model tests land.
+      - name: Build + test Presentation (with coverage gate)
+        run: >-
+          dotnet test tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj
+          -c Release --logger "console;verbosity=minimal"
+          /p:CollectCoverage=true
+          /p:Threshold=38%2c24
+          /p:ThresholdType=line%2cbranch
+          /p:ThresholdStat=total
+          /p:CoverletOutputFormat=cobertura
 
   build-app:
     # Compiles the shipping MAUI artifact so a break in the App project fails CI
