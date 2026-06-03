@@ -1,51 +1,46 @@
+using Honua.Collect.App.Services;
+using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Sync;
-using Honua.Sdk.Field.Forms;
-using Honua.Sdk.Field.Records;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
 /// <summary>
 /// The offline sync center: shows the Outbox/Sent/Failed counts and the pending
-/// list, and pushes the Outbox to the server's Feature Server on demand. Bound
-/// to the tested <see cref="SyncCenterViewModel"/>.
+/// list, pushes the Outbox to the server, and pulls server features (surfacing
+/// conflicts). Bound to the tested <see cref="SyncCenterViewModel"/>; transport
+/// and state come from DI over the shared auth-aware client.
 /// </summary>
 public partial class SyncPage : ContentPage
 {
-    private static readonly GeoServicesTarget Target = new("http://10.0.2.2:18080", "mobile_offline_demo", 68910);
+    private readonly AppSettings _settings = ServiceHelper.Get<AppSettings>();
+    private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
+    private readonly HttpClient _http =
+        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.ServerHttpClient);
 
     public SyncPage()
     {
         InitializeComponent();
     }
 
-    private static HttpClient CreateClient()
-    {
-        var http = new HttpClient { BaseAddress = new Uri("http://10.0.2.2:18080") };
-        http.DefaultRequestHeaders.Add("X-API-Key", "AdminPass123!");
-        return http;
-    }
-
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
+        await _book.InitializeAsync();
         // 4-arg form enables bidirectional sync: the puller queries the server and
         // the active form lets the merge classify new-vs-conflicting records.
-        BindingContext = new SyncCenterViewModel(CaptureStore.All, UploadAsync, PullAsync, SampleForms.FieldSite());
+        BindingContext = new SyncCenterViewModel(_book.All, UploadAsync, PullAsync, SampleForms.FieldSite());
     }
 
-    private static async Task<string?> UploadAsync(Core.Records.CollectRecordEntry entry, CancellationToken cancellationToken)
+    private async Task<string?> UploadAsync(Core.Records.CollectRecordEntry entry, CancellationToken cancellationToken)
     {
-        using var http = CreateClient();
-        var result = await new GeoServicesFeatureSync(http).SubmitAsync(entry.Record, Target, cancellationToken);
+        var result = await new GeoServicesFeatureSync(_http).SubmitAsync(entry.Record, _settings.Target, cancellationToken);
         return result.Success ? result.ObjectId?.ToString() : null;
     }
 
-    private static async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)
-    {
-        using var http = CreateClient();
-        return await new GeoServicesFeatureSync(http).QueryAsync(Target, "1=1", cancellationToken);
-    }
+    private async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)
+        => await new GeoServicesFeatureSync(_http).QueryAsync(_settings.Target, "1=1", cancellationToken);
 
     private async void OnPull(object? sender, EventArgs e)
     {

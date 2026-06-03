@@ -1,4 +1,6 @@
+using Honua.Collect.App.Services;
 using Honua.Collect.Core.Editions;
+using Honua.Collect.Core.Storage;
 using Honua.Collect.Presentation.Export;
 using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Microsoft.Maui.Storage;
@@ -18,17 +20,20 @@ public partial class ExportPage : ContentPage
     // Pro unlocks reporting and bulk export.
     private const CollectEdition Edition = CollectEdition.Pro;
 
+    private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
+
     public ExportPage()
     {
         InitializeComponent();
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
+        await _book.InitializeAsync();
         BindingContext = new ExportViewModel(
             SampleForms.FieldSite(),
-            CaptureStore.All.Select(e => e.Record),
+            _book.All.Select(e => e.Record),
             Edition);
     }
 

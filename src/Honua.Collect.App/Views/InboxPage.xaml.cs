@@ -1,3 +1,4 @@
+using Honua.Collect.App.Services;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Collect.Presentation.Assignments;
 using Honua.Collect.Presentation.Forms;
@@ -72,10 +73,10 @@ public partial class InboxPage : ContentPage
         _viewModel?.Start(assignment, recordId);
 
         var viewModel = new FormPageViewModel(session);
-        viewModel.SubmitSucceeded += (_, record) =>
+        viewModel.SubmitSucceeded += async (_, record) =>
         {
             record.Location = assignment.Location ?? new FieldGeoPoint(21.31, -157.81);
-            CaptureStore.AddSubmitted(record);
+            await ServiceHelper.Get<Core.Storage.RecordBook>().AddSubmittedAsync(record);
         };
 
         await Navigation.PushAsync(new FormPage(viewModel));
