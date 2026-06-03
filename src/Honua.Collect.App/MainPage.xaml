@@ -29,6 +29,11 @@
                     Clicked="OnCaptureKitClicked"
                     HorizontalOptions="Fill" />
 
+            <Button x:Name="SmartFormBtn"
+                    Text="Smart Form (Expressions) Demo"
+                    Clicked="OnSmartFormClicked"
+                    HorizontalOptions="Fill" />
+
             <Label x:Name="StatusLabel" />
 
         </VerticalStackLayout>

@@ -17,6 +17,7 @@
             </Picker>
             <Button Text="–" Clicked="OnZoomOut" WidthRequest="44" />
             <Button Text="+" Clicked="OnZoomIn" WidthRequest="44" />
+            <Button Text="⤓ Area" Clicked="OnDownloadArea" WidthRequest="80" />
         </HorizontalStackLayout>
 
         <Border Grid.Row="1" Stroke="LightGray" StrokeThickness="1">

@@ -19,56 +19,55 @@ public partial class SyncPage : ContentPage
         InitializeComponent();
     }
 
+    private static HttpClient CreateClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri("http://10.0.2.2:18080") };
+        http.DefaultRequestHeaders.Add("X-API-Key", "AdminPass123!");
+        return http;
+    }
+
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        BindingContext = new SyncCenterViewModel(CaptureStore.All, UploadAsync);
+        // 4-arg form enables bidirectional sync: the puller queries the server and
+        // the active form lets the merge classify new-vs-conflicting records.
+        BindingContext = new SyncCenterViewModel(CaptureStore.All, UploadAsync, PullAsync, SampleForms.FieldSite());
     }
 
     private static async Task<string?> UploadAsync(Core.Records.CollectRecordEntry entry, CancellationToken cancellationToken)
     {
-        using var http = new HttpClient { BaseAddress = new Uri("http://10.0.2.2:18080") };
-        http.DefaultRequestHeaders.Add("X-API-Key", "AdminPass123!");
+        using var http = CreateClient();
         var result = await new GeoServicesFeatureSync(http).SubmitAsync(entry.Record, Target, cancellationToken);
         return result.Success ? result.ObjectId?.ToString() : null;
     }
 
-    private async void OnReviewConflict(object? sender, EventArgs e)
-        => await Navigation.PushAsync(new ConflictReviewPage(SampleConflict()));
-
-    /// <summary>Builds a representative local-vs-server conflict for the review demo.</summary>
-    private static RecordConflict SampleConflict()
+    private static async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)
     {
-        var form = new FormDefinition
+        using var http = CreateClient();
+        return await new GeoServicesFeatureSync(http).QueryAsync(Target, "1=1", cancellationToken);
+    }
+
+    private async void OnPull(object? sender, EventArgs e)
+    {
+        if (BindingContext is not SyncCenterViewModel vm)
         {
-            FormId = "field-site",
-            Name = "Field Site",
-            Sections =
-            [
-                new FormSection
-                {
-                    SectionId = "s",
-                    Label = "s",
-                    Fields =
-                    [
-                        new FormField { FieldId = "status", Label = "Status", Type = FormFieldType.Text },
-                        new FormField { FieldId = "priority", Label = "Priority", Type = FormFieldType.Text },
-                        new FormField { FieldId = "notes", Label = "Notes", Type = FormFieldType.Text },
-                    ],
-                },
-            ],
-        };
+            return;
+        }
 
-        var local = new FieldRecord { RecordId = "site-42", FormId = "field-site" };
-        local.Values["status"] = "done";
-        local.Values["priority"] = "high";
-        local.Values["notes"] = "fixed on site";
+        ResultLabel.Text = "Pulling from server…";
+        var result = await vm.PullAsync();
+        if (result is null)
+        {
+            ResultLabel.Text = "Pull failed (server unreachable?).";
+            return;
+        }
 
-        var server = new FieldRecord { RecordId = "site-42", FormId = "field-site" };
-        server.Values["status"] = "in_progress";
-        server.Values["priority"] = "high";          // same — not a conflict
-        server.Values["notes"] = "awaiting parts";
+        ResultLabel.Text =
+            $"Pulled: {result.NewRecords.Count} new · {result.Conflicts.Count} conflict(s) · {result.Unchanged.Count} unchanged.";
 
-        return RecordConflictDetector.Detect(form, local, server);
+        if (result.Conflicts.Count > 0)
+        {
+            await Navigation.PushAsync(new ConflictReviewPage(result.Conflicts[0]));
+        }
     }
 }

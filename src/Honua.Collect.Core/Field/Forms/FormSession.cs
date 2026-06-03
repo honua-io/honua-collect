@@ -1,4 +1,5 @@
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Forms.Expressions;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Field.Forms;
@@ -363,6 +364,14 @@ public sealed class FormSession : ICaptureHost
         if (!_states.TryGetValue(fieldId, out var state))
         {
             return false;
+        }
+
+        // A boolean relevance expression (e.g. "${a}='x' and ${b}>5") supersedes
+        // the single-comparison visibility rule when present.
+        var relevance = state.Field.RelevanceExpression;
+        if (!string.IsNullOrWhiteSpace(relevance))
+        {
+            return ExpressionEvaluator.EvaluateBoolean(relevance, Record.Values);
         }
 
         var rule = state.Field.VisibilityRule;

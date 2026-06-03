@@ -85,3 +85,33 @@ Verified on the emulator:
 - **C3 video** uses the same `MediaPicker` capture/pick + import path as the verified photo widget.
 
 Manifest gains `CAMERA`, `RECORD_AUDIO`, and the scoped media-read permissions.
+
+## Parity gap-fills: expression engine, bidirectional sync, offline basemaps, geo-depth
+
+A round of agent-built, integrated work closing the Survey123/Fulcrum baseline gaps from the parity audit. Cross-repo: the forms expression engine landed in `Honua.Sdk.Field 1.2.0` (honua-sdk-dotnet) and is consumed here.
+
+### Expression engine (SDK 1.2.0) — **device-verified**
+
+`FormSession` now delegates calc + validation to the SDK's real expression engine (tokenizer/parser/evaluator: arithmetic, comparison, logical, `if`, dates, strings, `$field` refs) and evaluates boolean `RelevanceExpression`. The bundled **Smart Form** demo (home → "Smart Form (Expressions) Demo") proves all three on device:
+
+| File | Demonstrates |
+| --- | --- |
+| `10-smart-form-expressions.png` | `Total = $quantity * $unit_price` computes **120** (real arithmetic, not the old concat/sum); the **Approver** field appears via boolean relevance `$total > 100`; and the constraint `$coupon = '' or len($coupon) = 5` blocks the invalid coupon "ABC" with its message. |
+
+### Offline basemaps — **device-verified**
+
+Tiles now persist to an on-disk cache (`TileCache`), and the geometry page's **⤓ Area** button prefetches the visible viewport across zoom+2 into that cache.
+
+| File | Demonstrates |
+| --- | --- |
+| `11-offline-area.png` | "Offline area ready: 54 tiles cached" — 54 PNG tiles written under `files/tiles/`, so the area renders offline. |
+
+### Bidirectional sync — wired, unit-tested
+
+`GeoServicesFeatureSync.QueryAsync` pulls server features (paged) into `FieldRecord`s; `FeaturePullService` classifies new-vs-conflict via `RecordConflictDetector`; the Sync tab's **Pull from server** button surfaces conflicts to the review screen. Covered by Core + Presentation tests (live round-trip against a seeded server is the remaining check).
+
+### Geo-depth — Core/VM wired, unit-tested
+
+Snap-to-feature and GPS averaging are surfaced through `MapCaptureViewModel`, and repeat min/max bounds are enforced in `FormSession.Validate()` (the thin on-map toggle/GPS-button UI is the remaining wiring).
+
+Test totals after integration: **Core 226 + Presentation 38** (collect) and **108** (SDK Field).

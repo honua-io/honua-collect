@@ -83,4 +83,44 @@ public static class SampleForms
             },
         ],
     };
+
+    /// <summary>
+    /// A demo form exercising the expression engine (SDK 1.2.0): an arithmetic
+    /// calculated field, a constraint expression, and a boolean relevance rule
+    /// that reacts to the calculated total.
+    /// </summary>
+    public static FormDefinition SmartForm() => new()
+    {
+        FormId = "smart-form",
+        Name = "Smart Form",
+        Sections =
+        [
+            new FormSection
+            {
+                SectionId = "order",
+                Label = "Order",
+                Fields =
+                [
+                    new FormField { FieldId = "quantity", Label = "Quantity", Type = FormFieldType.Numeric, Required = true },
+                    new FormField { FieldId = "unit_price", Label = "Unit price", Type = FormFieldType.Numeric, Required = true },
+                    // Rich arithmetic — impossible with the old concat/sum-only evaluator.
+                    new FormField { FieldId = "total", Label = "Total", Type = FormFieldType.Calculated, CalculatedExpression = "$quantity * $unit_price" },
+                    // Constraint expression: empty, or exactly 5 characters.
+                    new FormField
+                    {
+                        FieldId = "coupon",
+                        Label = "Coupon (blank or 5 chars)",
+                        Type = FormFieldType.Text,
+                        Validation = new FieldValidationRule
+                        {
+                            ConstraintExpression = "$coupon = '' or len($coupon) = 5",
+                            ConstraintMessage = "Coupon must be blank or exactly 5 characters.",
+                        },
+                    },
+                    // Boolean relevance reacting to the calculated total.
+                    new FormField { FieldId = "approver", Label = "Approver (shown when total > 100)", Type = FormFieldType.Text, RelevanceExpression = "$total > 100" },
+                ],
+            },
+        ],
+    };
 }
