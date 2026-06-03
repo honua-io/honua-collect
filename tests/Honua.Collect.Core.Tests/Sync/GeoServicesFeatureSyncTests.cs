@@ -334,4 +334,118 @@ public class GeoServicesFeatureSyncTests
         Assert.Equal(4, result.Attempts);
         Assert.Equal(4, handler.Calls);
     }
+
+    private sealed class QueryHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
+    {
+        public List<Uri> CapturedUris { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var (status, body) = responses[Math.Min(CapturedUris.Count, responses.Length - 1)];
+            CapturedUris.Add(request.RequestUri!);
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+        }
+    }
+
+    [Fact]
+    public void QueryUrl_builds_expected_endpoint()
+    {
+        var target = new GeoServicesTarget("http://server:18080/", "svc", 9);
+        Assert.Equal("http://server:18080/rest/services/svc/FeatureServer/9/query", target.QueryUrl);
+    }
+
+    [Fact]
+    public async Task QueryAsync_hits_query_url_with_expected_params_and_decodes_features()
+    {
+        const string body = """
+        {
+          "objectIdFieldName": "objectid",
+          "features": [
+            { "attributes": { "objectid": 11, "site_name": "Alpha", "priority": "high", "count": 3 },
+              "geometry": { "x": -157.82, "y": 21.30 } },
+            { "attributes": { "objectid": 12, "site_name": "Bravo", "count": 7 },
+              "geometry": { "x": -120.0, "y": 35.0 } }
+          ]
+        }
+        """;
+        var handler = new QueryHandler((HttpStatusCode.OK, body));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(
+            new GeoServicesTarget("http://server:18080", "mobile_offline_demo", 68910), "status = 'open'");
+
+        Assert.True(result.Success);
+        var uri = handler.CapturedUris[0].AbsoluteUri;
+        Assert.Contains("/rest/services/mobile_offline_demo/FeatureServer/68910/query?", uri);
+        Assert.Contains("f=json", uri);
+        Assert.Contains("outFields=%2A", uri);            // *
+        Assert.Contains("returnGeometry=true", uri);
+        Assert.Contains("where=status%20%3D%20%27open%27", uri);
+
+        Assert.Equal(2, result.Records.Count);
+        var first = result.Records[0];
+        Assert.Equal(11, first.ObjectId);
+        Assert.Equal("11", first.Record.RecordId);
+        Assert.Equal("Alpha", first.Record.Values["site_name"]);
+        Assert.Equal(3L, Assert.IsType<long>(first.Record.Values["count"])); // numeric stays numeric
+        Assert.False(first.Record.Values.ContainsKey("objectid"));      // object id is metadata, not a value
+        Assert.Equal(21.30, first.Record.Location!.Latitude);           // y -> lat
+        Assert.Equal(-157.82, first.Record.Location!.Longitude);        // x -> lon
+        Assert.Equal(12, result.Records[1].ObjectId);
+    }
+
+    [Fact]
+    public async Task QueryAsync_follows_paging_until_transfer_limit_clears()
+    {
+        const string page1 = """
+        {
+          "objectIdFieldName": "objectid",
+          "exceededTransferLimit": true,
+          "features": [ { "attributes": { "objectid": 1 } }, { "attributes": { "objectid": 2 } } ]
+        }
+        """;
+        const string page2 = """
+        {
+          "objectIdFieldName": "objectid",
+          "features": [ { "attributes": { "objectid": 3 } } ]
+        }
+        """;
+        var handler = new QueryHandler((HttpStatusCode.OK, page1), (HttpStatusCode.OK, page2));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.CapturedUris.Count);
+        Assert.Contains("resultOffset=0", handler.CapturedUris[0].AbsoluteUri);
+        Assert.Contains("resultOffset=2", handler.CapturedUris[1].AbsoluteUri); // advanced by first page count
+        Assert.Equal([1L, 2L, 3L], result.Records.Select(r => r.ObjectId));
+    }
+
+    [Fact]
+    public async Task QueryAsync_surfaces_server_error_without_throwing()
+    {
+        var handler = new QueryHandler((HttpStatusCode.OK, """{"error":{"code":400,"message":"Invalid where clause"}}"""));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Equal("Invalid where clause", result.Error);
+        Assert.Equal(400, result.ErrorCode);
+        Assert.Empty(result.Records);
+        Assert.Single(handler.CapturedUris); // no paging after an error
+    }
+
+    [Fact]
+    public async Task QueryAsync_surfaces_http_failure()
+    {
+        var handler = new QueryHandler((HttpStatusCode.InternalServerError, "boom"));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Equal(500, result.ErrorCode);
+    }
 }
