@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Collect.App.Views.ExportPage"
+             Title="Export">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+
+            <Label Text="{Binding Header}" FontAttributes="Bold" />
+
+            <Label Text="Bulk-export captured records or generate a per-record report. Pro edition."
+                   FontSize="13" TextColor="Gray" />
+
+            <Button Text="Export CSV" Clicked="OnExportCsv"
+                    IsEnabled="{Binding IsEntitled}" />
+            <Button Text="Export GeoJSON" Clicked="OnExportGeoJson"
+                    IsEnabled="{Binding IsEntitled}" />
+            <Button Text="Report (latest record)" Clicked="OnReportLatest"
+                    IsEnabled="{Binding IsEntitled}" />
+
+            <Label x:Name="StatusLabel" FontSize="13" TextColor="Gray" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

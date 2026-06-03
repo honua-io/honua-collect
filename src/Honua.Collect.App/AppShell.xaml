@@ -20,6 +20,10 @@
                       ContentTemplate="{DataTemplate views:SignaturePage}" />
         <ShellContent Title="Account" Route="account"
                       ContentTemplate="{DataTemplate views:LoginPage}" />
+        <ShellContent Title="Inbox" Route="inbox"
+                      ContentTemplate="{DataTemplate views:InboxPage}" />
+        <ShellContent Title="Export" Route="export"
+                      ContentTemplate="{DataTemplate views:ExportPage}" />
     </TabBar>
 
 </Shell>
