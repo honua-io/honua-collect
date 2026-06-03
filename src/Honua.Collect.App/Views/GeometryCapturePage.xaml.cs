@@ -19,7 +19,7 @@ public partial class GeometryCapturePage : ContentPage
     private const int MinZoom = 2;
     private const int MaxZoom = 19;
 
-    private readonly OsmTileLoader _tiles = new();
+    private readonly OsmTileLoader _tiles = new(Path.Combine(FileSystem.AppDataDirectory, "tiles"));
     private readonly SlippyMapDrawable _map;
     private MapCaptureViewModel _vm = new(CapturedGeometryType.Point);
 
