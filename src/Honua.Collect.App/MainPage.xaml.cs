@@ -86,7 +86,7 @@ public partial class MainPage : ContentPage
         StatusLabel.Text = "Submitting to server…";
         try
         {
-            var sync = new GeoServicesFeatureSync(_http);
+            var sync = ServiceHelper.Get<GeoServicesFeatureSync>();
             var result = await sync.SubmitAsync(record, _settings.Target);
             if (result.Success)
             {

@@ -10,7 +10,7 @@ namespace Honua.Collect.App.Services;
 /// connection details and keys out of compiled code so they live in configuration
 /// and can be overridden per environment.
 /// </summary>
-public sealed class AppSettings
+public sealed record AppSettings
 {
     /// <summary>Base URL of the Honua server.</summary>
     public required string ServerBaseUrl { get; init; }
@@ -47,18 +47,45 @@ public sealed class AppSettings
         var root = document.RootElement;
         var server = root.GetProperty("server");
 
-        string? demoKey = null;
-        if (root.TryGetProperty("demo", out var demo) && demo.TryGetProperty("apiKey", out var key))
-        {
-            demoKey = key.GetString();
-        }
-
-        return new AppSettings
+        var settings = new AppSettings
         {
             ServerBaseUrl = server.GetProperty("baseUrl").GetString()!,
             ServiceId = server.GetProperty("serviceId").GetString()!,
             LayerId = server.GetProperty("layerId").GetInt32(),
-            DemoApiKey = demoKey,
+            DemoApiKey = ReadApiKey(root), // null in source — no credential ships in the binary
         };
+
+        return ApplyLocalOverride(settings);
+    }
+
+    private static string? ReadApiKey(JsonElement root)
+        => root.TryGetProperty("demo", out var demo)
+            && demo.TryGetProperty("apiKey", out var key)
+            && key.ValueKind == JsonValueKind.String
+            ? key.GetString()
+            : null;
+
+    /// <summary>
+    /// Overlays an optional, gitignored <c>appsettings.local.json</c> from the app
+    /// data directory (a local-dev credential convenience). Read with synchronous
+    /// file IO so startup never blocks on an async API; absent in normal/CI builds.
+    /// </summary>
+    private static AppSettings ApplyLocalOverride(AppSettings settings)
+    {
+        try
+        {
+            var path = Path.Combine(FileSystem.AppDataDirectory, "appsettings.local.json");
+            if (!File.Exists(path))
+            {
+                return settings;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            return settings with { DemoApiKey = ReadApiKey(document.RootElement) ?? settings.DemoApiKey };
+        }
+        catch (Exception)
+        {
+            return settings; // a malformed local override must not break startup
+        }
     }
 }

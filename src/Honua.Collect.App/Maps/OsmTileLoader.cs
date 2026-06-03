@@ -36,11 +36,14 @@ public sealed class OsmTileLoader : IDisposable
     /// The directory under which tiles are persisted, e.g.
     /// <c>Path.Combine(FileSystem.AppDataDirectory, "tiles")</c>.
     /// </param>
-    public OsmTileLoader(string cacheRoot)
+    /// <param name="http">
+    /// The HTTP client for tile requests, from <c>IHttpClientFactory</c> (the
+    /// caller owns its lifetime, so this type does not dispose it).
+    /// </param>
+    public OsmTileLoader(string cacheRoot, HttpClient http)
     {
         _disk = new TileCache(cacheRoot);
-        _http = new HttpClient();
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("HonuaCollect/1.0 (+https://honua.io)");
+        _http = http ?? throw new ArgumentNullException(nameof(http));
     }
 
     /// <summary>
@@ -223,7 +226,7 @@ public sealed class OsmTileLoader : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        _http.Dispose();
+        // The HttpClient is owned by IHttpClientFactory, not this type.
         _gate.Dispose();
     }
 }

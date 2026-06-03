@@ -1,8 +1,10 @@
 using Honua.Collect.App.Capture;
+using Honua.Collect.App.Services;
 using Honua.Collect.Core.Ai;
 using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Presentation.Forms;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
@@ -110,7 +112,8 @@ public partial class FormPage : ContentPage
         }
     }
 
-    private static readonly HttpClient AiHttp = new();
+    private readonly HttpClient _aiHttp =
+        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.AnthropicHttpClient);
 
     private async void OnAiFill(object? sender, EventArgs e)
     {
@@ -137,7 +140,7 @@ public partial class FormPage : ContentPage
             }
 
             var path = await CaptureFiles.ImportAsync(photo);
-            var provider = new AnthropicPhotoToFieldsProvider(AiHttp, new AnthropicPhotoToFieldsOptions { ApiKey = apiKey });
+            var provider = new AnthropicPhotoToFieldsProvider(_aiHttp, new AnthropicPhotoToFieldsOptions { ApiKey = apiKey });
             var result = await provider.ExtractAsync(path, vm.Session.Form);
             TryDelete(path);
 

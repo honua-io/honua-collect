@@ -1,0 +1,9 @@
+<Project>
+  <!-- Warnings are errors for the platform-neutral libraries and tests (which are
+       warning-clean), enforced here (not in Directory.Build.props) so UseMaui is
+       already set by the project. The MAUI app is excluded because it intentionally
+       carries framework obsolete-API (CS0618) warnings from the current MAUI surface. -->
+  <PropertyGroup Condition="'$(UseMaui)' != 'true'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

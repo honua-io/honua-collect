@@ -17,4 +17,17 @@
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>10.0.70</MauiVersion>
   </PropertyGroup>
+
+  <!-- Solution-wide quality gates: nullable + latest language everywhere, so
+       issues surface consistently. NU3018/NU3042 are the expected self-signed
+       package-trust notices from the private feed, suppressed so they don't mask
+       real warnings. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);NU3018;NU3042</NoWarn>
+  </PropertyGroup>
+  <!-- The warnings-as-errors gate is in Directory.Build.targets, which is imported
+       after the project sets UseMaui, so the MAUI app can be excluded correctly. -->
 </Project>
