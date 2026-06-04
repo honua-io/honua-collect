@@ -1,0 +1,36 @@
+name: CodeQL
+
+# Static application-security testing (SAST). Runs CodeQL's C# query suite on
+# every push/PR and on a weekly schedule so new advisories are caught even
+# without a code change. Uses build-mode `none` (no compile required), which
+# avoids the MAUI Android workload and private-feed restore while still
+# analysing the full C# source.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '27 4 * * 1'  # Mondays 04:27 UTC
+
+jobs:
+  analyze:
+    name: Analyze (csharp)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: none
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:csharp'
