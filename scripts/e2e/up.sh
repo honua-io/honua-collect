@@ -29,6 +29,9 @@ run_srv() {
     -e Kestrel__Endpoints__Http__Url="http://+:8080" -e Kestrel__Endpoints__Http__Protocols="Http1" \
     -e Security__ConnectionEncryption__MasterKey="$MK" -e Security__ConnectionEncryption__Salt="$SALT" \
     -e HONUA_ADMIN_PASSWORD="$ADMIN_PW" \
+    -e Authentication__PortalToken__Enabled="true" \
+    -e Authentication__PortalToken__RequireHttps="false" \
+    -e Authentication__PortalCredentialVerifier__FallBackToAdminVerifier="true" \
     -e Geocoding__Enabled="false" \
     -e Geocoding__Nominatim__BaseUrl="https://nominatim.openstreetmap.org/" \
     -p "${HTTPPORT}:8080" "$IMAGE" >/dev/null
