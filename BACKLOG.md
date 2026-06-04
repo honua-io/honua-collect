@@ -1,5 +1,10 @@
 # Honua Collect — feature backlog (parity with Survey123 & Fulcrum)
 
+> **Strategy:** for the competitive frame over this gap list — the rivalry
+> verdict, the incumbent weaknesses we exploit, and the three-horizon plan
+> (parity → differentiate → leapfrog) with its tracked epics — see
+> [`docs/COMPETITIVE-STRATEGY.md`](docs/COMPETITIVE-STRATEGY.md).
+
 Gaps relative to Esri **Survey123** and **Fulcrum**, from the capability
 assessment of the Honua mobile stack. Each item is tagged with:
 
