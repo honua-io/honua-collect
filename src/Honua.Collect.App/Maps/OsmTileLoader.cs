@@ -17,8 +17,6 @@ namespace Honua.Collect.App.Maps;
 /// </summary>
 public sealed class OsmTileLoader : IDisposable
 {
-    private const string UrlTemplate = "https://tile.openstreetmap.org/{0}/{1}/{2}.png";
-
     private readonly HttpClient _http;
     private readonly TileCache _disk;
     private readonly ConcurrentDictionary<string, IImage> _cache = new();
@@ -58,7 +56,7 @@ public sealed class OsmTileLoader : IDisposable
     /// <returns>The cached image, or null while loading.</returns>
     public IImage? Get(int zoom, int x, int y)
     {
-        var key = $"{zoom}/{x}/{y}";
+        var key = OsmTileUrl.CacheKey(zoom, x, y);
         if (_cache.TryGetValue(key, out var image))
         {
             return image;
@@ -144,7 +142,7 @@ public sealed class OsmTileLoader : IDisposable
 
     private async Task<byte[]?> DownloadAsync(int zoom, int x, int y)
     {
-        var url = string.Format(System.Globalization.CultureInfo.InvariantCulture, UrlTemplate, zoom, x, y);
+        var url = OsmTileUrl.For(zoom, x, y);
         using var response = await _http.GetAsync(url).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {

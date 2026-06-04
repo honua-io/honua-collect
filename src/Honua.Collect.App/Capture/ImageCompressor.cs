@@ -1,3 +1,4 @@
+using Honua.Collect.Core.Imaging;
 using Microsoft.Maui.Graphics;
 using Microsoft.Maui.Graphics.Platform;
 
@@ -35,8 +36,8 @@ public static class ImageCompressor
         using var input = File.OpenRead(sourcePath);
         var image = PlatformImage.FromStream(input);
 
-        var longest = Math.Max(image.Width, image.Height);
-        var output = longest > maxEdge ? image.Downsize(maxEdge) : image;
+        var plan = ImageResizePlan.For((int)image.Width, (int)image.Height, maxEdge);
+        var output = plan.ResizeNeeded ? image.Downsize(maxEdge) : image;
 
         var destination = CaptureFiles.NewPath(".jpg");
         using var stream = File.Create(destination);

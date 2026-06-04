@@ -104,4 +104,87 @@ public class SyncCenterPullTests
         Assert.False(vm.CanPull);
         Assert.False(vm.PullCommand.CanExecute(null));
     }
+
+    private static CollectRecordEntry PendingEntry(string recordId, string name)
+    {
+        var record = new FieldRecord { RecordId = recordId, FormId = "f", Status = RecordStatus.Submitted };
+        record.Values["name"] = name;
+        var entry = new CollectRecordEntry(record);
+        entry.MarkPending();
+        return entry;
+    }
+
+    [Fact]
+    public async Task SyncAsync_uploads_pending_records_and_marks_them_synced()
+    {
+        var entries = new[] { PendingEntry("a", "A"), PendingEntry("b", "B") };
+        var vm = new SyncCenterViewModel(entries, (e, _) => Task.FromResult<string?>($"remote-{e.Record.RecordId}"));
+        Assert.True(vm.SyncCommand.CanExecute(null));
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(2, synced);
+        Assert.All(entries, e => Assert.Equal("remote-" + e.Record.RecordId, e.RemoteId));
+        Assert.Empty(vm.Pending);
+        Assert.False(vm.SyncCommand.CanExecute(null)); // nothing left to do
+    }
+
+    [Fact]
+    public async Task SyncAsync_marks_failed_when_uploader_returns_null()
+    {
+        var entries = new[] { PendingEntry("a", "A") };
+        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult<string?>(null));
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(0, synced);
+        Assert.Equal("Upload was rejected.", entries[0].LastError);
+        Assert.Single(vm.Pending); // a failed record remains in the outbox
+    }
+
+    [Fact]
+    public async Task SyncAsync_marks_failed_and_continues_on_a_thrown_error()
+    {
+        var entries = new[] { PendingEntry("a", "A"), PendingEntry("b", "B") };
+        var vm = new SyncCenterViewModel(entries, (e, _) =>
+            e.Record.RecordId == "a"
+                ? throw new InvalidOperationException("network down")
+                : Task.FromResult<string?>("remote-b"));
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(1, synced); // "b" still succeeds after "a" failed
+        Assert.Equal("network down", entries[0].LastError);
+        Assert.Equal("remote-b", entries[1].RemoteId);
+    }
+
+    [Fact]
+    public async Task SyncAsync_lets_cancellation_propagate()
+    {
+        var entries = new[] { PendingEntry("a", "A") };
+        var vm = new SyncCenterViewModel(entries, (_, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult<string?>("x");
+        });
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => vm.SyncAsync(cts.Token));
+    }
+
+    [Fact]
+    public async Task SyncAsync_is_a_no_op_while_already_syncing()
+    {
+        var gate = new TaskCompletionSource<string?>();
+        var entries = new[] { PendingEntry("a", "A") };
+        var vm = new SyncCenterViewModel(entries, (_, _) => gate.Task);
+
+        var first = vm.SyncAsync();           // enters and parks on the uploader
+        var second = await vm.SyncAsync();    // re-entrancy guard returns immediately
+
+        Assert.Equal(0, second);
+        gate.SetResult("remote-a");
+        Assert.Equal(1, await first);
+    }
 }

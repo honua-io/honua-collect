@@ -20,7 +20,11 @@
     <PackageReference Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageReference Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageReference Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <!-- SQLCipher-capable SQLite: the .Core package + the e_sqlcipher batteries
+         bundle (version-matched on SQLitePCLRaw.core 2.1.11) so the record DB can
+         be encrypted at rest via a connection-string Password (PRAGMA key). -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.8" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
   </ItemGroup>
 
 </Project>

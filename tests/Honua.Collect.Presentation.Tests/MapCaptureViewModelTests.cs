@@ -108,4 +108,88 @@ public class MapCaptureViewModelTests
         var vm = new MapCaptureViewModel(CapturedGeometryType.Point);
         Assert.Throws<ArgumentException>(() => vm.AddAveragedVertex(Array.Empty<FieldGeoPoint>()));
     }
+
+    [Fact]
+    public void SnapEnabled_set_to_same_value_is_a_no_op()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Line);
+        var changes = 0;
+        vm.PropertyChanged += (_, _) => changes++;
+
+        vm.SnapEnabled = false; // already false
+
+        Assert.Equal(0, changes);
+    }
+
+    [Fact]
+    public void SnapTolerance_changes_only_on_a_new_value()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Line);
+        var original = vm.SnapToleranceMeters;
+        var changes = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.SnapToleranceMeters)) changes++; };
+
+        vm.SnapToleranceMeters = original; // no-op
+        Assert.Equal(0, changes);
+
+        vm.SnapToleranceMeters = original + 5;
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public void Undo_and_Clear_remove_vertices_and_gate_their_commands()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Line);
+        Assert.False(vm.UndoCommand.CanExecute(null));
+        Assert.False(vm.ClearCommand.CanExecute(null));
+
+        vm.AddVertex(new FieldGeoPoint(1, 1));
+        vm.AddVertex(new FieldGeoPoint(2, 2));
+        Assert.True(vm.UndoCommand.CanExecute(null));
+
+        vm.UndoCommand.Execute(null);
+        Assert.Single(vm.Vertices);
+
+        vm.ClearCommand.Execute(null);
+        Assert.Empty(vm.Vertices);
+        Assert.False(vm.ClearCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void AddGpsSample_before_begin_throws()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Point);
+        Assert.Throws<InvalidOperationException>(() => vm.AddGpsSample(new FieldGeoPoint(1, 1)));
+    }
+
+    [Fact]
+    public void Commit_without_samples_throws()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Point);
+        vm.BeginGpsAveraging();
+        Assert.Throws<InvalidOperationException>(() => vm.CommitAveragedVertex());
+    }
+
+    [Fact]
+    public void Cancel_with_no_run_is_a_no_op()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Point);
+        vm.CancelGpsAveraging(); // no run in progress
+        Assert.False(vm.IsAveraging);
+    }
+
+    [Fact]
+    public void ApplyTo_and_ToGeoJson_emit_the_captured_geometry()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Point);
+        vm.AddVertex(new FieldGeoPoint(12.5, -1.25));
+        Assert.True(vm.IsComplete);
+
+        var json = vm.ToGeoJson();
+        Assert.Contains("Point", json, StringComparison.OrdinalIgnoreCase);
+
+        var record = new FieldRecord { RecordId = "r", FormId = "f" };
+        vm.ApplyTo(record, "geom");
+        Assert.NotNull(record.Location);
+    }
 }
