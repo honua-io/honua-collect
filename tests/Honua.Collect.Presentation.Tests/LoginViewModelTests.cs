@@ -92,9 +92,10 @@ public class LoginViewModelTests
 
         await vm.LoginAsync();
 
-        // Raw transport detail is NOT surfaced to the user, only kept for diagnostics.
+        // Raw transport detail is NOT surfaced to the user, only kept for diagnostics
+        // (type-qualified so the log distinguishes a network fault from a parse/server error).
         Assert.Equal("Sign-in failed. Check your connection and try again.", vm.ErrorMessage);
-        Assert.Equal("server unreachable", vm.ErrorDetail);
+        Assert.Equal("InvalidOperationException: server unreachable", vm.ErrorDetail);
         Assert.False(vm.IsAuthenticated);
         Assert.Null(vm.Session);
     }
