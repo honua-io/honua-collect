@@ -39,8 +39,24 @@ public static class MauiProgram
 		// sign-in actually changes what the transport sends.
 		builder.Services.AddSingleton<IAuthSessionStore>(_ => new AuthSessionStore(settings.DemoApiKey));
 		builder.Services.AddTransient<AuthHeaderHandler>();
+
+		// Server client: auth handler + optional SPKI certificate pinning. Pinning is
+		// opt-in (configured pins only); with none set, platform TLS validation applies
+		// so self-hosted deployments aren't broken by a pin they didn't set.
+		var pinningCallback = CertificatePinning.CreateValidationCallback(settings.PinnedCertificateSpki);
 		builder.Services.AddHttpClient(ServerHttpClient, client => client.BaseAddress = settings.BaseUri)
-			.AddHttpMessageHandler<AuthHeaderHandler>();
+			.AddHttpMessageHandler<AuthHeaderHandler>()
+			.ConfigurePrimaryHttpMessageHandler(() =>
+			{
+				var handler = new HttpClientHandler();
+				if (pinningCallback is not null)
+				{
+					handler.ServerCertificateCustomValidationCallback =
+						(request, certificate, chain, errors) => pinningCallback(request, certificate, chain, errors);
+				}
+
+				return handler;
+			});
 
 		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
 		builder.Services.AddHttpClient(TileHttpClient,
