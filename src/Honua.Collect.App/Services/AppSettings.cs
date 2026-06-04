@@ -24,6 +24,13 @@ public sealed record AppSettings
     /// <summary>Development fallback credential used until the user signs in; null in production.</summary>
     public string? DemoApiKey { get; init; }
 
+    /// <summary>
+    /// Optional Base64 SPKI pins for the server certificate. When non-empty, the
+    /// server TLS handshake is additionally pinned to these public keys (see
+    /// <see cref="CertificatePinning"/>); empty means standard platform validation.
+    /// </summary>
+    public IReadOnlyList<string> PinnedCertificateSpki { get; init; } = Array.Empty<string>();
+
     /// <summary>The server base address.</summary>
     public Uri BaseUri => new(ServerBaseUrl);
 
@@ -53,11 +60,26 @@ public sealed record AppSettings
             ServiceId = server.GetProperty("serviceId").GetString()!,
             LayerId = server.GetProperty("layerId").GetInt32(),
             DemoApiKey = ReadApiKey(root), // null in source — no credential ships in the binary
+            PinnedCertificateSpki = ReadPins(server),
         };
 
         // Fail fast on a cleartext endpoint to a non-loopback host (no credential leak).
         EndpointSecurity.EnsureSecureTransport(settings.BaseUri);
         return ApplyLocalOverride(settings);
+    }
+
+    private static IReadOnlyList<string> ReadPins(JsonElement server)
+    {
+        if (!server.TryGetProperty("pinnedCertificates", out var pins) || pins.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return pins.EnumerateArray()
+            .Where(p => p.ValueKind == JsonValueKind.String)
+            .Select(p => p.GetString()!)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
     }
 
     private static string? ReadApiKey(JsonElement root)
