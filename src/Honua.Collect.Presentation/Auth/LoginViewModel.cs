@@ -125,9 +125,13 @@ public sealed class LoginViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            // Don't surface raw server/transport detail to the UI; keep it for diagnostics.
+            // Don't surface raw server/transport detail to the UI; keep it in-memory for
+            // diagnostics. The DEBUG log is deliberately limited to the exception TYPE —
+            // never the message or stack — so a server-returned string can't reach any
+            // log sink. (Credentials are never in scope here: the password is only ever
+            // sent to the token endpoint and is not part of any exception this catches.)
             ErrorDetail = $"{ex.GetType().Name}: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[honua-login] sign-in threw: {ErrorDetail}\n{ex}");
+            System.Diagnostics.Debug.WriteLine($"[honua-login] sign-in failed: {ex.GetType().FullName}");
             ErrorMessage = "Sign-in failed. Check your connection and try again.";
         }
         finally
