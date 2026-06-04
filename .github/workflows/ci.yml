@@ -6,6 +6,52 @@ on:
   pull_request:
 
 jobs:
+  security-scan:
+    # Secret scanning over the FULL git history (gitleaks) plus a dependency
+    # vulnerability gate. Blocks the build if a credential is committed or a
+    # package with a known advisory is referenced. The one accepted historical
+    # finding (a dead local-e2e key) is documented and allowlisted in
+    # .gitleaks.toml; any new/different secret fails here.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so gitleaks can scan every commit
+
+      - name: Secret scan (gitleaks, full history)
+        run: |
+          version=8.18.4
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --config .gitleaks.toml --redact --no-banner --exit-code 1 --verbose
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Authenticate package feed
+        run: >-
+          dotnet nuget update source github-honua
+          --username ${{ github.actor }}
+          --password ${{ secrets.GITHUB_TOKEN }}
+          --store-password-in-clear-text
+          --configfile NuGet.config
+
+      - name: Vulnerable dependency scan
+        # `dotnet list package --vulnerable` exits 0 even when it finds advisories,
+        # so we restore first (transitive graph) and fail if any severity row appears.
+        run: |
+          dotnet restore Honua.Collect.slnx
+          dotnet list Honua.Collect.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          if grep -q "has the following vulnerable packages" vuln.txt; then
+            echo "::error::Vulnerable NuGet packages detected — see the table above."
+            exit 1
+          fi
+          echo "No vulnerable packages."
+
   build-test:
     runs-on: ubuntu-latest
     permissions:

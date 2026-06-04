@@ -1,0 +1,18 @@
+# gitleaks configuration for Honua Collect.
+# Used by the `security-scan` CI job to fail the build if a secret is committed.
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Accepted historical finding: 'AdminPass123!' was a local-only e2e admin key used \
+by the Docker test server at 10.0.2.2:18080 (introduced in 759b750). It was never \
+valid against any real or shared environment, was removed from HEAD in PR #21, and \
+the e2e harness now provisions a per-run generated key (scripts/e2e/up.sh, \
+HONUA_E2E_APIKEY). It survives only in history; rotation is not applicable because \
+the value is dead. Allowlisted so the full-history scan stays green while still \
+failing on any *new* or *different* secret.
+"""
+regexes = [
+  '''AdminPass123!''',
+]
