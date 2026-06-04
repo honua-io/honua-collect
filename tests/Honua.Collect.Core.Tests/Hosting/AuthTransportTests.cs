@@ -28,6 +28,21 @@ public class AuthTransportTests
     }
 
     [Fact]
+    public void Store_does_not_present_an_expired_session_token()
+    {
+        var store = new AuthSessionStore("demo-key");
+        store.Set(new AuthSession
+        {
+            UserId = "u1",
+            AccessToken = "stale-token",
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1), // already expired
+        });
+
+        // The expired token is withheld; the fallback is used (re-auth required).
+        Assert.Equal("demo-key", store.CurrentApiKey);
+    }
+
+    [Fact]
     public void Store_raises_changed_on_set()
     {
         var store = new AuthSessionStore();
