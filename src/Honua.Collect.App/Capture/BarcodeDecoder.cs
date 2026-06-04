@@ -1,5 +1,6 @@
 #if ANDROID
 using Android.Graphics;
+using Honua.Collect.Core.Imaging;
 using ZXing;
 using ZXing.Common;
 #endif
@@ -37,14 +38,7 @@ public static class BarcodeDecoder
             bitmap.GetPixels(pixels, 0, width, 0, 0, width, height);
 
             // Pack ARGB ints into the RGB24 byte buffer ZXing expects.
-            var rgb = new byte[width * height * 3];
-            for (var i = 0; i < pixels.Length; i++)
-            {
-                var p = pixels[i];
-                rgb[(i * 3) + 0] = (byte)((p >> 16) & 0xFF);
-                rgb[(i * 3) + 1] = (byte)((p >> 8) & 0xFF);
-                rgb[(i * 3) + 2] = (byte)(p & 0xFF);
-            }
+            var rgb = ArgbPixels.PackRgb(pixels);
 
             var source = new RGBLuminanceSource(rgb, width, height, RGBLuminanceSource.BitmapFormat.RGB24);
             var reader = new BarcodeReaderGeneric

@@ -66,4 +66,38 @@ public class ResumableUploadTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new ResumableUpload(-1, 100));
         Assert.Throws<ArgumentOutOfRangeException>(() => new ResumableUpload(100, 100).ChunkAt(5));
     }
+
+    [Fact]
+    public void Chunk_index_boundary_is_exclusive_of_ChunkCount()
+    {
+        // ChunkCount == 3 (indices 0..2); index == ChunkCount must be rejected,
+        // pinning the >= boundary against an off-by-one mutation.
+        var upload = new ResumableUpload(250, 100);
+        Assert.Equal(3, upload.ChunkCount);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => upload.ChunkAt(3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => upload.MarkUploaded(3));
+        // The last valid index does NOT throw.
+        var lastChunk = upload.ChunkAt(2);
+        Assert.Equal(2, lastChunk.Index);
+        upload.MarkUploaded(2);
+        Assert.Equal(1, upload.CompletedCount);
+    }
+
+    [Fact]
+    public void Resume_ignores_index_equal_to_ChunkCount_but_accepts_the_last_valid_index()
+    {
+        // ChunkCount == 2 (indices 0,1). Resume with the last valid index (1) AND
+        // the first out-of-range index (2): only index 1 is restored, killing the
+        // index < ChunkCount boundary mutation.
+        var upload = new ResumableUpload(200, 100);
+        Assert.Equal(2, upload.ChunkCount);
+
+        upload.Resume([1, 2]);
+
+        Assert.Equal(1, upload.CompletedCount);
+        var pending = upload.PendingChunks();
+        Assert.Single(pending); // only chunk 0 remains pending
+        Assert.Equal(0, pending[0].Index);
+    }
 }

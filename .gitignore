@@ -33,3 +33,8 @@ Thumbs.db
 # Local dev config overrides (never commit credentials)
 appsettings.local.json
 **/appsettings.local.json
+
+# Mutation testing (Stryker.NET) output and local tool install
+StrykerOutput/
+**/StrykerOutput/
+/tools/

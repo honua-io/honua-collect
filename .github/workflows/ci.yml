@@ -43,18 +43,53 @@ jobs:
           /p:ThresholdStat=total
           /p:CoverletOutputFormat=cobertura
 
-      # Presentation (view models) is less covered today (line ~39% / branch
-      # ~25%); the gate pins it just below current so further regressions fail
-      # CI while leaving room to raise it as more view-model tests land.
+      # Presentation (view models). The raw number is diluted by Core types that
+      # are transitively included in the coverage run, so we scope coverlet to the
+      # Presentation assembly with /p:Include — that makes the figure honest
+      # (line ~94% / branch ~77%). The gate pins just below current so further
+      # regressions fail CI while leaving headroom as more view-model tests land.
       - name: Build + test Presentation (with coverage gate)
         run: >-
           dotnet test tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj
           -c Release --logger "console;verbosity=minimal"
           /p:CollectCoverage=true
-          /p:Threshold=38%2c24
+          /p:Include="[Honua.Collect.Presentation]*"
+          /p:Threshold=90%2c72
           /p:ThresholdType=line%2cbranch
           /p:ThresholdStat=total
           /p:CoverletOutputFormat=cobertura
+
+  mutation-test:
+    # Mutation testing (Stryker.NET) on the Core library — a quality signal that
+    # the Core tests actually assert behaviour, not just execute lines. Kept
+    # non-blocking (continue-on-error) so it informs without gating, and runs only
+    # the Core test project per stryker-config.json. See docs/mutation-testing.md.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Authenticate package feed
+        run: >-
+          dotnet nuget update source github-honua
+          --username ${{ github.actor }}
+          --password ${{ secrets.GITHUB_TOKEN }}
+          --store-password-in-clear-text
+          --configfile NuGet.config
+
+      - name: Install Stryker.NET
+        run: dotnet tool install dotnet-stryker --tool-path tools
+
+      - name: Run mutation tests (Core)
+        working-directory: tests/Honua.Collect.Core.Tests
+        run: ../../tools/dotnet-stryker
 
   build-app:
     # Compiles the shipping MAUI artifact so a break in the App project fails CI
