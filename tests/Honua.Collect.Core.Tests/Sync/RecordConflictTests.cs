@@ -62,6 +62,35 @@ public class RecordConflictTests
     }
 
     [Fact]
+    public void Value_present_on_only_one_side_is_a_conflict()
+    {
+        // Local set a name the server has never seen: a one-sided value is a real
+        // conflict to resolve, not a both-missing skip.
+        var local = Record("r1", ("name", "Added locally"));
+        var server = Record("r1"); // name missing entirely
+
+        var conflict = RecordConflictDetector.Detect(Form(), local, server);
+
+        var field = Assert.Single(conflict.FieldConflicts);
+        Assert.Equal("name", field.FieldId);
+        Assert.Equal("Added locally", field.LocalValue);
+        Assert.Null(field.ServerValue);
+    }
+
+    [Fact]
+    public void Value_present_only_on_the_server_is_a_conflict()
+    {
+        var local = Record("r1"); // name missing
+        var server = Record("r1", ("name", "From server"));
+
+        var conflict = RecordConflictDetector.Detect(Form(), local, server);
+
+        var field = Assert.Single(conflict.FieldConflicts);
+        Assert.Null(field.LocalValue);
+        Assert.Equal("From server", field.ServerValue);
+    }
+
+    [Fact]
     public void Calculated_fields_are_never_reported_as_conflicts()
     {
         var local = Record("r1", ("name", "A"), ("full", "A"));

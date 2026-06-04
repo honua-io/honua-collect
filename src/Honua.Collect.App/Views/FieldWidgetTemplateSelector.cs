@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Presentation.Forms;
 
 namespace Honua.Collect.App.Views;
@@ -40,15 +39,14 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
             return FallbackTemplate;
         }
 
-        return field.Widget switch
+        return FieldWidgetTemplateMap.For(field.Widget) switch
         {
-            CaptureWidgetKind.Text => TextTemplate ?? FallbackTemplate,
-            CaptureWidgetKind.Number => NumberTemplate ?? FallbackTemplate,
-            CaptureWidgetKind.Toggle => ToggleTemplate ?? FallbackTemplate,
-            CaptureWidgetKind.Choice => ChoiceTemplate ?? FallbackTemplate,
-            CaptureWidgetKind.Photo or CaptureWidgetKind.Video or CaptureWidgetKind.Audio
-                or CaptureWidgetKind.Signature or CaptureWidgetKind.Sketch => MediaTemplate ?? FallbackTemplate,
-            CaptureWidgetKind.Barcode => BarcodeTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Text => TextTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Number => NumberTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Toggle => ToggleTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Choice => ChoiceTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Media => MediaTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Barcode => BarcodeTemplate ?? FallbackTemplate,
             _ => FallbackTemplate,
         };
     }

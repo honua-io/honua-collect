@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-net/master/src/Stryker.Core/Stryker.Core/Schemas/stryker-config.schema.json",
+  "stryker-config": {
+    "project": "Honua.Collect.Core.csproj",
+    "test-projects": ["Honua.Collect.Core.Tests.csproj"],
+    "project-info": {
+      "name": "honua-collect/Honua.Collect.Core",
+      "module": "Honua.Collect.Core"
+    },
+    "reporters": ["progress", "html", "json"],
+    "thresholds": {
+      "high": 85,
+      "low": 70,
+      "break": 0
+    },
+    "mutation-level": "Standard",
+    "mutate": [
+      "**/*.cs"
+    ]
+  }
+}
