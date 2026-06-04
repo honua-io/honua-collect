@@ -38,3 +38,9 @@ appsettings.local.json
 StrykerOutput/
 **/StrykerOutput/
 /tools/
+
+# Coverage reports
+coverage*.xml
+cov-*.xml
+coverage*.json
+**/TestResults/

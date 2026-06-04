@@ -126,7 +126,8 @@ public sealed class LoginViewModel : ObservableObject
         catch (Exception ex)
         {
             // Don't surface raw server/transport detail to the UI; keep it for diagnostics.
-            ErrorDetail = ex.Message;
+            ErrorDetail = $"{ex.GetType().Name}: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[honua-login] sign-in threw: {ErrorDetail}\n{ex}");
             ErrorMessage = "Sign-in failed. Check your connection and try again.";
         }
         finally

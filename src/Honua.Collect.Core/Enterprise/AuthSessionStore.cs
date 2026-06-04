@@ -1,11 +1,11 @@
 namespace Honua.Collect.Core.Enterprise;
 
 /// <summary>
-/// Holds the signed-in <see cref="AuthSession"/> for the running app and exposes
-/// the credential that outbound requests should present. This is the seam that
-/// makes login functional rather than cosmetic: the transport layer
-/// (<see cref="AuthHeaderHandler"/>) reads <see cref="CurrentApiKey"/> so every
-/// sync/upload request carries the authenticated user's token.
+/// Holds the signed-in <see cref="AuthSession"/> for the running app. This is the
+/// seam that makes login functional: the transport layer
+/// (<see cref="AuthHeaderHandler"/>) reads the current session and presents its
+/// bearer token on every request. When signed out, an optional fallback API key
+/// (e.g. a local-dev credential) is used instead.
 /// </summary>
 public interface IAuthSessionStore
 {
@@ -13,10 +13,10 @@ public interface IAuthSessionStore
     AuthSession? Current { get; }
 
     /// <summary>
-    /// The credential to send on requests: the current session's access token, or
-    /// the configured fallback when not signed in (so an offline demo still works).
+    /// Credential presented when no live session exists (e.g. a dev API key); null
+    /// in production, where sign-in is required.
     /// </summary>
-    string? CurrentApiKey { get; }
+    string? FallbackApiKey { get; }
 
     /// <summary>Sets (or clears, with null) the current session.</summary>
     /// <param name="session">The new session, or null to sign out.</param>
@@ -30,12 +30,11 @@ public interface IAuthSessionStore
 public sealed class AuthSessionStore : IAuthSessionStore
 {
     private readonly object _gate = new();
-    private readonly string? _fallbackApiKey;
     private AuthSession? _session;
 
     /// <summary>Creates the store with an optional fallback credential for the signed-out state.</summary>
     /// <param name="fallbackApiKey">Credential to present when no session is set (e.g. a demo key); null for none.</param>
-    public AuthSessionStore(string? fallbackApiKey = null) => _fallbackApiKey = fallbackApiKey;
+    public AuthSessionStore(string? fallbackApiKey = null) => FallbackApiKey = fallbackApiKey;
 
     /// <inheritdoc />
     public AuthSession? Current
@@ -50,23 +49,7 @@ public sealed class AuthSessionStore : IAuthSessionStore
     }
 
     /// <inheritdoc />
-    public string? CurrentApiKey
-    {
-        get
-        {
-            lock (_gate)
-            {
-                // An expired session is not presented — fall back (re-auth required)
-                // rather than sending a stale credential.
-                if (_session is { } session && !session.IsExpired(DateTimeOffset.UtcNow))
-                {
-                    return session.AccessToken;
-                }
-
-                return _fallbackApiKey;
-            }
-        }
-    }
+    public string? FallbackApiKey { get; }
 
     /// <inheritdoc />
     public void Set(AuthSession? session)
