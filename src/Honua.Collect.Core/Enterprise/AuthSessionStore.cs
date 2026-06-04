@@ -56,7 +56,14 @@ public sealed class AuthSessionStore : IAuthSessionStore
         {
             lock (_gate)
             {
-                return _session?.AccessToken ?? _fallbackApiKey;
+                // An expired session is not presented — fall back (re-auth required)
+                // rather than sending a stale credential.
+                if (_session is { } session && !session.IsExpired(DateTimeOffset.UtcNow))
+                {
+                    return session.AccessToken;
+                }
+
+                return _fallbackApiKey;
             }
         }
     }
