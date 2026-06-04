@@ -10,21 +10,35 @@ namespace Honua.Collect.Core.Storage;
 /// and inbox screens share one consistent, persisted view without racing on
 /// shared mutable state.
 /// </summary>
+/// <remarks>
+/// The backing store is created lazily through an async factory, so the app can
+/// fetch the at-rest encryption key from secure storage off the UI thread rather
+/// than blocking startup.
+/// </remarks>
 public sealed class RecordBook
 {
-    private readonly IRecordStore _store;
+    private readonly Func<Task<IRecordStore>> _storeFactory;
     private readonly List<CollectRecordEntry> _entries = [];
     private readonly SemaphoreSlim _initGate = new(1, 1);
     private readonly object _listGate = new();
+    private IRecordStore? _store;
     private volatile bool _initialized;
 
-    /// <summary>Creates the book over a durable store.</summary>
+    /// <summary>Creates the book over an async store factory (used to inject an encryption key).</summary>
+    /// <param name="storeFactory">Builds the durable store on first use.</param>
+    public RecordBook(Func<Task<IRecordStore>> storeFactory)
+        => _storeFactory = storeFactory ?? throw new ArgumentNullException(nameof(storeFactory));
+
+    /// <summary>Creates the book over an already-constructed store (convenience for tests/simple hosts).</summary>
     /// <param name="store">The backing record store.</param>
-    public RecordBook(IRecordStore store) => _store = store ?? throw new ArgumentNullException(nameof(store));
+    public RecordBook(IRecordStore store)
+        : this(() => Task.FromResult(store ?? throw new ArgumentNullException(nameof(store))))
+    {
+    }
 
     /// <summary>
-    /// Hydrates the book from the store exactly once (idempotent and safe to call
-    /// concurrently from multiple screens). Subsequent calls are no-ops.
+    /// Builds the store (once) and hydrates the book from it, idempotently and
+    /// safely under concurrency. Subsequent calls are no-ops.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -41,6 +55,7 @@ public sealed class RecordBook
                 return;
             }
 
+            _store ??= await _storeFactory().ConfigureAwait(false);
             var loaded = await _store.LoadAllAsync().ConfigureAwait(false);
             lock (_listGate)
             {
@@ -74,6 +89,7 @@ public sealed class RecordBook
     public async Task<CollectRecordEntry> AddSubmittedAsync(FieldRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
+        await InitializeAsync().ConfigureAwait(false);
 
         var entry = new CollectRecordEntry(record);
         if (record.Status != RecordStatus.Draft)
@@ -92,9 +108,10 @@ public sealed class RecordBook
 
     /// <summary>Persists the current state of an entry (idempotent upsert).</summary>
     /// <param name="entry">The entry to persist.</param>
-    public Task SaveAsync(CollectRecordEntry entry)
+    public async Task SaveAsync(CollectRecordEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return _store.SaveAsync(entry);
+        await InitializeAsync().ConfigureAwait(false);
+        await _store!.SaveAsync(entry).ConfigureAwait(false);
     }
 }

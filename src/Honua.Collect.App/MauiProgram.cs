@@ -51,15 +51,41 @@ public static class MauiProgram
 		builder.Services.AddTransient(sp =>
 			new GeoServicesFeatureSync(sp.GetRequiredService<IHttpClientFactory>().CreateClient(ServerHttpClient)));
 
-		// One durable record store + the shared, thread-safe record book.
+		// The shared, thread-safe record book over a SQLCipher-encrypted store. The
+		// book builds the store lazily so the encryption key is fetched from secure
+		// storage off the UI thread (no startup blocking).
 		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-records.db");
-		builder.Services.AddSingleton<IRecordStore>(_ => new SqliteRecordStore(dbPath));
-		builder.Services.AddSingleton<RecordBook>();
+		builder.Services.AddSingleton(_ => new RecordBook(() => OpenEncryptedStoreAsync(dbPath)));
 
 		builder.Logging.AddDebug();
 
 		var app = builder.Build();
 		ServiceHelper.Initialize(app.Services);
 		return app;
+	}
+
+	/// <summary>
+	/// Opens the SQLCipher-encrypted record store, self-healing past a legacy
+	/// unencrypted or corrupt local cache (which can't be opened with the key) by
+	/// recreating it — the records re-sync from the server.
+	/// </summary>
+	private static async Task<IRecordStore> OpenEncryptedStoreAsync(string dbPath)
+	{
+		var key = await DbKeyProvider.GetOrCreateKeyAsync();
+		var store = new SqliteRecordStore(dbPath, key);
+		try
+		{
+			await store.LoadAllAsync(); // probe: opens + applies the key
+			return store;
+		}
+		catch (Microsoft.Data.Sqlite.SqliteException)
+		{
+			if (File.Exists(dbPath))
+			{
+				File.Delete(dbPath);
+			}
+
+			return new SqliteRecordStore(dbPath, key);
+		}
 	}
 }

@@ -28,12 +28,27 @@ public sealed class SqliteRecordStore : IRecordStore
     /// string) is treated as the SQLite file location.
     /// </summary>
     /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    public SqliteRecordStore(string connectionStringOrPath)
+    /// <param name="encryptionKey">
+    /// Optional SQLCipher key. When non-empty, the database is encrypted at rest
+    /// (the key is applied as the connection <c>Password</c>, i.e. SQLCipher's
+    /// <c>PRAGMA key</c>). Null/empty opens an unencrypted database.
+    /// </param>
+    public SqliteRecordStore(string connectionStringOrPath, string? encryptionKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        _connectionString = LooksLikeConnectionString(connectionStringOrPath)
-            ? connectionStringOrPath
-            : new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath }.ToString();
+        if (LooksLikeConnectionString(connectionStringOrPath))
+        {
+            _connectionString = connectionStringOrPath;
+            return;
+        }
+
+        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
+        if (!string.IsNullOrEmpty(encryptionKey))
+        {
+            builder.Password = encryptionKey; // SQLCipher: applied as PRAGMA key on open
+        }
+
+        _connectionString = builder.ToString();
     }
 
     /// <inheritdoc />
