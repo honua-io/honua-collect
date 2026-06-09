@@ -13,6 +13,9 @@ on:
   schedule:
     - cron: '27 4 * * 1'  # Mondays 04:27 UTC
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     name: Analyze (csharp)
