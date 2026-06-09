@@ -1,5 +1,7 @@
 # Honua Collect
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/honua-io/honua-collect/badge)](https://scorecard.dev/viewer/?uri=github.com/honua-io/honua-collect)
+
 **Honua Collect** is an offline-first mobile field data collection product built
 on the [Honua](https://github.com/honua-io) platform — a source-available
 alternative to apps like Esri Survey123 and Fulcrum. Dynamic forms, GeoPackage
