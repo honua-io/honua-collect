@@ -50,8 +50,10 @@ jobs:
       - name: Vulnerable dependency scan
         # `dotnet list package --vulnerable` exits 0 even when it finds advisories,
         # so we restore first (transitive graph) and fail if any severity row appears.
+        # --locked-mode fails the build if the committed packages.lock.json files
+        # don't match the resolved graph (a drifted or poisoned transitive dependency).
         run: |
-          dotnet restore Honua.Collect.slnx
+          dotnet restore Honua.Collect.slnx --locked-mode
           dotnet list Honua.Collect.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
           if grep -q "has the following vulnerable packages" vuln.txt; then
             echo "::error::Vulnerable NuGet packages detected — see the table above."
@@ -90,6 +92,7 @@ jobs:
         run: >-
           dotnet test tests/Honua.Collect.Core.Tests/Honua.Collect.Core.Tests.csproj
           -c Release --logger "console;verbosity=minimal"
+          -p:RestoreLockedMode=true
           /p:CollectCoverage=true
           /p:Threshold=85%2c65
           /p:ThresholdType=line%2cbranch
@@ -105,6 +108,7 @@ jobs:
         run: >-
           dotnet test tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj
           -c Release --logger "console;verbosity=minimal"
+          -p:RestoreLockedMode=true
           /p:CollectCoverage=true
           /p:Include="[Honua.Collect.Presentation]*"
           /p:Threshold=90%2c72
@@ -170,4 +174,7 @@ jobs:
         run: dotnet workload install maui-android
 
       - name: Build Android app
+        # The app is intentionally not lockfile-enforced (its SDK/workload-implicit
+        # graph floats with the toolchain — see RestorePackagesWithLockFile=false in
+        # the csproj), so no -p:RestoreLockedMode here.
         run: dotnet build src/Honua.Collect.App/Honua.Collect.App.csproj -f net10.0-android -c Release

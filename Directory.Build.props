@@ -1,22 +1,19 @@
 <Project>
-  <PropertyGroup>
-    <!--
-      Honua Collect consumes the Honua platform as versioned NuGet packages from
-      the private github-honua feed (see NuGet.config):
-        - Honua.Sdk.*     platform-neutral SDK   (honua-io/honua-sdk-dotnet, Apache-2.0)
-        - Honua.Mobile.*  mobile SDK foundation  (honua-io/honua-mobile,     Apache-2.0)
+  <!--
+    Honua Collect consumes the Honua platform as versioned NuGet packages from the
+    private github-honua feed (see NuGet.config):
+      - Honua.Sdk.*     platform-neutral SDK   (honua-io/honua-sdk-dotnet, Apache-2.0)
+      - Honua.Mobile.*  mobile SDK foundation  (honua-io/honua-mobile,     Apache-2.0)
 
-      This repository (the Honua Collect product) is licensed under the Elastic
-      License 2.0 — see LICENSE. The Apache-licensed SDK layers below are NOT
-      relicensed; they remain Apache-2.0 and are consumed, never vendored.
+    This repository (the Honua Collect product) is licensed under the Elastic
+    License 2.0 — see LICENSE. The Apache-licensed SDK layers are NOT relicensed;
+    they remain Apache-2.0 and are consumed, never vendored.
 
-      Pin the SDK train here so the whole product builds against one coherent set
-      of contracts. Bump in lockstep with honua-mobile's Directory.Build.props.
-    -->
-    <HonuaSdkDotNetTrainVersion>1.2.0</HonuaSdkDotNetTrainVersion>
-    <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
-    <MauiVersion>10.0.70</MauiVersion>
-  </PropertyGroup>
+    All package versions — including the SDK-train pin — now live in
+    Directory.Packages.props (Central Package Management), which is the
+    lockfile-compatible home and is in scope when the PackageVersion items
+    evaluate. Bump the train there, in lockstep with honua-mobile.
+  -->
 
   <!-- Solution-wide quality gates: nullable + latest language everywhere, so
        issues surface consistently. NU3018/NU3042 are the expected self-signed
@@ -27,6 +24,15 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <NoWarn>$(NoWarn);NU3018;NU3042</NoWarn>
+  </PropertyGroup>
+
+  <!-- Supply-chain hardening: hash-pin the full transitive graph via per-project
+       packages.lock.json (committed). With Central Package Management (see
+       Directory.Packages.props) the versions resolve cleanly under lockfile
+       restore. CI restores in locked mode so a drifted or poisoned transitive
+       dependency fails the build instead of silently resolving. -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <!-- The warnings-as-errors gate is in Directory.Build.targets, which is imported
        after the project sets UseMaui, so the MAUI app can be excluded correctly. -->

@@ -19,6 +19,15 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
+		<!-- The MAUI app is excluded from lockfile enforcement: its graph is dominated
+		     by SDK/workload-implicit packages (e.g. Microsoft.NET.ILLink.Tasks, runtime
+		     packs) whose versions float with the .NET SDK patch, so a committed lock
+		     file drifts between toolchains (NU1004) for no real supply-chain gain. The
+		     hash-pinned graph that matters — the first-party Honua SDK, crypto, SQLite,
+		     and third-party libs — is locked in the platform-neutral libraries and
+		     tests. (Overrides RestorePackagesWithLockFile from Directory.Build.props.) -->
+		<RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+
 		<!-- Enable XAML source generation for faster build times and improved performance.
 		     This generates C# code from XAML at compile time instead of runtime inflation.
 		     To disable, remove this line.
@@ -70,15 +79,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Maui.Controls" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+		<PackageReference Include="Microsoft.Extensions.Http" />
 		<!-- Audio recording (C2). Stable release; targets net10-android. -->
-		<PackageReference Include="Plugin.Maui.Audio" Version="4.0.0" />
+		<PackageReference Include="Plugin.Maui.Audio" />
 		<!-- Barcode/QR decoding from a captured image (C6); pure-.NET, since ZXing.Net.Maui is net6-only. -->
-		<PackageReference Include="ZXing.Net" Version="0.16.10" />
+		<PackageReference Include="ZXing.Net" />
 		<!-- Honua mobile MAUI primitives (DI, native display/location); Apache, consumed as a package. -->
-		<PackageReference Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
+		<PackageReference Include="Honua.Mobile.Maui" />
 	</ItemGroup>
 
 	<ItemGroup>

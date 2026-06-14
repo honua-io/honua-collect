@@ -1,0 +1,60 @@
+<Project>
+  <!--
+    Central Package Management: every package version is declared here once, so
+    PackageReference items in the csproj files carry no Version. This is the
+    lockfile-compatible configuration (it replaces the MSBuild property-valued
+    PackageReference versions that previously blocked RestorePackagesWithLockFile
+    with NU1015). The SDK-train properties below come from Directory.Build.props,
+    which is imported before this file — keep bumping the train there (see #31).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    SDK-train versions. These live HERE (not Directory.Build.props) because this
+    file is imported before Directory.Build.props, so a property defined there is
+    empty when the PackageVersion items below evaluate. Bump the Honua train in
+    lockstep with honua-mobile's Directory.Build.props (this is the one-line bump
+    in #31), then re-run restore to refresh the lockfiles.
+  -->
+  <PropertyGroup>
+    <HonuaSdkDotNetTrainVersion>1.2.0</HonuaSdkDotNetTrainVersion>
+    <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
+    <MauiVersion>10.0.70</MauiVersion>
+  </PropertyGroup>
+
+  <!-- First-party Honua platform packages (private github-honua feed). -->
+  <ItemGroup>
+    <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
+    <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
+    <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
+    <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
+  </ItemGroup>
+
+  <!-- Storage / crypto. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.8" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
+    <PackageVersion Include="BouncyCastle.Cryptography" Version="2.6.2" />
+  </ItemGroup>
+
+  <!-- App / MAUI runtime. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageVersion Include="Plugin.Maui.Audio" Version="4.0.0" />
+    <PackageVersion Include="ZXing.Net" Version="0.16.10" />
+  </ItemGroup>
+
+  <!-- Test stack. -->
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="coverlet.msbuild" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
+  </ItemGroup>
+</Project>
