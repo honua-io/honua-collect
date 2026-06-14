@@ -40,6 +40,17 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAuthSessionStore>(_ => new AuthSessionStore(settings.DemoApiKey));
 		builder.Services.AddTransient<AuthHeaderHandler>();
 
+		// Session lifecycle: persist the signed-in session to the platform secure
+		// store (Keystore/Keychain) so it resumes across restarts, honoring expiry on
+		// load and surfacing a graceful re-sign-in when it lapses. No refresher is
+		// wired yet — the server's generateToken issues no refresh token — so the
+		// manager simply keeps a near-expiry token until it expires (the refresh seam
+		// is there for when the server contract supports it).
+		builder.Services.AddSingleton<ISessionPersistence, SecureStorageSessionPersistence>();
+		builder.Services.AddSingleton(sp => new AuthSessionManager(
+			sp.GetRequiredService<IAuthSessionStore>(),
+			sp.GetRequiredService<ISessionPersistence>()));
+
 		// Server client: auth handler + optional SPKI certificate pinning. Pinning is
 		// opt-in (configured pins only); with none set, platform TLS validation applies
 		// so self-hosted deployments aren't broken by a pin they didn't set.
