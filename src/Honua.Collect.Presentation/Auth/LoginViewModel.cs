@@ -92,6 +92,18 @@ public sealed class LoginViewModel : ObservableObject
     public ICommand LoginCommand { get; }
 
     /// <summary>
+    /// Surfaces a graceful "your session expired — sign in again" prompt after the
+    /// lifecycle could not refresh a lapsed session. Clears the authenticated state
+    /// so the sign-in fields are usable again, rather than failing silently.
+    /// </summary>
+    public void NotifySessionExpired()
+    {
+        IsAuthenticated = false;
+        Session = null;
+        ErrorMessage = "Your session expired. Please sign in again.";
+    }
+
+    /// <summary>
     /// Runs a sign-in attempt: validates the fields, calls the verifier, and on
     /// success sets <see cref="Session"/>/<see cref="IsAuthenticated"/> and raises
     /// <see cref="Authenticated"/>. Failures and exceptions surface via

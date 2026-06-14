@@ -66,6 +66,24 @@ public class LoginViewModelTests
     }
 
     [Fact]
+    public async Task NotifySessionExpired_AfterSignIn_ClearsStateAndPrompts()
+    {
+        var vm = new LoginViewModel((_, _, _) => Task.FromResult<AuthSession?>(SampleSession()))
+        {
+            Username = "user",
+            Password = "secret",
+        };
+        await vm.LoginAsync();
+        Assert.True(vm.IsAuthenticated);
+
+        vm.NotifySessionExpired();
+
+        Assert.False(vm.IsAuthenticated);
+        Assert.Null(vm.Session);
+        Assert.Equal("Your session expired. Please sign in again.", vm.ErrorMessage);
+    }
+
+    [Fact]
     public async Task LoginAsync_NullVerifier_SetsInvalidCredentialsError()
     {
         var vm = new LoginViewModel((_, _, _) => Task.FromResult<AuthSession?>(null))
