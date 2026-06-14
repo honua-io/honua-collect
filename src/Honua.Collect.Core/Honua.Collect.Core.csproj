@@ -25,6 +25,10 @@
          be encrypted at rest via a connection-string Password (PRAGMA key). -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.8" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
+    <!-- Pure-managed Ed25519 (no native deps) for offline license-key verification
+         against the embedded authority public key. Already in the restore graph
+         transitively; pinned here as a direct, audited dependency. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
   </ItemGroup>
 
 </Project>

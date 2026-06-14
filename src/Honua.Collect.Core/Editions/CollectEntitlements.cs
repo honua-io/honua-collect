@@ -43,7 +43,7 @@ public sealed class FeatureNotEntitledException : InvalidOperationException
 /// before that verification lands.
 /// </para>
 /// </remarks>
-public sealed class CollectEntitlements
+public sealed class CollectEntitlements : IEntitlements
 {
     /// <summary>Creates an entitlement check for an edition.</summary>
     /// <param name="edition">The edition this instance is licensed for.</param>

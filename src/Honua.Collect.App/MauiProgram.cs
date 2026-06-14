@@ -1,5 +1,7 @@
 using Honua.Collect.App.Services;
+using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Enterprise;
+using Honua.Collect.Core.Licensing;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,6 +53,16 @@ public static class MauiProgram
 			sp.GetRequiredService<IAuthSessionStore>(),
 			sp.GetRequiredService<ISessionPersistence>()));
 
+		// Licensing & entitlement enforcement: the LicenseService verifies a signed
+		// license key offline against the embedded authority public key and is the
+		// trusted source of the running edition. IEntitlements resolves to the current
+		// entitlements (Community baseline until a valid key is activated), so gated
+		// features (reports/export, AI capture) enforce the real license rather than a
+		// hardcoded edition. The activated key is held in secure storage.
+		builder.Services.AddSingleton<SecureStorageLicenseStore>();
+		builder.Services.AddSingleton(_ => new LicenseService());
+		builder.Services.AddTransient<IEntitlements>(sp => sp.GetRequiredService<LicenseService>().Entitlements);
+
 		// Server client: auth handler + optional SPKI certificate pinning. Pinning is
 		// opt-in (configured pins only); with none set, platform TLS validation applies
 		// so self-hosted deployments aren't broken by a pin they didn't set.
@@ -88,7 +100,29 @@ public static class MauiProgram
 
 		var app = builder.Build();
 		ServiceHelper.Initialize(app.Services);
+
+		// Activate any stored license key so entitlements are established before the
+		// first gated screen. Off the UI thread; an absent/invalid key leaves the app
+		// on the Community baseline.
+		_ = ActivateStoredLicenseAsync(app.Services);
 		return app;
+	}
+
+	/// <summary>Loads the persisted license key (if any) and applies it to the license service.</summary>
+	private static async Task ActivateStoredLicenseAsync(IServiceProvider services)
+	{
+		try
+		{
+			var token = await services.GetRequiredService<SecureStorageLicenseStore>().LoadAsync();
+			if (!string.IsNullOrWhiteSpace(token))
+			{
+				services.GetRequiredService<LicenseService>().Apply(token);
+			}
+		}
+		catch (Exception ex)
+		{
+			System.Diagnostics.Debug.WriteLine($"[honua-license] activation skipped: {ex.GetType().Name}");
+		}
 	}
 
 	/// <summary>

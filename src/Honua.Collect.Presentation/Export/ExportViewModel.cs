@@ -21,7 +21,7 @@ public sealed class ExportViewModel : ObservableObject
 {
     private readonly FormDefinition _form;
     private readonly IReadOnlyList<FieldRecord> _records;
-    private readonly CollectEntitlements _entitlements;
+    private readonly IEntitlements _entitlements;
     private readonly RecordReportRenderer _reportRenderer;
 
     /// <summary>Creates the export view-model over a form, its records, and an edition.</summary>
@@ -29,11 +29,20 @@ public sealed class ExportViewModel : ObservableObject
     /// <param name="records">Captured records to export and report on.</param>
     /// <param name="edition">The licensing edition in effect; reports/exports require Pro.</param>
     public ExportViewModel(FormDefinition form, IEnumerable<FieldRecord> records, CollectEdition edition)
+        : this(form, records, new CollectEntitlements(edition))
+    {
+    }
+
+    /// <summary>Creates the export view-model over a form, its records, and verified entitlements.</summary>
+    /// <param name="form">Form whose fields define the export columns/properties.</param>
+    /// <param name="records">Captured records to export and report on.</param>
+    /// <param name="entitlements">Entitlements in effect (e.g. from the license service); reports/exports require Pro.</param>
+    public ExportViewModel(FormDefinition form, IEnumerable<FieldRecord> records, IEntitlements entitlements)
     {
         _form = form ?? throw new ArgumentNullException(nameof(form));
         ArgumentNullException.ThrowIfNull(records);
+        _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
         _records = records.ToList();
-        _entitlements = new CollectEntitlements(edition);
         _reportRenderer = new RecordReportRenderer(_entitlements);
     }
 
