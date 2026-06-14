@@ -174,4 +174,7 @@ jobs:
         run: dotnet workload install maui-android
 
       - name: Build Android app
-        run: dotnet build src/Honua.Collect.App/Honua.Collect.App.csproj -f net10.0-android -c Release -p:RestoreLockedMode=true
+        # The app is intentionally not lockfile-enforced (its SDK/workload-implicit
+        # graph floats with the toolchain — see RestorePackagesWithLockFile=false in
+        # the csproj), so no -p:RestoreLockedMode here.
+        run: dotnet build src/Honua.Collect.App/Honua.Collect.App.csproj -f net10.0-android -c Release

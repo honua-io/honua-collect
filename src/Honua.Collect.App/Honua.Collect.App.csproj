@@ -19,6 +19,15 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
+		<!-- The MAUI app is excluded from lockfile enforcement: its graph is dominated
+		     by SDK/workload-implicit packages (e.g. Microsoft.NET.ILLink.Tasks, runtime
+		     packs) whose versions float with the .NET SDK patch, so a committed lock
+		     file drifts between toolchains (NU1004) for no real supply-chain gain. The
+		     hash-pinned graph that matters — the first-party Honua SDK, crypto, SQLite,
+		     and third-party libs — is locked in the platform-neutral libraries and
+		     tests. (Overrides RestorePackagesWithLockFile from Directory.Build.props.) -->
+		<RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+
 		<!-- Enable XAML source generation for faster build times and improved performance.
 		     This generates C# code from XAML at compile time instead of runtime inflation.
 		     To disable, remove this line.
