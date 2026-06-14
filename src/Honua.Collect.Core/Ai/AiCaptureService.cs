@@ -45,11 +45,11 @@ public sealed record AiApplyOutcome(IReadOnlyList<string> Applied, IReadOnlyList
 /// </summary>
 public sealed class AiCaptureService
 {
-    private readonly CollectEntitlements _entitlements;
+    private readonly IEntitlements _entitlements;
 
     /// <summary>Creates the service for an entitlement context.</summary>
     /// <param name="entitlements">Edition entitlements; AI capture requires Pro.</param>
-    public AiCaptureService(CollectEntitlements entitlements)
+    public AiCaptureService(IEntitlements entitlements)
         => _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
 
     /// <summary>Whether the current edition unlocks AI-assisted capture.</summary>

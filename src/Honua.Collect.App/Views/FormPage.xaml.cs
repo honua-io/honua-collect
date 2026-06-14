@@ -144,7 +144,7 @@ public partial class FormPage : ContentPage
             var result = await provider.ExtractAsync(path, vm.Session.Form);
             TryDelete(path);
 
-            var outcome = new AiCaptureService(new CollectEntitlements(CollectEdition.Pro)).Apply(vm.Session, result);
+            var outcome = new AiCaptureService(ServiceHelper.Get<IEntitlements>()).Apply(vm.Session, result);
             vm.RefreshFields();
             await DisplayAlert("AI fill",
                 outcome.Applied.Count > 0

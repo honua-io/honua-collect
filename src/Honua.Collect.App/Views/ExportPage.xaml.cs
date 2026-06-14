@@ -16,10 +16,6 @@ namespace Honua.Collect.App.Views;
 /// </summary>
 public partial class ExportPage : ContentPage
 {
-    // The edition this build runs as. Flip to Community to see the gated state;
-    // Pro unlocks reporting and bulk export.
-    private const CollectEdition Edition = CollectEdition.Pro;
-
     private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
 
     public ExportPage()
@@ -34,7 +30,7 @@ public partial class ExportPage : ContentPage
         BindingContext = new ExportViewModel(
             SampleForms.FieldSite(),
             _book.All.Select(e => e.Record),
-            Edition);
+            ServiceHelper.Get<IEntitlements>());
     }
 
     private async void OnExportCsv(object? sender, EventArgs e) =>

@@ -15,11 +15,11 @@ namespace Honua.Collect.Core.Reports;
 /// </summary>
 public sealed class RecordReportRenderer
 {
-    private readonly CollectEntitlements _entitlements;
+    private readonly IEntitlements _entitlements;
 
     /// <summary>Creates a renderer for an entitlement context.</summary>
     /// <param name="entitlements">Edition entitlements; reports require Pro.</param>
-    public RecordReportRenderer(CollectEntitlements entitlements)
+    public RecordReportRenderer(IEntitlements entitlements)
         => _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
 
     /// <summary>Renders a record to a Markdown report.</summary>
