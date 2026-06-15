@@ -254,7 +254,8 @@ public static class RecordExporter
         }
     }
 
-    private static string CellText(FieldRecord record, FormField field)
+    /// <summary>Renders a field's value to its canonical export string (shared across exporters).</summary>
+    internal static string CellText(FieldRecord record, FormField field)
     {
         if (IsMediaField(field.Type))
         {
