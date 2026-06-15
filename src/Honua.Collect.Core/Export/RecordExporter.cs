@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Xml;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -31,6 +32,7 @@ public static class RecordExporter
     {
         ExportFormat.Csv => ToCsv(form, records),
         ExportFormat.GeoJson => ToGeoJson(form, records),
+        ExportFormat.Kml => ToKml(form, records),
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported export format."),
     };
 
@@ -97,6 +99,72 @@ public static class RecordExporter
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>Exports records to an OGC KML 2.2 document of placemarks.</summary>
+    /// <param name="form">Form whose fields define the placemark extended data.</param>
+    /// <param name="records">Records to export.</param>
+    /// <returns>KML text. Records with a location carry a <c>Point</c>; all carry their values as <c>ExtendedData</c>.</returns>
+    public static string ToKml(FormDefinition form, IEnumerable<FieldRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        ArgumentNullException.ThrowIfNull(records);
+
+        var fields = form.Sections.SelectMany(s => s.Fields).ToList();
+        var builder = new StringBuilder();
+        var settings = new XmlWriterSettings { Indent = true, Encoding = Encoding.UTF8 };
+        using (var writer = XmlWriter.Create(builder, settings))
+        {
+            writer.WriteStartDocument();
+            writer.WriteStartElement("kml", "http://www.opengis.net/kml/2.2");
+            writer.WriteStartElement("Document");
+
+            foreach (var record in records)
+            {
+                WritePlacemark(writer, record, fields);
+            }
+
+            writer.WriteEndElement(); // Document
+            writer.WriteEndElement(); // kml
+            writer.WriteEndDocument();
+        }
+
+        return builder.ToString();
+    }
+
+    private static void WritePlacemark(XmlWriter writer, FieldRecord record, IReadOnlyList<FormField> fields)
+    {
+        writer.WriteStartElement("Placemark");
+        writer.WriteElementString("name", record.RecordId);
+
+        writer.WriteStartElement("ExtendedData");
+        WriteKmlData(writer, "status", record.Status.ToString());
+        foreach (var field in fields)
+        {
+            WriteKmlData(writer, field.FieldId, CellText(record, field));
+        }
+
+        writer.WriteEndElement(); // ExtendedData
+
+        // KML coordinates are lon,lat[,alt] — same axis order as GeoJSON.
+        if (record.Location is { } location)
+        {
+            writer.WriteStartElement("Point");
+            writer.WriteElementString(
+                "coordinates",
+                string.Create(CultureInfo.InvariantCulture, $"{location.Longitude},{location.Latitude}"));
+            writer.WriteEndElement(); // Point
+        }
+
+        writer.WriteEndElement(); // Placemark
+    }
+
+    private static void WriteKmlData(XmlWriter writer, string name, string value)
+    {
+        writer.WriteStartElement("Data");
+        writer.WriteAttributeString("name", name);
+        writer.WriteElementString("value", value);
+        writer.WriteEndElement(); // Data
     }
 
     private static void WriteFeature(Utf8JsonWriter writer, FieldRecord record, IReadOnlyList<FormField> fields)
