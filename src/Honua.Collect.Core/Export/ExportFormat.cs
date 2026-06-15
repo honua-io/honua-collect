@@ -11,4 +11,7 @@ public enum ExportFormat
 
     /// <summary>RFC 7946 GeoJSON <c>FeatureCollection</c>.</summary>
     GeoJson,
+
+    /// <summary>OGC KML 2.2 <c>Document</c> of placemarks (Google Earth / GIS).</summary>
+    Kml,
 }
