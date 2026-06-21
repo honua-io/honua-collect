@@ -65,6 +65,43 @@ public class SqliteRecordStoreEncryptionTests : IDisposable
     }
 
     [Fact]
+    public async Task Cipher_is_actually_engaged_when_a_key_is_requested()
+    {
+        // The fail-closed guard keys off `PRAGMA cipher_version`. Assert directly
+        // that SQLCipher reports a non-empty version under the key path — the same
+        // signal SqliteRecordStore uses to refuse to open a plaintext field DB.
+        var builder = new SqliteConnectionStringBuilder { DataSource = _dbPath, Password = "test-key" };
+        await using var connection = new SqliteConnection(builder.ToString());
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA cipher_version;";
+        var version = await command.ExecuteScalarAsync() as string;
+
+        Assert.False(string.IsNullOrWhiteSpace(version));
+    }
+
+    [Fact]
+    public async Task Requesting_encryption_does_not_throw_when_SQLCipher_is_available()
+    {
+        // Positive path: the guard must NOT fail closed when the cipher is wired in
+        // (it is, via SQLitePCLRaw.bundle_e_sqlcipher). A save+reload round-trips.
+        var store = new SqliteRecordStore(_dbPath, "test-key");
+        await store.SaveAsync(new CollectRecordEntry(Record("r1")));
+        var all = await store.LoadAllAsync();
+        Assert.Single(all);
+    }
+
+    [Fact]
+    public async Task Unencrypted_store_does_not_run_the_cipher_guard()
+    {
+        // No key requested → no cipher_version check, plaintext DB opens normally.
+        var store = new SqliteRecordStore(_dbPath);
+        await store.SaveAsync(new CollectRecordEntry(Record("r1")));
+        Assert.Single(await store.LoadAllAsync());
+    }
+
+    [Fact]
     public async Task A_corrupt_database_file_fails_loudly_not_silently()
     {
         await File.WriteAllBytesAsync(_dbPath, [0xDE, 0xAD, 0xBE, 0xEF, .. new byte[2048]]);

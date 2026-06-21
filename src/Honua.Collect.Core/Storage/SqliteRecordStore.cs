@@ -19,6 +19,7 @@ public sealed class SqliteRecordStore : IRecordStore
     private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
 
     private readonly string _connectionString;
+    private readonly bool _encryptionRequested;
     private readonly SemaphoreSlim _schemaGate = new(1, 1);
     private bool _schemaReady;
 
@@ -46,6 +47,7 @@ public sealed class SqliteRecordStore : IRecordStore
         if (!string.IsNullOrEmpty(encryptionKey))
         {
             builder.Password = encryptionKey; // SQLCipher: applied as PRAGMA key on open
+            _encryptionRequested = true;
         }
 
         _connectionString = builder.ToString();
@@ -236,9 +238,59 @@ public sealed class SqliteRecordStore : IRecordStore
     private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
     {
         var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(ct).ConfigureAwait(false);
-        await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-        return connection;
+        try
+        {
+            await connection.OpenAsync(ct).ConfigureAwait(false);
+            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
+            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// When an encryption key was supplied, fails closed unless SQLCipher is
+    /// actually active. Stock <c>Microsoft.Data.Sqlite</c> over the non-SQLCipher
+    /// native bundle silently ignores the <c>Password</c> (no <c>PRAGMA key</c>),
+    /// so the file would be written in plaintext. <c>PRAGMA cipher_version</c>
+    /// returns the SQLCipher version when the cipher is wired in, and nothing
+    /// otherwise — we use that as the engaged-or-not signal.
+    /// </summary>
+    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        if (!_encryptionRequested)
+        {
+            return;
+        }
+
+        string? cipherVersion = null;
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA cipher_version;";
+            var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            cipherVersion = result as string;
+        }
+        catch (SqliteException)
+        {
+            // Stock SQLite doesn't recognize the SQLCipher-specific pragma; treat
+            // that as "cipher not engaged" rather than a hard error here so the
+            // single InvalidOperationException below is the one consistent failure.
+            cipherVersion = null;
+        }
+
+        if (string.IsNullOrWhiteSpace(cipherVersion))
+        {
+            throw new InvalidOperationException(
+                "An encryption key was provided but SQLCipher is not active for this database " +
+                "(PRAGMA cipher_version returned nothing). The native SQLCipher bundle " +
+                "(e.g. SQLitePCLRaw.bundle_e_sqlcipher) is not wired in, so the database would " +
+                "be stored in plaintext. Refusing to open the field database unencrypted.");
+        }
     }
 
     private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)

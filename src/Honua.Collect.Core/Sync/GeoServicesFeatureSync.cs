@@ -290,12 +290,17 @@ public sealed class GeoServicesFeatureSync
 
             records.AddRange(page.Records);
 
-            if (!page.ExceededTransferLimit || page.Records.Count == 0)
+            // Advance and break on the raw feature count the server returned, not
+            // the decoded count: DecodeFeature drops features lacking a recognized
+            // object id, so paging on Records.Count would re-fetch the dropped
+            // boundary features and could truncate early when a page decodes to
+            // zero rows but still reports exceededTransferLimit.
+            if (!page.ExceededTransferLimit || page.RawCount == 0)
             {
                 break;
             }
 
-            offset += page.Records.Count;
+            offset += page.RawCount;
         }
 
         return new FeatureQueryResult(true, records, null);
@@ -311,7 +316,7 @@ public sealed class GeoServicesFeatureSync
 
     private sealed record QueryError(string Message, int? Code);
 
-    private sealed record FeaturePage(IReadOnlyList<PulledRecord> Records, bool ExceededTransferLimit, QueryError? Error);
+    private sealed record FeaturePage(IReadOnlyList<PulledRecord> Records, int RawCount, bool ExceededTransferLimit, QueryError? Error);
 
     private static FeaturePage ParseQueryPage(string body)
     {
@@ -322,16 +327,18 @@ public sealed class GeoServicesFeatureSync
         {
             var msg = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
             int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
-            return new FeaturePage([], false, new QueryError(msg, code));
+            return new FeaturePage([], 0, false, new QueryError(msg, code));
         }
 
         var objectIdField = root.TryGetProperty("objectIdFieldName", out var oidf) ? oidf.GetString() : null;
 
         var records = new List<PulledRecord>();
+        var rawCount = 0;
         if (root.TryGetProperty("features", out var features) && features.ValueKind == JsonValueKind.Array)
         {
             foreach (var feature in features.EnumerateArray())
             {
+                rawCount++;
                 if (DecodeFeature(feature, objectIdField) is { } pulled)
                 {
                     records.Add(pulled);
@@ -342,7 +349,7 @@ public sealed class GeoServicesFeatureSync
         var exceeded = root.TryGetProperty("exceededTransferLimit", out var etl)
             && etl.ValueKind == JsonValueKind.True;
 
-        return new FeaturePage(records, exceeded, null);
+        return new FeaturePage(records, rawCount, exceeded, null);
     }
 
     private static PulledRecord? DecodeFeature(JsonElement feature, string? objectIdField)

@@ -423,6 +423,72 @@ public class GeoServicesFeatureSyncTests
     }
 
     [Fact]
+    public async Task QueryAsync_pages_on_raw_feature_count_when_some_features_lack_object_ids()
+    {
+        // Page 1 returns 3 raw features but one (the middle) has no recognized
+        // object id, so it's dropped on decode. Paging must still advance by the
+        // RAW count (3), not the decoded count (2) — otherwise the next offset is
+        // wrong and boundary features get re-fetched.
+        const string page1 = """
+        {
+          "objectIdFieldName": "objectid",
+          "exceededTransferLimit": true,
+          "features": [
+            { "attributes": { "objectid": 1 } },
+            { "attributes": { "site_name": "no oid" } },
+            { "attributes": { "objectid": 2 } }
+          ]
+        }
+        """;
+        const string page2 = """
+        {
+          "objectIdFieldName": "objectid",
+          "features": [ { "attributes": { "objectid": 3 } } ]
+        }
+        """;
+        var handler = new QueryHandler((HttpStatusCode.OK, page1), (HttpStatusCode.OK, page2));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.CapturedUris.Count);
+        Assert.Contains("resultOffset=0", handler.CapturedUris[0].AbsoluteUri);
+        Assert.Contains("resultOffset=3", handler.CapturedUris[1].AbsoluteUri); // raw count, not decoded count (2)
+        Assert.Equal([1L, 2L, 3L], result.Records.Select(r => r.ObjectId));
+    }
+
+    [Fact]
+    public async Task QueryAsync_keeps_paging_when_a_full_page_decodes_to_zero_but_limit_is_exceeded()
+    {
+        // A page whose features all lack a recognized object id decodes to zero
+        // records. With the old Records.Count==0 guard the loop would break early
+        // and silently truncate; paging on the raw count keeps going.
+        const string page1 = """
+        {
+          "objectIdFieldName": "objectid",
+          "exceededTransferLimit": true,
+          "features": [ { "attributes": { "site_name": "no oid 1" } }, { "attributes": { "site_name": "no oid 2" } } ]
+        }
+        """;
+        const string page2 = """
+        {
+          "objectIdFieldName": "objectid",
+          "features": [ { "attributes": { "objectid": 7 } } ]
+        }
+        """;
+        var handler = new QueryHandler((HttpStatusCode.OK, page1), (HttpStatusCode.OK, page2));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.CapturedUris.Count); // did not break early on the all-dropped page
+        Assert.Contains("resultOffset=2", handler.CapturedUris[1].AbsoluteUri);
+        Assert.Equal([7L], result.Records.Select(r => r.ObjectId));
+    }
+
+    [Fact]
     public async Task QueryAsync_surfaces_server_error_without_throwing()
     {
         var handler = new QueryHandler((HttpStatusCode.OK, """{"error":{"code":400,"message":"Invalid where clause"}}"""));

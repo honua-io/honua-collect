@@ -148,6 +148,38 @@ public class RecordConflictTests
     }
 
     [Fact]
+    public void Resolve_preserves_server_only_fields_absent_from_the_form()
+    {
+        // "server_audit" is a server-managed attribute not present as a form
+        // field, so it never surfaces as a FieldConflict. Keeping server must
+        // still carry it into the merged record rather than silently dropping it.
+        var local = Record("r1", ("name", "Local"));
+        var server = Record("r1", ("name", "Server"), ("server_audit", "admin-set"));
+        var conflict = RecordConflictDetector.Detect(Form(), local, server);
+
+        var merged = conflict.ResolveAll(ConflictResolution.KeepServer);
+
+        Assert.Equal("Server", merged.Values["name"]);
+        Assert.True(merged.Values.ContainsKey("server_audit"));
+        Assert.Equal("admin-set", merged.Values["server_audit"]);
+    }
+
+    [Fact]
+    public void Resolve_keeps_server_only_fields_even_when_keeping_local()
+    {
+        // A server-only attribute has no local counterpart and is not a conflict;
+        // resolving conflicts to local must not discard it.
+        var local = Record("r1", ("name", "Local"));
+        var server = Record("r1", ("name", "Server"), ("server_audit", "admin-set"));
+        var conflict = RecordConflictDetector.Detect(Form(), local, server);
+
+        var merged = conflict.ResolveAll(ConflictResolution.KeepLocal);
+
+        Assert.Equal("Local", merged.Values["name"]);
+        Assert.Equal("admin-set", merged.Values["server_audit"]);
+    }
+
+    [Fact]
     public void ResolveAll_keeps_one_side_for_every_conflict()
     {
         var local = Record("r1", ("name", "Local"), ("count", 1));
