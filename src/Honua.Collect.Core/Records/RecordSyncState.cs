@@ -31,4 +31,14 @@ public enum RecordSyncState
     /// the user resolves it.
     /// </summary>
     Conflicted = 5,
+
+    /// <summary>
+    /// A previously <see cref="Synced"/> record has been re-edited offline and is
+    /// queued to upload again as an <em>update</em> against its existing server
+    /// record (keyed by <see cref="Records.CollectRecordEntry.RemoteId"/>), rather
+    /// than as a new insert. This is the "never locked out after sync" state
+    /// (BACKLOG #38): the device keeps the server-id reference so the edit syncs
+    /// as a server-side update instead of duplicating the record.
+    /// </summary>
+    PendingUpdate = 6,
 }

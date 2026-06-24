@@ -54,7 +54,7 @@ public sealed class RecordEditHistory
         ArgumentNullException.ThrowIfNull(after);
         ArgumentException.ThrowIfNullOrWhiteSpace(editorUserId);
 
-        var changes = Diff(before, after);
+        var changes = ComputeChanges(before, after);
         if (changes.Count == 0)
         {
             return null;
@@ -110,10 +110,23 @@ public sealed class RecordEditHistory
         }
     }
 
-    private static List<FieldChange> Diff(
+    /// <summary>
+    /// Computes the field-level changes that turn <paramref name="before"/> into
+    /// <paramref name="after"/>, using the same missing-value/list-contents
+    /// equality as <see cref="Record"/>. Exposed so the durable edit log
+    /// (<see cref="RecordEditLog"/>) diffs identically to the in-memory history
+    /// rather than carrying a second, drifting comparison.
+    /// </summary>
+    /// <param name="before">The record's values before the edit.</param>
+    /// <param name="after">The record's values after the edit.</param>
+    /// <returns>One <see cref="FieldChange"/> per genuinely-changed field.</returns>
+    public static IReadOnlyList<FieldChange> ComputeChanges(
         IReadOnlyDictionary<string, object?> before,
         IReadOnlyDictionary<string, object?> after)
     {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+
         var changes = new List<FieldChange>();
         foreach (var fieldId in before.Keys.Union(after.Keys, StringComparer.Ordinal))
         {
