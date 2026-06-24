@@ -189,8 +189,8 @@ proven; these are device-sensor integrations.
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
 | R1 | Per-record feature reports (templated Markdown/PDF/DOCX) | 🧱✅ | Pro | collect |
-| R2 | Bulk export (CSV/GeoJSON/KML + field-mapped CSV) | 🧱✅ | Pro | collect |
-| R2b | Bulk report generation (N records → manifest of MD/PDF/DOCX) | 🧱✅ | Pro | collect |
+| R2 | Bulk export (CSV/GeoJSON/KML/GeoPackage/Shapefile/Excel + field-mapped CSV) | 🧱✅ | Pro | collect |
+| R2b | Bulk report generation (N records → manifest of MD/PDF/DOCX, zip-bundled) | 🧱✅ | Pro | collect |
 | R3 | Report template designer (model + AI-narrative seam; UI deferred) | 🧱 | Pro | collect |
 
 ## 6. AI-assisted capture (Pro — differentiator; framework exists, provider stubbed)
