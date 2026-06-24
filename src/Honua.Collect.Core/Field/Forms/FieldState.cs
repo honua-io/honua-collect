@@ -25,6 +25,7 @@ public sealed class FieldState
         Field = field ?? throw new ArgumentNullException(nameof(field));
         Section = section ?? throw new ArgumentNullException(nameof(section));
         RepeatInstance = repeatInstance;
+        AvailableChoices = field.Choices ?? [];
     }
 
     /// <summary>The SDK field definition this state captures a value for.</summary>
@@ -63,6 +64,16 @@ public sealed class FieldState
 
     /// <summary>Whether the field had no validation errors at the last pass.</summary>
     public bool IsValid => _errors.Count == 0;
+
+    /// <summary>
+    /// The choice options currently available for this field. For a plain choice
+    /// field this is the field's full <see cref="FormField.Choices"/>; for a
+    /// cascading/dependent select (BACKLOG F3) it is the subset whose
+    /// <see cref="Sdk.Field.Forms.FieldChoice.ParentValue"/> matches the parent
+    /// field's current value. Renderers bind their picker to this rather than the
+    /// raw field choices so cascades take effect.
+    /// </summary>
+    public IReadOnlyList<FieldChoice> AvailableChoices { get; internal set; }
 
     /// <summary>Media captured against this field (kept with host-local paths).</summary>
     public IReadOnlyList<CapturedMediaAttachment> Media => _media;

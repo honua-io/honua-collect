@@ -194,4 +194,59 @@ public class FormPageViewModelTests
         Assert.True(raised);
         Assert.Equal("X", name.Value);
     }
+
+    [Fact]
+    public void Cascading_select_surfaces_filtered_choices_through_the_view_model()
+    {
+        var form = new FormDefinition
+        {
+            FormId = "geo",
+            Name = "Geo",
+            Sections =
+            [
+                new FormSection
+                {
+                    SectionId = "s",
+                    Label = "s",
+                    Fields =
+                    [
+                        new FormField
+                        {
+                            FieldId = "country",
+                            Label = "Country",
+                            Type = FormFieldType.SingleChoice,
+                            Choices =
+                            [
+                                new FieldChoice { Value = "us", Label = "US" },
+                                new FieldChoice { Value = "ca", Label = "Canada" },
+                            ],
+                        },
+                        new FormField
+                        {
+                            FieldId = "region",
+                            Label = "Region",
+                            Type = FormFieldType.SingleChoice,
+                            Choices =
+                            [
+                                new FieldChoice { Value = "wa", Label = "Washington", ParentValue = "us" },
+                                new FieldChoice { Value = "bc", Label = "BC", ParentValue = "ca" },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var session = FormSession.CreateForNewRecord(
+            form, "r1", cascadeRules: [new Honua.Collect.Core.Field.Forms.Cascade.ChoiceCascadeRule("region", "country")]);
+        var page = new FormPageViewModel(session);
+        var region = page.Fields.Single(f => f.FieldId == "region");
+
+        // No country yet -> dependent select offers nothing.
+        Assert.Empty(region.Choices);
+
+        page.Fields.Single(f => f.FieldId == "country").Value = "us";
+
+        Assert.Equal(["wa"], region.Choices.Select(c => c.Value));
+    }
 }

@@ -1,3 +1,4 @@
+using Honua.Collect.Core.Field.Forms.Cascade;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Forms.Expressions;
 using Honua.Sdk.Field.Records;
@@ -33,15 +34,25 @@ public sealed class FormSession : ICaptureHost
     private readonly Dictionary<string, FieldState> _states = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<FieldState> _ordered = [];
     private readonly Dictionary<string, RepeatGroup> _groups = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ChoiceCascadeRule> _cascades = new(StringComparer.OrdinalIgnoreCase);
     private readonly FormDefinition _scalarForm;
 
     private FormSession(
         FormDefinition form,
         FieldRecord record,
-        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null)
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
+        IEnumerable<ChoiceCascadeRule>? cascadeRules = null)
     {
         Form = form;
         Record = record;
+
+        if (cascadeRules is not null)
+        {
+            foreach (var rule in cascadeRules)
+            {
+                _cascades[rule.FieldId] = rule;
+            }
+        }
 
         // Split scalar sections (flat fields) from repeatable sections (groups of
         // rows). The SDK helpers operate on the scalar form so repeat-section
@@ -115,11 +126,12 @@ public sealed class FormSession : ICaptureHost
     public static FormSession Open(
         FormDefinition form,
         FieldRecord record,
-        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null)
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
+        IEnumerable<ChoiceCascadeRule>? cascadeRules = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(record);
-        return new FormSession(form, record, repeatBounds);
+        return new FormSession(form, record, repeatBounds, cascadeRules);
     }
 
     /// <summary>Starts a session for a brand-new record.</summary>
@@ -138,13 +150,26 @@ public sealed class FormSession : ICaptureHost
     /// <see cref="Validate"/>. The SDK <see cref="FormSection"/> does not carry
     /// these in package 1.1.0, so they are supplied here (BACKLOG F-depth).
     /// </param>
+    /// <param name="cascadeRules">
+    /// Optional cascading/dependent-select rules (BACKLOG F3): each links a choice
+    /// field to the parent field whose value filters its options.
+    /// </param>
+    /// <param name="seedDefaults">
+    /// Optional pre-resolved per-field default values (BACKLOG F5) — typically the
+    /// output of a defaults resolver that merges explicit defaults, a saved
+    /// "favorites" answer set, and the user's last-submitted answers with the
+    /// correct precedence. Applied after <paramref name="seedFrom"/>, so an
+    /// explicit resolved default takes precedence over a copied previous value.
+    /// </param>
     /// <returns>A session for a new draft record.</returns>
     public static FormSession CreateForNewRecord(
         FormDefinition form,
         string recordId,
         FieldRecord? seedFrom = null,
         IEnumerable<string>? seedFieldIds = null,
-        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null)
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
+        IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
+        IReadOnlyDictionary<string, object?>? seedDefaults = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -156,7 +181,12 @@ public sealed class FormSession : ICaptureHost
             SeedDefaults(form, record, seedFrom, seedFieldIds);
         }
 
-        return new FormSession(form, record, repeatBounds);
+        if (seedDefaults is not null)
+        {
+            ApplyResolvedDefaults(form, record, seedDefaults);
+        }
+
+        return new FormSession(form, record, repeatBounds, cascadeRules);
     }
 
     /// <summary>Gets the live state for a field.</summary>
@@ -329,6 +359,7 @@ public sealed class FormSession : ICaptureHost
         }
 
         RecomputeVisibility();
+        RecomputeChoices();
 
         var validation = FormValidator.Validate(_scalarForm, Record);
 
@@ -356,6 +387,31 @@ public sealed class FormSession : ICaptureHost
         foreach (var state in _ordered)
         {
             state.IsVisible = ResolveVisibility(state.FieldId, resolving);
+        }
+    }
+
+    /// <summary>
+    /// Re-evaluates the available options of every cascading/dependent select
+    /// (BACKLOG F3) against the current parent values, and clears any child value
+    /// that the new parent value no longer permits. Choice fields without a
+    /// cascade rule keep their full option list.
+    /// </summary>
+    private void RecomputeChoices()
+    {
+        foreach (var state in _ordered)
+        {
+            _cascades.TryGetValue(state.FieldId, out var rule);
+            var available = ChoiceFilter.Available(state.Field, rule, Record.Values);
+            state.AvailableChoices = available;
+
+            // A cascading select whose chosen value is no longer offered (because
+            // the parent changed) is cleared so the record never carries a stale,
+            // now-invalid child selection.
+            if (rule is not null && !ChoiceFilter.IsStillValid(state.Value, available))
+            {
+                state.Value = null;
+                Record.Values[state.FieldId] = null;
+            }
         }
     }
 
@@ -451,6 +507,34 @@ public sealed class FormSession : ICaptureHost
             }
 
             if (source.Values.TryGetValue(field.FieldId, out var value) && value is not null)
+            {
+                target.Values[field.FieldId] = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies a pre-resolved set of per-field default values (BACKLOG F5) onto a
+    /// new record. The supplied dictionary is treated as authoritative — a
+    /// defaults resolver has already merged explicit defaults, favorites, and the
+    /// user's last answers with the right precedence — so a present value
+    /// overwrites whatever a previous-record copy seeded. Calculated and media
+    /// fields are never defaulted (the former is recomputed, the latter is
+    /// host-local), and unknown field ids are ignored.
+    /// </summary>
+    private static void ApplyResolvedDefaults(
+        FormDefinition form,
+        FieldRecord target,
+        IReadOnlyDictionary<string, object?> defaults)
+    {
+        foreach (var field in form.Sections.Where(s => !s.Repeatable).SelectMany(s => s.Fields))
+        {
+            if (field.Type is FormFieldType.Calculated || IsMediaField(field.Type))
+            {
+                continue;
+            }
+
+            if (defaults.TryGetValue(field.FieldId, out var value) && value is not null)
             {
                 target.Values[field.FieldId] = value;
             }
