@@ -102,7 +102,13 @@ public sealed class SyncCenterViewModel : ObservableObject
     public bool IsSyncing
     {
         get => _isSyncing;
-        private set => SetProperty(ref _isSyncing, value);
+        private set
+        {
+            if (SetProperty(ref _isSyncing, value))
+            {
+                (SyncCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     /// <summary>Pushes the outbox to the server.</summary>
