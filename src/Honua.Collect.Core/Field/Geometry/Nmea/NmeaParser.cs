@@ -137,6 +137,35 @@ public static class NmeaParser
         return new TimeSpan(0, hours, minutes, 0) + TimeSpan.FromSeconds(seconds);
     }
 
+    /// <summary>
+    /// Parses an NMEA RMC <c>ddmmyy</c> date field. The two-digit year follows the NMEA
+    /// convention: 70–99 → 1970–1999, 00–69 → 2000–2069.
+    /// </summary>
+    /// <param name="value">The <c>ddmmyy</c> field.</param>
+    /// <returns>The calendar date, or null when unparseable / out of range.</returns>
+    public static DateOnly? ParseDate(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length != 6)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(value.AsSpan(0, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var day)
+            || !int.TryParse(value.AsSpan(2, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var month)
+            || !int.TryParse(value.AsSpan(4, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var year2))
+        {
+            return null;
+        }
+
+        var year = year2 >= 70 ? 1900 + year2 : 2000 + year2;
+        if (month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month))
+        {
+            return null;
+        }
+
+        return new DateOnly(year, month, day);
+    }
+
     /// <summary>Parses an invariant-culture double field, returning null for an empty/invalid field.</summary>
     internal static double? ParseDouble(string? value)
         => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : null;

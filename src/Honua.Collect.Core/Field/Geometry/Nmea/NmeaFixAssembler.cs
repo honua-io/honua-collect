@@ -14,10 +14,14 @@ public sealed class NmeaFixAssembler
     private double? _latitude;
     private double? _longitude;
     private double? _altitude;
-    private double? _accuracy;
+    private double? _gstHorizontalAccuracy;
+    private double? _verticalAccuracy;
     private double? _hdop;
+    private double? _speed;
+    private double? _course;
     private int? _satellites;
     private TimeSpan? _time;
+    private DateOnly? _date;
 
     /// <summary>The fix assembled from everything seen so far.</summary>
     public NmeaFix Current => new()
@@ -26,11 +30,30 @@ public sealed class NmeaFixAssembler
         Latitude = _latitude,
         Longitude = _longitude,
         AltitudeMeters = _altitude,
-        HorizontalAccuracyMeters = _accuracy,
+        HorizontalAccuracyMeters = HorizontalAccuracy,
+        VerticalAccuracyMeters = _verticalAccuracy,
         Hdop = _hdop,
+        SpeedMetersPerSecond = _speed,
+        CourseDegrees = _course,
         SatellitesUsed = _satellites,
         UtcTime = _time,
+        Timestamp = BuildTimestamp(),
     };
+
+    // Prefer the GST-measured horizontal accuracy; otherwise derive a coarse estimate
+    // from HDOP so receivers that emit no GST still surface a usable accuracy figure.
+    private double? HorizontalAccuracy => _gstHorizontalAccuracy
+        ?? (_hdop is { } hdop ? hdop * NmeaFix.DefaultUereMeters : null);
+
+    private DateTimeOffset? BuildTimestamp()
+    {
+        if (_date is { } date && _time is { } time)
+        {
+            return new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) + time, TimeSpan.Zero);
+        }
+
+        return null;
+    }
 
     /// <summary>Whether a usable positional fix has been assembled.</summary>
     public bool HasFix => Current.HasPosition;
@@ -70,9 +93,11 @@ public sealed class NmeaFixAssembler
     public void Reset()
     {
         _quality = NmeaFixQuality.None;
-        _latitude = _longitude = _altitude = _accuracy = _hdop = null;
+        _latitude = _longitude = _altitude = null;
+        _gstHorizontalAccuracy = _verticalAccuracy = _hdop = _speed = _course = null;
         _satellites = null;
         _time = null;
+        _date = null;
     }
 
     private bool ProcessGga(string[] f)
@@ -113,6 +138,17 @@ public sealed class NmeaFixAssembler
         }
 
         _time = NmeaParser.ParseTime(f[1]) ?? _time;
+
+        // Speed (knots, f[7]), course (degrees true, f[8]) and date (ddmmyy, f[9]) are
+        // optional fields — capture them whenever present, independent of fix validity.
+        if (NmeaParser.ParseDouble(f.Length > 7 ? f[7] : null) is { } knots)
+        {
+            _speed = knots * KnotsToMetersPerSecond;
+        }
+
+        _course = NmeaParser.ParseDouble(f.Length > 8 ? f[8] : null) ?? _course;
+        _date = NmeaParser.ParseDate(f.Length > 9 ? f[9] : null) ?? _date;
+
         var valid = string.Equals(f[2], "A", StringComparison.OrdinalIgnoreCase);
         if (valid)
         {
@@ -145,9 +181,14 @@ public sealed class NmeaFixAssembler
         var lonStd = NmeaParser.ParseDouble(f[7]);
         if (latStd is { } la && lonStd is { } lo)
         {
-            _accuracy = Math.Sqrt((la * la) + (lo * lo));
+            _gstHorizontalAccuracy = Math.Sqrt((la * la) + (lo * lo));
         }
+
+        _verticalAccuracy = NmeaParser.ParseDouble(f[8]) ?? _verticalAccuracy;
 
         return true;
     }
+
+    // 1 knot = 1 nautical mile (1852 m) per hour.
+    private const double KnotsToMetersPerSecond = 1852.0 / 3600.0;
 }

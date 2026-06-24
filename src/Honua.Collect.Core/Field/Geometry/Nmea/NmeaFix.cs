@@ -24,19 +24,46 @@ public sealed record NmeaFix
     public double? AltitudeMeters { get; init; }
 
     /// <summary>
-    /// Estimated horizontal accuracy in metres (1σ) from the GST sentence's lat/lon
-    /// standard deviations, when available.
+    /// Estimated horizontal accuracy in metres (1σ). Preferred source is the GST
+    /// sentence's lat/lon standard deviations; when no GST has been seen it falls back
+    /// to an HDOP-derived estimate (HDOP × <see cref="DefaultUereMeters"/>).
     /// </summary>
     public double? HorizontalAccuracyMeters { get; init; }
 
+    /// <summary>
+    /// Estimated vertical accuracy in metres (1σ) from the GST sentence's altitude
+    /// standard deviation, when available.
+    /// </summary>
+    public double? VerticalAccuracyMeters { get; init; }
+
     /// <summary>Horizontal dilution of precision, when reported.</summary>
     public double? Hdop { get; init; }
+
+    /// <summary>Ground speed in metres per second (from RMC), when reported.</summary>
+    public double? SpeedMetersPerSecond { get; init; }
+
+    /// <summary>Course over ground in degrees true (from RMC), when reported.</summary>
+    public double? CourseDegrees { get; init; }
 
     /// <summary>Number of satellites used in the solution, when reported.</summary>
     public int? SatellitesUsed { get; init; }
 
     /// <summary>UTC time-of-day of the fix, when reported.</summary>
     public TimeSpan? UtcTime { get; init; }
+
+    /// <summary>
+    /// Full UTC timestamp of the fix, when both an RMC date and a time-of-day have been
+    /// seen. RMC carries only a two-digit year; the NMEA convention maps years 70–99 to
+    /// 1970–1999 and 00–69 to 2000–2069.
+    /// </summary>
+    public DateTimeOffset? Timestamp { get; init; }
+
+    /// <summary>
+    /// Default User-Equivalent Range Error (metres) used to derive a horizontal-accuracy
+    /// estimate from HDOP when a receiver emits no GST sentence. ~5 m is a conservative
+    /// figure for an autonomous consumer-grade GNSS pseudorange.
+    /// </summary>
+    public const double DefaultUereMeters = 5.0;
 
     /// <summary>Whether the fix carries a usable coordinate (quality &gt; None and lat/lon present).</summary>
     public bool HasPosition => Quality != NmeaFixQuality.None && Latitude is not null && Longitude is not null;

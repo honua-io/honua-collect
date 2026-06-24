@@ -63,4 +63,40 @@ public class NmeaParserTests
         Assert.Null(NmeaParser.ParseTime("bad"));
         Assert.Null(NmeaParser.ParseTime("993519")); // hour out of range
     }
+
+    [Fact]
+    public void ParseDate_reads_ddmmyy_with_pivoted_two_digit_year()
+    {
+        Assert.Equal(new DateOnly(1994, 3, 23), NmeaParser.ParseDate("230394")); // 94 -> 1994
+        Assert.Equal(new DateOnly(2024, 12, 31), NmeaParser.ParseDate("311224")); // 24 -> 2024
+        Assert.Equal(new DateOnly(1970, 1, 1), NmeaParser.ParseDate("010170")); // 70 pivot -> 1970
+        Assert.Equal(new DateOnly(2069, 1, 1), NmeaParser.ParseDate("010169")); // 69 pivot -> 2069
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("2303")]    // too short
+    [InlineData("23039400")] // too long
+    [InlineData("321394")]  // day out of range
+    [InlineData("231394")]  // month out of range
+    [InlineData("290224")]  // Feb 29 exists in 2024 (leap) — sanity that this is accepted below
+    [InlineData("bad394")]
+    public void ParseDate_rejects_bad_input_except_valid_leap_day(string? value)
+    {
+        // 290224 is a valid leap day; everything else here is invalid.
+        if (value == "290224")
+        {
+            Assert.Equal(new DateOnly(2024, 2, 29), NmeaParser.ParseDate(value));
+            return;
+        }
+
+        Assert.Null(NmeaParser.ParseDate(value));
+    }
+
+    [Fact]
+    public void ParseDate_rejects_nonexistent_leap_day()
+    {
+        Assert.Null(NmeaParser.ParseDate("290223")); // Feb 29 2023 does not exist
+    }
 }
