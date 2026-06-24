@@ -24,6 +24,7 @@ public sealed class RecordRowViewModel(CollectRecordEntry entry) : ObservableObj
     {
         RecordBox.Drafts => "Draft",
         RecordBox.Sent => $"Sent — {Entry.RemoteId ?? "synced"}",
+        RecordBox.Conflicts => "Conflict — needs review",
         _ => Entry.SyncState == RecordSyncState.Failed
             ? $"Failed — {Entry.LastError}"
             : "Ready to send",
@@ -48,6 +49,7 @@ public sealed class RecordBoxViewModel : ObservableObject
         _entries = entries.ToList();
         Drafts = [];
         Outbox = [];
+        Conflicts = [];
         Sent = [];
         _summary = SyncSummary.From(_entries);
         Refresh();
@@ -59,6 +61,9 @@ public sealed class RecordBoxViewModel : ObservableObject
     /// <summary>Records waiting to upload or retry.</summary>
     public ObservableCollection<RecordRowViewModel> Outbox { get; }
 
+    /// <summary>Records held for manual conflict review (BACKLOG S1).</summary>
+    public ObservableCollection<RecordRowViewModel> Conflicts { get; }
+
     /// <summary>Records uploaded to the server.</summary>
     public ObservableCollection<RecordRowViewModel> Sent { get; }
 
@@ -69,14 +74,15 @@ public sealed class RecordBoxViewModel : ObservableObject
         private set => SetProperty(ref _summary, value);
     }
 
-    /// <summary>A header line like "Drafts 2 · Outbox 1 · Sent 3".</summary>
-    public string Header => $"Drafts {Summary.Drafts} · Outbox {Summary.Outbox} · Sent {Summary.Sent}";
+    /// <summary>A header line like "Drafts 2 · Outbox 1 · Conflicts 0 · Sent 3".</summary>
+    public string Header => $"Drafts {Summary.Drafts} · Outbox {Summary.Outbox} · Conflicts {Summary.Conflicts} · Sent {Summary.Sent}";
 
     /// <summary>Rebuilds the per-box lists and summary from the current entries.</summary>
     public void Refresh()
     {
         FillBox(Drafts, RecordBox.Drafts);
         FillBox(Outbox, RecordBox.Outbox);
+        FillBox(Conflicts, RecordBox.Conflicts);
         FillBox(Sent, RecordBox.Sent);
         Summary = SyncSummary.From(_entries);
         OnPropertyChanged(nameof(Header));

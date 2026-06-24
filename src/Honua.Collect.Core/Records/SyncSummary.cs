@@ -9,14 +9,18 @@ namespace Honua.Collect.Core.Records;
 /// <param name="Outbox">Finished records waiting to upload or retry.</param>
 /// <param name="Sent">Records confirmed on the server.</param>
 /// <param name="Failed">Subset of <paramref name="Outbox"/> whose last attempt failed.</param>
+/// <param name="Conflicts">Records held for manual conflict review (BACKLOG S1).</param>
 /// <param name="LastSyncedUtc">Most recent successful sync time across the set, when any.</param>
-public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, DateTimeOffset? LastSyncedUtc)
+public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, int Conflicts, DateTimeOffset? LastSyncedUtc)
 {
     /// <summary>Total records counted.</summary>
-    public int Total => Drafts + Outbox + Sent;
+    public int Total => Drafts + Outbox + Conflicts + Sent;
 
     /// <summary>Whether anything is waiting to upload or retry.</summary>
     public bool HasPendingWork => Outbox > 0;
+
+    /// <summary>Whether any records are waiting on manual conflict review.</summary>
+    public bool HasConflicts => Conflicts > 0;
 
     /// <summary>Builds a summary from a set of record entries.</summary>
     /// <param name="entries">Records to summarise.</param>
@@ -29,6 +33,7 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, D
         var outbox = 0;
         var sent = 0;
         var failed = 0;
+        var conflicts = 0;
         DateTimeOffset? lastSynced = null;
 
         foreach (var entry in entries)
@@ -46,6 +51,9 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, D
                     }
 
                     break;
+                case RecordBox.Conflicts:
+                    conflicts++;
+                    break;
                 case RecordBox.Sent:
                     sent++;
                     break;
@@ -57,6 +65,6 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, D
             }
         }
 
-        return new SyncSummary(drafts, outbox, sent, failed, lastSynced);
+        return new SyncSummary(drafts, outbox, sent, failed, conflicts, lastSynced);
     }
 }

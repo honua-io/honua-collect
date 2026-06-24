@@ -22,6 +22,13 @@ public static class RecordBoxClassifier
             return RecordBox.Sent;
         }
 
+        // A diverged server version needs review before it can upload, so it sits
+        // in its own box rather than the Outbox where a retry would re-push it.
+        if (syncState == RecordSyncState.Conflicted)
+        {
+            return RecordBox.Conflicts;
+        }
+
         // Anything still in the review-draft stage is being edited -> Drafts.
         if (status == RecordStatus.Draft)
         {

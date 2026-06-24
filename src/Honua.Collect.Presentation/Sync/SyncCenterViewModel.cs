@@ -92,8 +92,8 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>A formatted one-line status: "Outbox 1 · Sent 0 · Failed 1".</summary>
-    public string Header => $"Outbox {Summary.Outbox} · Sent {Summary.Sent} · Failed {Summary.Failed}";
+    /// <summary>A formatted one-line status: "Outbox 1 · Conflicts 0 · Sent 0 · Failed 1".</summary>
+    public string Header => $"Outbox {Summary.Outbox} · Conflicts {Summary.Conflicts} · Sent {Summary.Sent} · Failed {Summary.Failed}";
 
     /// <summary>Records currently waiting to upload or retry.</summary>
     public ObservableCollection<CollectRecordEntry> Pending { get; }
@@ -171,9 +171,27 @@ public sealed class SyncCenterViewModel : ObservableObject
             var merge = _pullService.Merge(_form, queryResult.Records, BuildLocalIndex());
 
             Conflicts.Clear();
-            foreach (var conflict in merge.Conflicts)
+            foreach (var classification in merge.Classifications)
             {
-                Conflicts.Add(new ConflictReviewViewModel(conflict));
+                if (classification.Disposition != PullDisposition.Conflict || classification.Conflict is null)
+                {
+                    continue;
+                }
+
+                // Mark the owning local entry conflicted so it leaves the Outbox
+                // (and a retry never re-pushes over it) and shows in the Conflicts
+                // box; bind the review to that entry so resolving it re-queues the
+                // merged record through the normal sync path.
+                var entry = FindEntry(classification.Local?.RecordId ?? classification.Conflict.RecordId);
+                if (entry is not null)
+                {
+                    entry.MarkConflicted(classification.Conflict);
+                    Conflicts.Add(new ConflictReviewViewModel(entry));
+                }
+                else
+                {
+                    Conflicts.Add(new ConflictReviewViewModel(classification.Conflict));
+                }
             }
 
             NewFromServer.Clear();
@@ -182,6 +200,7 @@ public sealed class SyncCenterViewModel : ObservableObject
                 NewFromServer.Add(item);
             }
 
+            RebuildState();
             return merge;
         }
         finally
@@ -196,6 +215,17 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// participate; an unsynced (local-only) record has no server counterpart, so a
     /// matching server feature is correctly treated as new-from-server.
     /// </summary>
+    private CollectRecordEntry? FindEntry(string? recordId)
+    {
+        if (string.IsNullOrEmpty(recordId))
+        {
+            return null;
+        }
+
+        return _entries.FirstOrDefault(e =>
+            string.Equals(e.Record.RecordId, recordId, StringComparison.Ordinal));
+    }
+
     private Dictionary<long, FieldRecord> BuildLocalIndex()
     {
         var index = new Dictionary<long, FieldRecord>();

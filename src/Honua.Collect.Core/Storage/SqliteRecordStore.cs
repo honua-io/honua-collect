@@ -226,6 +226,12 @@ public sealed class SqliteRecordStore : IRecordStore
 
                 break;
 
+            case RecordSyncState.Conflicted:
+                // The conflict body is recomputed on the next pull; keep the record
+                // out of the Outbox so a retry never re-pushes over a conflict.
+                entry.RestoreConflicted();
+                break;
+
             case RecordSyncState.Pending:
             default:
                 // MarkPending already applied above.

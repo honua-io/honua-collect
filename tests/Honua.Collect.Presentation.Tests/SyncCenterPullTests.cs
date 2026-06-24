@@ -67,6 +67,35 @@ public class SyncCenterPullTests
     }
 
     [Fact]
+    public async Task PullAsync_moves_the_diverging_local_entry_into_the_conflicts_box()
+    {
+        var entries = new[] { SyncedEntry("rec-1", "11", "Mine") };
+        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult<string?>(null),
+            Puller(Server(11, "Theirs")), Form());
+
+        await vm.PullAsync();
+
+        // The owning local entry is now conflicted, out of the Outbox, and the
+        // sync center surfaces the count.
+        Assert.Equal(RecordBox.Conflicts, entries[0].Box);
+        Assert.True(entries[0].IsConflicted);
+        Assert.Equal(1, vm.Summary.Conflicts);
+        Assert.Contains("Conflicts 1", vm.Header);
+
+        // The review is bound to that entry, so applying it re-queues the record.
+        var review = vm.Conflicts[0];
+        Assert.True(review.CanApply);
+        review.Conflicts[0].Resolution = ConflictResolution.KeepLocal;
+        review.ApplyResolution();
+
+        Assert.False(entries[0].IsConflicted);
+        Assert.Equal(RecordBox.Outbox, entries[0].Box);
+        Assert.Equal("Mine", entries[0].Record.Values["name"]);
+        Assert.True(review.IsResolved);
+        Assert.False(review.ApplyResolutionCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task PullAsync_returns_null_and_no_conflicts_on_query_failure()
     {
         var entries = new[] { SyncedEntry("rec-1", "11", "Mine") };
