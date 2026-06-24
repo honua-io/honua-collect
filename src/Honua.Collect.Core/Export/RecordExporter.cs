@@ -72,6 +72,59 @@ public static class RecordExporter
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Exports records to CSV under a field mapping (epic #39): only the mapped
+    /// columns are emitted, in the mapping's order, under the mapped headers. Sources
+    /// may be form field ids or the fixed record columns
+    /// (<c>record_id</c>/<c>status</c>/<c>latitude</c>/<c>longitude</c>).
+    /// </summary>
+    /// <param name="form">Form whose fields are addressable as mapping sources.</param>
+    /// <param name="records">Records to export.</param>
+    /// <param name="mapping">The column mapping; must list at least one column.</param>
+    /// <returns>CSV text including the mapped header row.</returns>
+    public static string ToMappedCsv(FormDefinition form, IEnumerable<FieldRecord> records, ExportFieldMapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(mapping);
+        if (mapping.Columns.Count == 0)
+        {
+            throw new ArgumentException("A field mapping must define at least one column.", nameof(mapping));
+        }
+
+        var fieldsById = form.Sections.SelectMany(s => s.Fields)
+            .GroupBy(f => f.FieldId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var builder = new StringBuilder();
+        builder.AppendLine(string.Join(',', mapping.Columns.Select(c => EscapeCsv(c.ResolvedHeader))));
+
+        foreach (var record in records)
+        {
+            var cells = mapping.Columns.Select(c => MappedCell(record, c.Source, fieldsById));
+            builder.AppendLine(string.Join(',', cells.Select(EscapeCsv)));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string MappedCell(FieldRecord record, string source, IReadOnlyDictionary<string, FormField> fieldsById)
+    {
+        switch (source.ToLowerInvariant())
+        {
+            case "record_id":
+                return record.RecordId;
+            case "status":
+                return record.Status.ToString();
+            case "latitude":
+                return record.Location?.Latitude.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            case "longitude":
+                return record.Location?.Longitude.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        return fieldsById.TryGetValue(source, out var field) ? CellText(record, field) : string.Empty;
+    }
+
     /// <summary>Exports records to an RFC 7946 GeoJSON <c>FeatureCollection</c>.</summary>
     /// <param name="form">Form whose fields define the feature properties.</param>
     /// <param name="records">Records to export.</param>

@@ -26,6 +26,16 @@ public sealed record ReportTemplate
     /// <summary>Whether to include a record metadata header (id, status). Defaults to <see langword="true"/>.</summary>
     public bool IncludeMetadata { get; init; } = true;
 
+    /// <summary>
+    /// Whether to fold an AI-drafted narrative section (epic #39) into the report when
+    /// a non-null <see cref="IReportNarrator"/> supplies one. Off by default; the
+    /// shipped narrator (<see cref="NullReportNarrator"/>) is a no-op regardless.
+    /// </summary>
+    public bool IncludeNarrative { get; init; }
+
+    /// <summary>Heading for the AI-drafted narrative section. Defaults to <c>"Summary"</c>.</summary>
+    public string NarrativeHeading { get; init; } = "Summary";
+
     /// <summary>The default template: all sections, non-empty fields, media and metadata.</summary>
     public static ReportTemplate Default { get; } = new();
 }
