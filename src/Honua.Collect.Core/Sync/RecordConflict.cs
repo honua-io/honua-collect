@@ -55,8 +55,10 @@ public sealed class RecordConflict
 
     /// <summary>
     /// Produces a merged record by applying a per-field resolution choice. The
-    /// merge starts from the local record and overwrites each conflicted field
-    /// with the chosen side; non-conflicted fields are left as the local version.
+    /// merge starts from the union of the local and server values so server-only
+    /// attributes (server-computed/admin fields, or fields added after the local
+    /// form was cached, which never surface as <see cref="FieldConflict"/>s) are
+    /// preserved; each conflicted field is then overwritten with the chosen side.
     /// </summary>
     /// <param name="choices">Per-field resolution choices, keyed by field id.</param>
     /// <param name="defaultResolution">Choice for any conflicted field absent from <paramref name="choices"/>.</param>
@@ -76,9 +78,22 @@ public sealed class RecordConflict
             AssignedUserId = _local.AssignedUserId,
         };
 
+        // Seed from local first, then carry over any server-only attributes that
+        // the local record doesn't have. Fields that genuinely differ are listed
+        // in FieldConflicts and resolved explicitly below, so a server attribute
+        // present on both sides keeps its local value here and is corrected by the
+        // conflict pass if it differs.
         foreach (var pair in _local.Values)
         {
             merged.Values[pair.Key] = pair.Value;
+        }
+
+        foreach (var pair in _server.Values)
+        {
+            if (!merged.Values.ContainsKey(pair.Key))
+            {
+                merged.Values[pair.Key] = pair.Value;
+            }
         }
 
         foreach (var conflict in FieldConflicts)

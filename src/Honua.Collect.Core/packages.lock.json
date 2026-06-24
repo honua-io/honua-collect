@@ -42,9 +42,9 @@
       },
       "Microsoft.Data.Sqlite.Core": {
         "type": "Direct",
-        "requested": "[10.0.8, )",
-        "resolved": "10.0.8",
-        "contentHash": "26t7WDiEjjAls/sFpWvVEFDxt+7Q5VPt6+blU2Lafuj9L8PzAv/GtGV4cqVPtrhWbfD2BX/z2v8hD1qXYtK6Aw==",
+        "requested": "[10.0.9, )",
+        "resolved": "10.0.9",
+        "contentHash": "iZrONyMKPjxfVZnUktqO30QjzNwAGH+AxM61s8lKQnVhgbQ3bn0hiXI129ZmVicEbIcwljyy2OVsIYUR51ZHKQ==",
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.11"
         }
