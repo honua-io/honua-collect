@@ -32,6 +32,19 @@
     <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
   </ItemGroup>
 
+  <!--
+    Imaging. SkiaSharp gives Core a platform-neutral, headless image codec
+    (decode/encode/transform) so the C8 resize+compress EXECUTION — not just the
+    ImageResizePlan maths — runs and is unit-tested in Core without MAUI or a
+    device. SkiaSharp's managed assembly targets net10.0; the bundled native
+    binaries cover the test/CI hosts, so the Core test suite exercises real bytes.
+    The App layer keeps its MAUI-Graphics path for on-device capture.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
+  </ItemGroup>
+
   <!-- Storage / crypto. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.9" />
