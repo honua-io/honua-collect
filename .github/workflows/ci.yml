@@ -52,14 +52,30 @@ jobs:
         # so we restore first (transitive graph) and fail if any severity row appears.
         # --locked-mode fails the build if the committed packages.lock.json files
         # don't match the resolved graph (a drifted or poisoned transitive dependency).
+        #
+        # One advisory is accepted and suppressed at source (NuGetAuditSuppress in
+        # Directory.Build.props): GHSA-2m69-gcr7-jv3q on SQLitePCLRaw.lib.e_sqlite3,
+        # pulled transitively by the SQLCipher batteries bundle, with no patched
+        # release available. `dotnet list --vulnerable` does NOT honour audit
+        # suppressions, so we drop that one advisory's rows here and still fail on
+        # any OTHER vulnerable package. Keep the two lists (this and the suppress in
+        # Directory.Build.props) in lockstep; remove both when a fixed bundle ships.
         run: |
           dotnet restore Honua.Collect.slnx --locked-mode
           dotnet list Honua.Collect.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
-          if grep -q "has the following vulnerable packages" vuln.txt; then
-            echo "::error::Vulnerable NuGet packages detected — see the table above."
+          # Each vulnerable package is a row beginning with ">" carrying its advisory
+          # URL. Gate on any such row whose advisory is NOT the accepted one — so the
+          # accepted SQLitePCLRaw advisory passes while any other vulnerable package
+          # (or a second advisory on the same package) still fails. We materialise the
+          # filtered rows to a file rather than piping into `grep -q`, which can
+          # SIGPIPE the upstream grep and yield a nondeterministic result.
+          grep -E '^[[:space:]]*> ' vuln.txt | grep -v 'GHSA-2m69-gcr7-jv3q' > unaccepted.txt || true
+          if [ -s unaccepted.txt ]; then
+            echo "::error::Unaccepted vulnerable NuGet packages detected — see the table above."
+            cat unaccepted.txt
             exit 1
           fi
-          echo "No vulnerable packages."
+          echo "No unaccepted vulnerable packages."
 
   build-test:
     runs-on: ubuntu-latest
