@@ -73,15 +73,62 @@ public class AuthTransportTests
     }
 
     [Fact]
-    public async Task Expired_session_is_not_presented_and_falls_back()
+    public async Task Expired_session_fails_closed_no_token_and_no_api_key_fallback()
     {
+        // A session WAS established and then lapsed: fail closed. The request goes out
+        // with no credential (surfacing a 401 / re-sign-in) rather than silently
+        // downgrading to the anonymous fallback key.
         var store = new AuthSessionStore("demo-key");
         store.Set(Session("stale", validFor: TimeSpan.FromMinutes(-1))); // expired
 
         var sent = await SendThrough(store, new HttpRequestMessage(HttpMethod.Get, "https://x/y"));
 
         Assert.Null(sent.Headers.Authorization);
-        Assert.Equal("demo-key", sent.Headers.GetValues(AuthHeaderHandler.ApiKeyHeader).Single());
+        Assert.False(sent.Headers.Contains(AuthHeaderHandler.ApiKeyHeader));
+    }
+
+    [Fact]
+    public async Task Validator_refreshes_a_near_expiry_session_before_presenting_it()
+    {
+        var store = new AuthSessionStore("demo-key");
+        store.Set(Session("near-expiry", validFor: TimeSpan.FromSeconds(30)));
+        var refreshed = Session("fresh-token");
+
+        async Task<AuthSession?> Validate(CancellationToken _)
+        {
+            store.Set(refreshed); // simulate EnsureValidAsync swapping in a refreshed session
+            return await Task.FromResult(refreshed);
+        }
+
+        var inner = new CapturingInner();
+        var handler = new AuthHeaderHandler(store, Validate) { InnerHandler = inner };
+        using var invoker = new HttpMessageInvoker(handler);
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "https://x/y"), CancellationToken.None);
+
+        Assert.Equal("Bearer", inner.Last!.Headers.Authorization!.Scheme);
+        Assert.Equal("fresh-token", inner.Last!.Headers.Authorization!.Parameter);
+    }
+
+    [Fact]
+    public async Task Validator_returning_null_fails_closed_no_fallback_after_a_session_existed()
+    {
+        // EnsureValidAsync expired the session and returned null: present nothing.
+        var store = new AuthSessionStore("demo-key");
+        store.Set(Session("stale", validFor: TimeSpan.FromMinutes(-1)));
+
+        Task<AuthSession?> Validate(CancellationToken _)
+        {
+            store.Set(null); // manager signs out on unrecoverable expiry
+            return Task.FromResult<AuthSession?>(null);
+        }
+
+        var inner = new CapturingInner();
+        var handler = new AuthHeaderHandler(store, Validate) { InnerHandler = inner };
+        using var invoker = new HttpMessageInvoker(handler);
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "https://x/y"), CancellationToken.None);
+
+        Assert.Null(inner.Last!.Headers.Authorization);
+        Assert.False(inner.Last!.Headers.Contains(AuthHeaderHandler.ApiKeyHeader));
     }
 
     [Fact]

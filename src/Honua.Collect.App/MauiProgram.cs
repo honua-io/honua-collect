@@ -14,6 +14,13 @@ public static class MauiProgram
 	/// <summary>The named HTTP client configured with the server base address and auth handler.</summary>
 	public const string ServerHttpClient = "honua";
 
+	/// <summary>
+	/// Named HTTP client for the server token endpoint (sign-in / token refresh). Points
+	/// at the server but carries NO <see cref="AuthHeaderHandler"/>, so a token refresh
+	/// can't recurse through the handler that triggers it.
+	/// </summary>
+	public const string TokenHttpClient = "honua-token";
+
 	/// <summary>Named HTTP client for OpenStreetMap tile requests (no server auth).</summary>
 	public const string TileHttpClient = "osm";
 
@@ -37,21 +44,38 @@ public static class MauiProgram
 		builder.Services.AddSingleton(settings);
 
 		// Auth: the session store holds the signed-in credential (falling back to the
-		// dev key); the delegating handler attaches it to every server request, so
-		// sign-in actually changes what the transport sends.
+		// dev key); the delegating handler validates/refreshes the session and attaches
+		// it to every server request, so sign-in actually changes what the transport
+		// sends and a near-expiry token is renewed just-in-time.
 		builder.Services.AddSingleton<IAuthSessionStore>(_ => new AuthSessionStore(settings.DemoApiKey));
-		builder.Services.AddTransient<AuthHeaderHandler>();
 
 		// Session lifecycle: persist the signed-in session to the platform secure
 		// store (Keystore/Keychain) so it resumes across restarts, honoring expiry on
-		// load and surfacing a graceful re-sign-in when it lapses. No refresher is
-		// wired yet — the server's generateToken issues no refresh token — so the
-		// manager simply keeps a near-expiry token until it expires (the refresh seam
-		// is there for when the server contract supports it).
+		// load and surfacing a graceful re-sign-in when it lapses. A SessionRefresher is
+		// wired over the token endpoint so a near-expiry session is renewed from its
+		// refresh token before use (refused/failed refresh fails closed to re-sign-in).
+		// The refresher runs over an UNAUTHENTICATED client (no AuthHeaderHandler) so a
+		// refresh never recurses through this same handler.
 		builder.Services.AddSingleton<ISessionPersistence, SecureStorageSessionPersistence>();
-		builder.Services.AddSingleton(sp => new AuthSessionManager(
-			sp.GetRequiredService<IAuthSessionStore>(),
-			sp.GetRequiredService<ISessionPersistence>()));
+		builder.Services.AddSingleton(sp =>
+		{
+			var tokenHttp = sp.GetRequiredService<IHttpClientFactory>().CreateClient(TokenHttpClient);
+			var refresher = new ServerTokenRefresher(tokenHttp);
+			return new AuthSessionManager(
+				sp.GetRequiredService<IAuthSessionStore>(),
+				sp.GetRequiredService<ISessionPersistence>(),
+				refresher.RefreshAsync);
+		});
+
+		// The transport handler validates/refreshes via the lifecycle just before
+		// authenticating each request, then presents the (possibly renewed) bearer token.
+		builder.Services.AddTransient(sp =>
+		{
+			var manager = sp.GetRequiredService<AuthSessionManager>();
+			return new AuthHeaderHandler(
+				sp.GetRequiredService<IAuthSessionStore>(),
+				manager.EnsureValidAsync);
+		});
 
 		// Licensing & entitlement enforcement: the LicenseService verifies a signed
 		// license key offline against the embedded authority public key and is the
@@ -69,6 +93,22 @@ public static class MauiProgram
 		var pinningCallback = CertificatePinning.CreateValidationCallback(settings.PinnedCertificateSpki);
 		builder.Services.AddHttpClient(ServerHttpClient, client => client.BaseAddress = settings.BaseUri)
 			.AddHttpMessageHandler<AuthHeaderHandler>()
+			.ConfigurePrimaryHttpMessageHandler(() =>
+			{
+				var handler = new HttpClientHandler();
+				if (pinningCallback is not null)
+				{
+					handler.ServerCertificateCustomValidationCallback =
+						(request, certificate, chain, errors) => pinningCallback(request, certificate, chain, errors);
+				}
+
+				return handler;
+			});
+
+		// Token endpoint client: same server base address + cert pinning, but no auth
+		// handler — sign-in and token refresh present their own credential and must not
+		// recurse through the AuthHeaderHandler.
+		builder.Services.AddHttpClient(TokenHttpClient, client => client.BaseAddress = settings.BaseUri)
 			.ConfigurePrimaryHttpMessageHandler(() =>
 			{
 				var handler = new HttpClientHandler();

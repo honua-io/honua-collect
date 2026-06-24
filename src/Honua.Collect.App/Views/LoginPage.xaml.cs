@@ -27,7 +27,7 @@ public partial class LoginPage : ContentPage
 
         // Exchange credentials for a short-lived bearer token at the server's token
         // endpoint; the AuthHeaderHandler then presents that token (not the password).
-        var http = ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.ServerHttpClient);
+        var http = ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.TokenHttpClient);
         var verifier = new ServerCredentialVerifier(http);
 
         _viewModel = new LoginViewModel(verifier.VerifyAsync);
