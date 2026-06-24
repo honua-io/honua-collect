@@ -17,6 +17,10 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- SkiaSharp's native libSkiaSharp for the Linux/CI test host so the C8
+         resize tests decode/encode real image bytes. NoDependencies avoids the
+         fontconfig/freetype system requirement (we never render text). -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
   </ItemGroup>
 
   <ItemGroup>

@@ -29,6 +29,10 @@
          against the embedded authority public key. Already in the restore graph
          transitively; pinned here as a direct, audited dependency. -->
     <PackageReference Include="BouncyCastle.Cryptography" />
+    <!-- Headless image codec for the C8 resize/compress execution on real bytes
+         (decode, EXIF-orientation normalise, downscale, re-encode). Managed-only
+         here; the native runtime assets are pulled by the consuming app/test host. -->
+    <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
 </Project>

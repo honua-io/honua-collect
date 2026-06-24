@@ -1,9 +1,89 @@
+using System.Security.Cryptography;
 using Honua.Collect.Core.Sync;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
 public class ResumableUploadTests
 {
+    [Fact]
+    public void State_machine_transitions_pending_inprogress_completed()
+    {
+        var upload = new ResumableUpload(300, 100);
+        Assert.Equal(ResumableUploadState.Pending, upload.State);
+
+        upload.MarkUploaded(0);
+        Assert.Equal(ResumableUploadState.InProgress, upload.State);
+
+        upload.MarkUploaded(1);
+        upload.MarkUploaded(2);
+        Assert.Equal(ResumableUploadState.Completed, upload.State);
+    }
+
+    [Fact]
+    public void Empty_file_state_is_completed()
+        => Assert.Equal(ResumableUploadState.Completed, new ResumableUpload(0, 100).State);
+
+    [Fact]
+    public void Next_pending_is_the_lowest_incomplete_chunk_then_null()
+    {
+        var upload = new ResumableUpload(300, 100);
+        Assert.Equal(0, upload.NextPending()!.Value.Index);
+
+        upload.MarkUploaded(0);
+        Assert.Equal(1, upload.NextPending()!.Value.Index);
+
+        upload.MarkUploaded(1);
+        upload.MarkUploaded(2);
+        Assert.Null(upload.NextPending());
+    }
+
+    [Fact]
+    public void Uploaded_bytes_sum_completed_chunk_lengths_including_remainder()
+    {
+        var upload = new ResumableUpload(250, 100); // chunks: 100,100,50
+        upload.MarkUploaded(0);
+        Assert.Equal(100, upload.UploadedBytes);
+        upload.MarkUploaded(2); // the 50-byte remainder
+        Assert.Equal(150, upload.UploadedBytes);
+    }
+
+    [Fact]
+    public void Per_chunk_hash_round_trips()
+    {
+        var upload = new ResumableUpload(200, 100);
+        upload.MarkUploaded(0, "deadbeef");
+        Assert.Equal("deadbeef", upload.ChunkHash(0));
+        upload.MarkUploaded(1); // no hash recorded
+        Assert.Null(upload.ChunkHash(1));
+    }
+
+    [Fact]
+    public void Final_integrity_passes_for_the_real_digest_and_fails_otherwise()
+    {
+        var content = Enumerable.Range(0, 250).Select(i => (byte)i).ToArray();
+        var upload = new ResumableUpload(content.Length, 100);
+        upload.Resume([0, 1, 2]);
+
+        var hex = Convert.ToHexStringLower(SHA256.HashData(content));
+        Assert.True(upload.VerifyFinalIntegrity(content, hex));
+        Assert.False(upload.VerifyFinalIntegrity(content, new string('0', 64)));
+    }
+
+    [Fact]
+    public void Final_integrity_requires_completion_and_matching_length()
+    {
+        var content = new byte[250];
+        var upload = new ResumableUpload(content.Length, 100);
+        // Not complete yet.
+        Assert.Throws<InvalidOperationException>(
+            () => upload.VerifyFinalIntegrity(content, new string('0', 64)));
+
+        upload.Resume([0, 1, 2]);
+        // Wrong-length content.
+        Assert.Throws<ArgumentException>(
+            () => upload.VerifyFinalIntegrity(new byte[10], new string('0', 64)));
+    }
+
     [Fact]
     public void Chunk_count_and_last_chunk_length_are_correct()
     {
