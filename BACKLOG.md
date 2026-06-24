@@ -39,8 +39,11 @@ testable without a device and unblocks every widget and screen above it:
   merge for the manual conflict-review screen. Backs **S1**.
 - **`Sync/SelectiveSyncPlan`** — per-layer / per-area sync opt-in decision.
   Backs **S2**.
-- **`Assignments/FieldAssignment` + `AssignmentInbox`** — dispatch → capture →
-  submit task loop and the worker inbox. Backs **E5**.
+- **`Assignments/FieldAssignment` + `AssignmentInbox` + `AssignmentService`** —
+  dispatch → capture → submit task loop, the worker inbox, and the operator-scoped
+  dispatch service (auth-session identity, assignee-only + role guards, SQLite
+  persistence via `SqliteAssignmentStore`, and the `IAssignmentSyncClient` pull/push
+  seam). Backs **E5** / epic #40. Live server binding deferred.
 - **`Field/RecordLinkField`** — manages a parent record's related/child record
   links. Backs **F4**.
 - **`Field/Forms/FormLocalizer` + `FormTranslations`** — produces a localized

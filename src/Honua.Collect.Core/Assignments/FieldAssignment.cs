@@ -2,6 +2,22 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Assignments;
 
+/// <summary>Relative urgency a dispatcher sets on an assignment.</summary>
+public enum AssignmentPriority
+{
+    /// <summary>Routine work; no special urgency.</summary>
+    Low,
+
+    /// <summary>Default urgency.</summary>
+    Normal,
+
+    /// <summary>Elevated urgency; surface above normal work.</summary>
+    High,
+
+    /// <summary>Drop-everything urgency.</summary>
+    Urgent,
+}
+
 /// <summary>
 /// Lifecycle status of a dispatched field assignment.
 /// </summary>
@@ -19,8 +35,11 @@ public enum AssignmentStatus
     /// <summary>Capture is complete and the record has been submitted.</summary>
     Completed,
 
-    /// <summary>Worker declined the assignment.</summary>
+    /// <summary>Worker declined/rejected the assignment.</summary>
     Declined,
+
+    /// <summary>Reassigned to a different worker; this copy is closed.</summary>
+    Reassigned,
 }
 
 /// <summary>
@@ -52,6 +71,9 @@ public sealed class FieldAssignment
 
     /// <summary>Optional due date.</summary>
     public DateTimeOffset? DueAtUtc { get; init; }
+
+    /// <summary>Dispatcher-set urgency, surfaced in the inbox and used for ordering.</summary>
+    public AssignmentPriority Priority { get; init; } = AssignmentPriority.Normal;
 
     /// <summary>UTC time the assignment was created/dispatched.</summary>
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
@@ -118,6 +140,42 @@ public sealed class FieldAssignment
         CompletedAtUtc = atUtc ?? DateTimeOffset.UtcNow;
     }
 
+    /// <summary>
+    /// Reassigns the work to another operator. Only an open assignment that the
+    /// current operator has not yet started can be reassigned; this copy is closed
+    /// (<see cref="AssignmentStatus.Reassigned"/>) and a fresh assignment is returned
+    /// for the new operator so the work survives but its lifecycle restarts cleanly.
+    /// </summary>
+    /// <param name="newUserId">The operator to reassign the work to.</param>
+    /// <param name="newAssignmentId">Stable id for the new assignment copy.</param>
+    /// <returns>A new, unstarted assignment dispatched to <paramref name="newUserId"/>.</returns>
+    public FieldAssignment Reassign(string newUserId, string newAssignmentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newAssignmentId);
+
+        if (Status is not (AssignmentStatus.Assigned or AssignmentStatus.Accepted))
+        {
+            throw new InvalidOperationException(
+                $"Assignment '{AssignmentId}' cannot be reassigned from {Status}; " +
+                "only an unstarted (Assigned/Accepted) assignment can be reassigned.");
+        }
+
+        Status = AssignmentStatus.Reassigned;
+
+        return new FieldAssignment
+        {
+            AssignmentId = newAssignmentId,
+            FormId = FormId,
+            AssignedToUserId = newUserId,
+            Title = Title,
+            Instructions = Instructions,
+            Location = Location,
+            DueAtUtc = DueAtUtc,
+            Priority = Priority,
+        };
+    }
+
     private void Require(AssignmentStatus expected, AssignmentStatus target)
     {
         if (Status != expected)
@@ -125,5 +183,23 @@ public sealed class FieldAssignment
             throw new InvalidOperationException(
                 $"Assignment '{AssignmentId}' cannot move to {target} from {Status}; expected {expected}.");
         }
+    }
+
+    /// <summary>
+    /// Rebuilds an assignment with its persisted lifecycle state, bypassing the
+    /// transition guards. Used only by the store and sync layers to rehydrate a
+    /// row/payload into its exact saved state; live transitions must still go
+    /// through <see cref="Accept"/>/<see cref="Start"/>/<see cref="Complete"/>.
+    /// </summary>
+    internal void RestoreState(
+        AssignmentStatus status,
+        string? recordId,
+        DateTimeOffset? acceptedAtUtc,
+        DateTimeOffset? completedAtUtc)
+    {
+        Status = status;
+        RecordId = recordId;
+        AcceptedAtUtc = acceptedAtUtc;
+        CompletedAtUtc = completedAtUtc;
     }
 }
