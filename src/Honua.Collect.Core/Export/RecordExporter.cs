@@ -33,7 +33,29 @@ public static class RecordExporter
         ExportFormat.Csv => ToCsv(form, records),
         ExportFormat.GeoJson => ToGeoJson(form, records),
         ExportFormat.Kml => ToKml(form, records),
+        ExportFormat.Xlsx => throw new ArgumentException(
+            $"{nameof(ExportFormat.Xlsx)} is a binary format; call {nameof(ExportBinary)} or {nameof(ExcelExporter)}.{nameof(ExcelExporter.Export)}.",
+            nameof(format)),
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported export format."),
+    };
+
+    /// <summary>
+    /// Whether a format produces binary bytes (<see cref="ExportBinary"/>) rather than
+    /// the text returned by <see cref="Export(FormDefinition, IEnumerable{FieldRecord}, ExportFormat)"/>.
+    /// </summary>
+    /// <param name="format">The format to classify.</param>
+    /// <returns><see langword="true"/> for binary formats such as <see cref="ExportFormat.Xlsx"/>.</returns>
+    public static bool IsBinary(ExportFormat format) => format is ExportFormat.Xlsx;
+
+    /// <summary>Exports records to a binary format's file bytes.</summary>
+    /// <param name="form">Form whose fields define the columns.</param>
+    /// <param name="records">Records to export.</param>
+    /// <param name="format">A binary target format (currently <see cref="ExportFormat.Xlsx"/>).</param>
+    /// <returns>The serialized export as a byte array.</returns>
+    public static byte[] ExportBinary(FormDefinition form, IEnumerable<FieldRecord> records, ExportFormat format) => format switch
+    {
+        ExportFormat.Xlsx => ExcelExporter.Export(form, records),
+        _ => throw new ArgumentException($"{format} is not a binary export format; call {nameof(Export)}.", nameof(format)),
     };
 
     /// <summary>Exports records to CSV with one row per record.</summary>

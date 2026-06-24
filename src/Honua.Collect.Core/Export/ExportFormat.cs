@@ -14,4 +14,11 @@ public enum ExportFormat
 
     /// <summary>OGC KML 2.2 <c>Document</c> of placemarks (Google Earth / GIS).</summary>
     Kml,
+
+    /// <summary>
+    /// Microsoft Excel <c>.xlsx</c> workbook, one row per record with typed cells.
+    /// Binary output via <see cref="ExcelExporter"/> (not the text
+    /// <see cref="RecordExporter.Export(Honua.Sdk.Field.Forms.FormDefinition, System.Collections.Generic.IEnumerable{Honua.Sdk.Field.Records.FieldRecord}, ExportFormat)"/>).
+    /// </summary>
+    Xlsx,
 }
