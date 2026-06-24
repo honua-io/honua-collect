@@ -10,7 +10,7 @@ namespace Honua.Collect.Core.Automation;
 /// <param name="FieldId">The field to test.</param>
 /// <param name="Operator">The comparison to apply.</param>
 /// <param name="Value">The comparand (ignored for <see cref="ConditionOperator.Exists"/>/<see cref="ConditionOperator.NotExists"/>).</param>
-public sealed record RuleCondition(string FieldId, ConditionOperator Operator, object? Value = null)
+public sealed record RuleCondition(string FieldId, ConditionOperator Operator, object? Value = null) : IRuleCondition
 {
     /// <summary>Evaluates the condition against a set of field values.</summary>
     /// <param name="values">The record's current values.</param>
