@@ -23,4 +23,12 @@ public enum RecordSyncState
 
     /// <summary>The last upload attempt failed; eligible for retry.</summary>
     Failed = 4,
+
+    /// <summary>
+    /// The server's version of this record diverged from the local edits, so the
+    /// upload was rejected by the <c>ManualReview</c> strategy and the record is
+    /// waiting on manual conflict review (BACKLOG S1). Held out of the Outbox until
+    /// the user resolves it.
+    /// </summary>
+    Conflicted = 5,
 }

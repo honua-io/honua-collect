@@ -158,6 +158,41 @@ public sealed class SqliteRecordStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Conflicted_record_reloads_into_the_conflicts_box()
+    {
+        var entry = new CollectRecordEntry(NewRecord("rec-conflict", RecordStatus.Submitted));
+        entry.MarkPending();
+        entry.MarkConflicted(BuildConflict());
+        await _store.SaveAsync(entry);
+
+        var back = (await _store.LoadAllAsync()).Single();
+
+        // The transport state survives a restart so the record stays out of the
+        // Outbox; the field-level conflict body is recomputed by the next pull.
+        Assert.Equal(RecordSyncState.Conflicted, back.SyncState);
+        Assert.Equal(RecordBox.Conflicts, back.Box);
+        Assert.False(back.IsPendingUpload);
+    }
+
+    private static Honua.Collect.Core.Sync.RecordConflict BuildConflict()
+    {
+        var form = new Honua.Sdk.Field.Forms.FormDefinition
+        {
+            FormId = "tree-survey",
+            Name = "tree-survey",
+            Sections = [new Honua.Sdk.Field.Forms.FormSection { SectionId = "s", Label = "s", Fields =
+            [
+                new Honua.Sdk.Field.Forms.FormField { FieldId = "species", Label = "Species", Type = Honua.Sdk.Field.Forms.FormFieldType.Text },
+            ] }],
+        };
+        var local = NewRecord("rec-conflict", RecordStatus.Submitted);
+        local.Values["species"] = "Koa";
+        var server = NewRecord("rec-conflict", RecordStatus.Submitted);
+        server.Values["species"] = "Ohia";
+        return Honua.Collect.Core.Sync.RecordConflictDetector.Detect(form, local, server);
+    }
+
+    [Fact]
     public async Task Record_without_location_reloads_with_null_location()
     {
         await _store.SaveAsync(Outbox("rec-no-loc"));

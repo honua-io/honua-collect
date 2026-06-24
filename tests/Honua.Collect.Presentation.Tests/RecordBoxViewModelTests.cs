@@ -40,7 +40,7 @@ public class RecordBoxViewModelTests
         Assert.Equal(["d1", "d2"], vm.Drafts.Select(r => r.RecordId));
         Assert.Equal(["o1", "o2"], vm.Outbox.Select(r => r.RecordId));
         Assert.Equal(["s1"], vm.Sent.Select(r => r.RecordId));
-        Assert.Equal("Drafts 2 · Outbox 2 · Sent 1", vm.Header);
+        Assert.Equal("Drafts 2 · Outbox 2 · Conflicts 0 · Sent 1", vm.Header);
         Assert.Equal(2, vm.Summary.Drafts);
         Assert.Equal(1, vm.Summary.Failed);
     }

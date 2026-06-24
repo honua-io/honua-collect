@@ -101,6 +101,46 @@ public class ScreenViewModelTests
         Assert.All(vm.Conflicts, c => Assert.True(c.KeepLocal));
     }
 
+    [Fact]
+    public void ConflictReview_unbound_cannot_apply()
+    {
+        var vm = new ConflictReviewViewModel(Conflict());
+
+        Assert.False(vm.CanApply);
+        Assert.False(vm.ApplyResolutionCommand.CanExecute(null));
+        Assert.Throws<InvalidOperationException>(() => vm.ApplyResolution());
+    }
+
+    [Fact]
+    public void ConflictReview_bound_applies_resolution_to_the_entry_and_disables_reapply()
+    {
+        var entry = new CollectRecordEntry(new FieldRecord { RecordId = "r", FormId = "f", Status = RecordStatus.Submitted });
+        entry.MarkPending();
+        entry.MarkConflicted(Conflict());
+
+        var vm = new ConflictReviewViewModel(entry);
+        Assert.True(vm.CanApply);
+        Assert.True(vm.ApplyResolutionCommand.CanExecute(null));
+
+        vm.KeepAllLocalCommand.Execute(null);
+        vm.ApplyResolutionCommand.Execute(null);
+
+        Assert.Equal(RecordSyncState.Pending, entry.SyncState);
+        Assert.Equal("Local", entry.Record.Values["name"]);
+        Assert.Null(entry.Conflict);
+        Assert.True(vm.IsResolved);
+        Assert.False(vm.ApplyResolutionCommand.CanExecute(null)); // can't re-apply
+    }
+
+    [Fact]
+    public void ConflictReview_bound_to_non_conflicted_entry_throws()
+    {
+        var entry = new CollectRecordEntry(new FieldRecord { RecordId = "r", FormId = "f", Status = RecordStatus.Submitted });
+        entry.MarkPending();
+
+        Assert.Throws<ArgumentException>(() => new ConflictReviewViewModel(entry));
+    }
+
     // --- Inbox ----------------------------------------------------------------
 
     [Fact]

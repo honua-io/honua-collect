@@ -53,6 +53,16 @@ public sealed class CollectRecordEntry
     /// <summary>Whether the record is finished and waiting to upload (or retry).</summary>
     public bool IsPendingUpload => Box == RecordBox.Outbox;
 
+    /// <summary>Whether the record is waiting on manual conflict review.</summary>
+    public bool IsConflicted => SyncState == RecordSyncState.Conflicted;
+
+    /// <summary>
+    /// The unresolved record conflict surfaced by a pull, when the record is in
+    /// the <see cref="RecordSyncState.Conflicted"/> state. The manual-review screen
+    /// binds to this; <see langword="null"/> for every other state.
+    /// </summary>
+    public Sync.RecordConflict? Conflict { get; private set; }
+
     /// <summary>Queues a finished record for upload.</summary>
     /// <remarks>Only finished records (review status past <see cref="RecordStatus.Draft"/>) may be queued.</remarks>
     public void MarkPending()
@@ -96,5 +106,62 @@ public sealed class CollectRecordEntry
         LastError = error;
         LastAttemptUtc = attemptTimeUtc ?? DateTimeOffset.UtcNow;
         FailedAttempts++;
+    }
+
+    /// <summary>
+    /// Marks the record as conflicted because a pull found the server version had
+    /// diverged from the local edits (the mobile sync engine's <c>ManualReview</c>
+    /// strategy). Moves the record into the Conflicts box and attaches the
+    /// field-level conflict for the review screen.
+    /// </summary>
+    /// <param name="conflict">The detected record conflict to resolve.</param>
+    public void MarkConflicted(Sync.RecordConflict conflict)
+    {
+        ArgumentNullException.ThrowIfNull(conflict);
+        SyncState = RecordSyncState.Conflicted;
+        Conflict = conflict;
+    }
+
+    /// <summary>
+    /// Restores the conflicted transport state when rehydrating from storage. The
+    /// field-level <see cref="Conflict"/> body is recomputed by the next pull (it is
+    /// not persisted), so the record stays in the Conflicts box and out of the
+    /// Outbox after a restart rather than silently re-uploading.
+    /// </summary>
+    internal void RestoreConflicted() => SyncState = RecordSyncState.Conflicted;
+
+    /// <summary>
+    /// Applies a manual conflict resolution: copies the merged values produced by
+    /// the review screen onto the local record, clears the conflict, and re-queues
+    /// the record for upload so the resolved version flows back through the normal
+    /// sync path.
+    /// </summary>
+    /// <param name="merged">The merged record from <c>RecordConflict.Resolve</c>.</param>
+    /// <remarks>
+    /// The same <see cref="FieldRecord"/> instance is kept (its id is stable);
+    /// only the mutable capture data is overwritten so existing references stay
+    /// valid.
+    /// </remarks>
+    public void ApplyResolution(FieldRecord merged)
+    {
+        ArgumentNullException.ThrowIfNull(merged);
+        if (!IsConflicted)
+        {
+            throw new InvalidOperationException("Only a conflicted record can have a resolution applied.");
+        }
+
+        Record.Values.Clear();
+        foreach (var pair in merged.Values)
+        {
+            Record.Values[pair.Key] = pair.Value;
+        }
+
+        Record.Location = merged.Location;
+        Record.Status = merged.Status;
+        Record.AssignedUserId = merged.AssignedUserId;
+
+        Conflict = null;
+        LastError = null;
+        SyncState = RecordSyncState.Pending;
     }
 }

@@ -14,6 +14,13 @@ public enum RecordBox
     /// <summary>Finished and awaiting (or retrying) upload to the server.</summary>
     Outbox,
 
+    /// <summary>
+    /// The server version diverged and the record needs manual conflict review
+    /// before it can upload (BACKLOG S1). Held out of the Outbox so a bound retry
+    /// never silently re-pushes over a conflict.
+    /// </summary>
+    Conflicts,
+
     /// <summary>Successfully uploaded to the server.</summary>
     Sent,
 }
