@@ -4,6 +4,7 @@ using Honua.Collect.Core.Enterprise;
 using Honua.Collect.Core.Licensing;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
+using Honua.Collect.Presentation.Auth;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
