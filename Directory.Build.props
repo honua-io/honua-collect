@@ -26,6 +26,18 @@
     <NoWarn>$(NoWarn);NU3018;NU3042</NoWarn>
   </PropertyGroup>
 
+  <!-- Accepted, currently-unfixable transitive advisory. The SQLCipher batteries
+       bundle (SQLitePCLRaw.bundle_e_sqlcipher, see Directory.Packages.props) pulls
+       SQLitePCLRaw.lib.e_sqlite3 2.1.11, which carries GHSA-2m69-gcr7-jv3q. No
+       patched SQLitePCLRaw release ships a remediated native lib yet, and the
+       record DB requires SQLCipher, so we cannot drop or float the package. We
+       therefore suppress THIS ONE advisory by its URL (not NU1903 wholesale): the
+       NuGetAudit gate stays on, so any new/different advisory still fails restore.
+       Revisit when SQLitePCLRaw publishes a fixed bundle (tracking: SDK train). -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
+
   <!-- Supply-chain hardening: hash-pin the full transitive graph via per-project
        packages.lock.json (committed). With Central Package Management (see
        Directory.Packages.props) the versions resolve cleanly under lockfile
