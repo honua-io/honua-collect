@@ -59,3 +59,10 @@ required for the core capture-and-sync loop.
 Documented here for honesty: the **server-side** air-gapped deployment runbook
 and a **round-trip interop test against a reference ArcGIS layer** are tracked in
 #37 and live with the server component; they are not part of the Collect client.
+
+## See also
+
+- [Self-hosting guide](./self-hosting.md) — the configuration surface, auth, and
+  open-core boundary for pointing Collect at a self-hosted server.
+- [Esri compatibility matrix](./esri-compatibility.md) — what Collect supports vs
+  the incumbents, marked honestly.

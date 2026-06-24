@@ -43,6 +43,19 @@ protected by ELv2's anti-circumvention terms).
 
 _Tier assignments are provisional and subject to change before GA._
 
+## Documentation
+
+- [Self-hosting guide](docs/self-hosting.md) — point Collect at a self-hosted
+  Honua server (config surface, auth, the ELv2 open-core boundary, quickstart).
+- [Esri compatibility matrix](docs/esri-compatibility.md) — what Collect supports
+  vs Survey123 / Field Maps / Fulcrum, marked honestly.
+- [Data residency & self-host posture](docs/data-residency-and-self-host.md) —
+  where records live and how the connection is secured.
+- [Migrating from Survey123 and Fulcrum](docs/migration-from-survey123-and-fulcrum.md)
+  — lowering the switching cost.
+- [Competitive strategy](docs/COMPETITIVE-STRATEGY.md) — the three-horizon
+  positioning frame.
+
 ## Status
 
 🚧 **Active development.** The `Honua.Collect.Core` logic layer, the
