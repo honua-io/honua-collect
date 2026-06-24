@@ -59,8 +59,12 @@ public sealed class FieldViewModel : ObservableObject
         _ => "Add attachment",
     };
 
-    /// <summary>Allowed choices for choice/classification fields.</summary>
-    public IReadOnlyList<FieldChoice> Choices => State.Field.Choices;
+    /// <summary>
+    /// Allowed choices for choice/classification fields. For a cascading/dependent
+    /// select (BACKLOG F3) this is the subset currently permitted by the parent
+    /// field's value; for a plain choice field it is the field's full option list.
+    /// </summary>
+    public IReadOnlyList<FieldChoice> Choices => State.AvailableChoices;
 
     /// <summary>
     /// The selected choice for single-choice pickers. Maps between the stored
@@ -127,6 +131,7 @@ public sealed class FieldViewModel : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(nameof(Value));
+        OnPropertyChanged(nameof(Choices));
         OnPropertyChanged(nameof(SelectedChoice));
         OnPropertyChanged(nameof(IsVisible));
         OnPropertyChanged(nameof(ErrorText));
