@@ -1,7 +1,7 @@
 {
   "version": 2,
   "dependencies": {
-    "net10.0-android1.0": {
+    "net10.0": {
       "BouncyCastle.Cryptography": {
         "type": "Direct",
         "requested": "[2.6.2, )",
@@ -55,7 +55,7 @@
         "resolved": "2.1.11",
         "contentHash": "NFuxa/rD3Ah88jbFOgsoUjuWcLiBkj3iqgO2gJXola9NtjtCTRI3HMQtVjQDnrhCvdBOAJ4RqbwnqoEMLht8GQ==",
         "dependencies": {
-          "SQLitePCLRaw.lib.e_sqlcipher.android": "2.1.11",
+          "SQLitePCLRaw.lib.e_sqlcipher": "2.1.11",
           "SQLitePCLRaw.provider.e_sqlcipher": "2.1.11"
         }
       },
@@ -124,7 +124,7 @@
         "resolved": "2.1.11",
         "contentHash": "DC4nA7yWnf4UZdgJDF+9Mus4/cb0Y3Sfgi3gDnAoKNAIBwzkskNAbNbyu+u4atT0ruVlZNJfwZmwiEwE5oz9LQ==",
         "dependencies": {
-          "SQLitePCLRaw.lib.e_sqlite3.android": "2.1.11",
+          "SQLitePCLRaw.lib.e_sqlite3": "2.1.11",
           "SQLitePCLRaw.provider.e_sqlite3": "2.1.11"
         }
       },
@@ -133,15 +133,15 @@
         "resolved": "2.1.11",
         "contentHash": "PK0GLFkfhZzLQeR3PJf71FmhtHox+U3vcY6ZtswoMjrefkB9k6ErNJEnwXqc5KgXDSjige2XXrezqS39gkpQKA=="
       },
-      "SQLitePCLRaw.lib.e_sqlcipher.android": {
+      "SQLitePCLRaw.lib.e_sqlcipher": {
         "type": "Transitive",
         "resolved": "2.1.11",
-        "contentHash": "Urehfbyce/CRzvquSBVtQWvzpouioLiJvbdEQ8/jPntR5wITTM6QmEDrouhX9bzSyp8RTLOBOORku/vfrVGW3A=="
+        "contentHash": "Cg6UPeDbH8jyaOs1vqXYIgeewH0wYrBnmbC5Ml3GYBo+GKzNmyxrWSO52JV68bfB7Addt/PZLMekJV1RH2ftWQ=="
       },
-      "SQLitePCLRaw.lib.e_sqlite3.android": {
+      "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.11",
-        "contentHash": "1eOZAlWkI57o/XJv2rDxwM1HD9rbJBBgsDYSSr5sQ9UG4Bg3ysl2eaNjBG/p+B2LB8KsDVTkG/VxYPD/P/mgjA=="
+        "contentHash": "Ev2ytaXiOlWZ4b3R67GZBsemTINslLD1DCJr2xiacpn4tbapu0Q4dHEzSvZSMnVWeE5nlObU3VZN2p81q3XOYQ=="
       },
       "SQLitePCLRaw.provider.e_sqlcipher": {
         "type": "Transitive",
