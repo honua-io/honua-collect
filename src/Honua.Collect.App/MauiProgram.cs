@@ -78,6 +78,51 @@ public static class MauiProgram
 				manager.EnsureValidAsync);
 		});
 
+		// Audit trail (BACKLOG E3): security- and data-relevant events are appended to
+		// a durable, tamper-evident SQLite trail in the same encrypted at-rest posture
+		// as the record store. Secrets are scrubbed before persisting; the trail can be
+		// queried/exported off-device for SIEM/audit.
+		var auditDbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-audit.db");
+		builder.Services.AddSingleton<IAuditStore>(_ =>
+			new SqliteAuditStore(auditDbPath, DbKeyProvider.GetOrCreateKeyAsync().GetAwaiter().GetResult()));
+		builder.Services.AddSingleton(sp => new AuditTrail(sp.GetRequiredService<IAuditStore>()));
+		builder.Services.AddSingleton<IAuditSink>(sp => sp.GetRequiredService<AuditTrail>());
+
+		// On-device authorization (BACKLOG E2): the IdP's role claims on the session map
+		// to capabilities via a data-driven capability map; the Presentation layer queries
+		// IDeviceAuthorization.Can(action, resource) and authorization fails closed when no
+		// session (or no granting role) is present. Denials are recorded to the audit trail.
+		builder.Services.AddSingleton(_ => CapabilityMap.Build()
+			.Role("field-worker",
+				CollectPermission.CaptureRecords,
+				CollectPermission.EditRecords,
+				CollectPermission.SubmitRecords,
+				CollectPermission.GenerateReports)
+			.Role("supervisor",
+				CollectPermission.CaptureRecords,
+				CollectPermission.EditRecords,
+				CollectPermission.SubmitRecords,
+				CollectPermission.ReviewRecords,
+				CollectPermission.DeleteRecords,
+				CollectPermission.ExportData,
+				CollectPermission.GenerateReports,
+				CollectPermission.ManageAssignments)
+			.Role("admin",
+				CollectPermission.CaptureRecords,
+				CollectPermission.EditRecords,
+				CollectPermission.SubmitRecords,
+				CollectPermission.ReviewRecords,
+				CollectPermission.DeleteRecords,
+				CollectPermission.ExportData,
+				CollectPermission.GenerateReports,
+				CollectPermission.ManageAssignments,
+				CollectPermission.ConfigureForms)
+			.Create());
+		builder.Services.AddSingleton<IDeviceAuthorization>(sp => new DeviceAuthorization(
+			sp.GetRequiredService<IAuthSessionStore>(),
+			sp.GetRequiredService<CapabilityMap>(),
+			sp.GetRequiredService<IAuditSink>()));
+
 		// Licensing & entitlement enforcement: the LicenseService verifies a signed
 		// license key offline against the embedded authority public key and is the
 		// trusted source of the running edition. IEntitlements resolves to the current
