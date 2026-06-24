@@ -17,10 +17,29 @@ public sealed record AutomationValidationError(string Message, string RuleName);
 /// <param name="RuleName">The rule that queued it.</param>
 public sealed record QueuedRequest(string Url, string? Body, string RuleName);
 
+/// <summary>A notification enqueued offline by an automation run, for delivery by the host.</summary>
+/// <param name="Title">Notification title.</param>
+/// <param name="Body">Notification body.</param>
+/// <param name="RuleName">The rule that enqueued it.</param>
+public sealed record QueuedNotification(string Title, string Body, string RuleName);
+
+/// <summary>A follow-up task scheduled by an automation run.</summary>
+/// <param name="Description">What the follow-up is for.</param>
+/// <param name="DueInDays">How many days out the follow-up is due.</param>
+/// <param name="RuleName">The rule that scheduled it.</param>
+public sealed record ScheduledFollowUp(string Description, int DueInDays, string RuleName);
+
+/// <summary>A record that an AI action was invoked, so the seam is observable in results/tests.</summary>
+/// <param name="ActionId">The AI action that was invoked.</param>
+/// <param name="Handled">Whether a provider serviced it (false for the no-op stub).</param>
+/// <param name="RuleName">The rule that invoked it.</param>
+public sealed record AiActionInvocation(string ActionId, bool Handled, string RuleName);
+
 /// <summary>
 /// The outcome of running automation rules for one event: the field values after
-/// any set-field actions, plus the alerts, validation errors, and offline-queued
-/// requests the rules produced, and which rules fired.
+/// any set-field/compute/AI actions, plus the alerts, validation errors, tags,
+/// offline-queued requests/notifications, scheduled follow-ups, and AI-action
+/// invocations the rules produced, and which rules fired.
 /// </summary>
 public sealed record AutomationResult
 {
@@ -35,6 +54,18 @@ public sealed record AutomationResult
 
     /// <summary>Requests queued for offline replay.</summary>
     public IReadOnlyList<QueuedRequest> QueuedRequests { get; init; } = [];
+
+    /// <summary>Notifications enqueued for offline delivery.</summary>
+    public IReadOnlyList<QueuedNotification> Notifications { get; init; } = [];
+
+    /// <summary>Follow-up tasks scheduled by the run.</summary>
+    public IReadOnlyList<ScheduledFollowUp> FollowUps { get; init; } = [];
+
+    /// <summary>Tags added to the record, in order, deduplicated.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
+    /// <summary>AI-action invocations, in order — observable even with the no-op stub.</summary>
+    public IReadOnlyList<AiActionInvocation> AiInvocations { get; init; } = [];
 
     /// <summary>Names of the rules that fired, in order.</summary>
     public IReadOnlyList<string> FiredRules { get; init; } = [];

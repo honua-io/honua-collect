@@ -19,8 +19,12 @@ public sealed record AutomationRule
     /// </summary>
     public string? TriggerFieldId { get; init; }
 
-    /// <summary>Optional guard; when null the rule always fires for its trigger.</summary>
-    public RuleCondition? Condition { get; init; }
+    /// <summary>
+    /// Optional guard; when null the rule always fires for its trigger. May be the
+    /// data-driven <see cref="RuleCondition"/> or an <see cref="ExpressionCondition"/>
+    /// reusing the SDK form-expression engine.
+    /// </summary>
+    public IRuleCondition? Condition { get; init; }
 
     /// <summary>The actions to run, in order, when the rule fires.</summary>
     public IReadOnlyList<AutomationAction> Actions { get; init; } = [];

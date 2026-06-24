@@ -170,6 +170,7 @@ proven; these are device-sensor integrations.
 | F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | Community | sdk |
 | F4 | Related tables / record links UX | 🧱 | Pro | collect |
 | F5 | Default-from-previous / "favorites" answer reuse | 🧱 | Community | collect |
+| F6 | Offline Data Events automation engine (rules → set/compute/tag/notify/follow-up/HTTP/AI actions; #44) | 🧱 | Pro | collect |
 
 ## 4. Sync & offline (advanced)
 
