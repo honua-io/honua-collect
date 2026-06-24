@@ -39,6 +39,14 @@ public sealed record AuthSession
     /// <summary>Granted scopes / claims used for coarse client-side gating.</summary>
     public IReadOnlySet<string> Scopes { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Roles granted to the identity by the IdP (e.g. <c>field-worker</c>,
+    /// <c>supervisor</c>), carried as token claims. These drive on-device
+    /// authorization (BACKLOG E2) via a capability map; an empty set means the
+    /// session holds no roles and authorization fails closed.
+    /// </summary>
+    public IReadOnlySet<string> Roles { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
     /// <summary>Whether the access token has expired as of the given time.</summary>
     /// <param name="asOfUtc">Reference time.</param>
     /// <returns><see langword="true"/> when expired.</returns>
@@ -63,6 +71,15 @@ public sealed record AuthSession
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scope);
         return Scopes.Contains(scope);
+    }
+
+    /// <summary>Whether the session holds a role.</summary>
+    /// <param name="role">Role to check.</param>
+    /// <returns><see langword="true"/> when held.</returns>
+    public bool HasRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        return Roles.Contains(role);
     }
 
     /// <summary>Classifies the session state at a point in time.</summary>

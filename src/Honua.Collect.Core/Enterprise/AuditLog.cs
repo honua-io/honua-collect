@@ -1,7 +1,3 @@
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
-
 namespace Honua.Collect.Core.Enterprise;
 
 /// <summary>Auditable actions recorded on the device (BACKLOG E3).</summary>
@@ -33,6 +29,21 @@ public enum AuditAction
 
     /// <summary>A user signed out.</summary>
     SignOut,
+
+    /// <summary>An auth session was refreshed.</summary>
+    SessionRefreshed,
+
+    /// <summary>An auth session expired and could not be recovered.</summary>
+    SessionExpired,
+
+    /// <summary>Local records were pushed to the server.</summary>
+    SyncPush,
+
+    /// <summary>Remote features were pulled to the device.</summary>
+    SyncPull,
+
+    /// <summary>An action was attempted without sufficient permission.</summary>
+    PermissionDenied,
 }
 
 /// <summary>A single audited action.</summary>
@@ -73,9 +84,13 @@ public sealed class AuditLog
     {
         ArgumentNullException.ThrowIfNull(auditEvent);
 
+        // Defence in depth: scrub any secret that slipped into the detail string
+        // before it is hashed into the durable, tamper-evident chain.
+        auditEvent = auditEvent with { Details = SecretScrubber.Scrub(auditEvent.Details) };
+
         var sequence = _entries.Count;
         var previousHash = HeadHash;
-        var hash = ComputeHash(sequence, auditEvent, previousHash);
+        var hash = AuditTrail.ComputeHash(sequence, auditEvent, previousHash);
         var entry = new AuditEntry(sequence, auditEvent, previousHash, hash);
         _entries.Add(entry);
         return entry;
@@ -106,7 +121,7 @@ public sealed class AuditLog
                 return false;
             }
 
-            if (ComputeHash(entry.Sequence, entry.Event, entry.PreviousHash) != entry.Hash)
+            if (AuditTrail.ComputeHash(entry.Sequence, entry.Event, entry.PreviousHash) != entry.Hash)
             {
                 return false;
             }
@@ -115,21 +130,5 @@ public sealed class AuditLog
         }
 
         return true;
-    }
-
-    private static string ComputeHash(long sequence, AuditEvent e, string previousHash)
-    {
-        var canonical = string.Join(
-            '',
-            sequence.ToString(CultureInfo.InvariantCulture),
-            previousHash,
-            e.TimestampUtc.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
-            e.UserId,
-            e.Action.ToString(),
-            e.RecordId ?? string.Empty,
-            e.Details ?? string.Empty);
-
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-        return Convert.ToHexStringLower(bytes);
     }
 }
