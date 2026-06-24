@@ -67,6 +67,87 @@ public sealed class RecordReportRenderer
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Renders a record to Markdown, optionally folding in an AI-drafted narrative
+    /// section (epic #39) when the template opts in and the narrator supplies one.
+    /// With the shipped <see cref="NullReportNarrator"/> this is identical to
+    /// <see cref="RenderMarkdown(FormDefinition, FieldRecord, ReportTemplate?)"/>.
+    /// </summary>
+    /// <param name="form">Form definition.</param>
+    /// <param name="record">Record to render.</param>
+    /// <param name="narrator">AI narrative provider; the no-op default returns nothing.</param>
+    /// <param name="template">Report template, or the default when null.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The Markdown report.</returns>
+    public async Task<string> RenderMarkdownAsync(
+        FormDefinition form,
+        FieldRecord record,
+        IReportNarrator narrator,
+        ReportTemplate? template = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(narrator);
+
+        var tpl = template ?? ReportTemplate.Default;
+        var body = RenderMarkdown(form, record, tpl);
+
+        if (!tpl.IncludeNarrative)
+        {
+            return body;
+        }
+
+        var narrative = await narrator.DraftAsync(form, record, ct).ConfigureAwait(false);
+        if (narrative is null)
+        {
+            return body;
+        }
+
+        return InsertNarrative(body, narrative, tpl);
+    }
+
+    private static string InsertNarrative(string body, ReportNarrative narrative, ReportTemplate tpl)
+    {
+        var section = new StringBuilder();
+        section.Append("## ").AppendLine(tpl.NarrativeHeading);
+
+        if (!string.IsNullOrWhiteSpace(narrative.Overview))
+        {
+            section.AppendLine(narrative.Overview.Trim()).AppendLine();
+        }
+
+        if (narrative.Findings.Count > 0)
+        {
+            section.AppendLine("### Findings");
+            foreach (var finding in narrative.Findings)
+            {
+                section.Append("- ").AppendLine(finding);
+            }
+
+            section.AppendLine();
+        }
+
+        if (narrative.RecommendedActions.Count > 0)
+        {
+            section.AppendLine("### Recommended actions");
+            foreach (var action in narrative.RecommendedActions)
+            {
+                section.Append("- ").AppendLine(action);
+            }
+
+            section.AppendLine();
+        }
+
+        // Place the narrative immediately after the title/metadata header, before the
+        // first form section heading, so the prose summary leads the report.
+        var firstSection = body.IndexOf("\n## ", StringComparison.Ordinal);
+        if (firstSection < 0)
+        {
+            return body.TrimEnd() + "\n\n" + section;
+        }
+
+        return string.Concat(body.AsSpan(0, firstSection + 1), section.ToString(), body.AsSpan(firstSection + 1));
+    }
+
     private void RenderSection(StringBuilder builder, FormSection section, FieldRecord record, ReportTemplate tpl)
     {
         builder.Append("## ").AppendLine(section.Label);
