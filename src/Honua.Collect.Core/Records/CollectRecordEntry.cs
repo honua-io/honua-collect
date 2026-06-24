@@ -45,6 +45,24 @@ public sealed class CollectRecordEntry
     public string? RemoteId { get; private set; }
 
     /// <summary>
+    /// The edit-history version this entry is currently on. Starts at zero on
+    /// capture and increments by one on every committed edit recorded through
+    /// <see cref="RecordEditHistory"/>; persisted so the monotonic version sequence
+    /// survives restarts. Used to detect the next version number to append and to
+    /// keep the change log tamper-evident (BACKLOG #38).
+    /// </summary>
+    public int Version { get; private set; }
+
+    /// <summary>
+    /// Whether the next upload of this record must be sent as an <em>update</em>
+    /// against an existing server record (keyed by <see cref="RemoteId"/>) rather
+    /// than a fresh insert. True only for a re-edited, previously-synced record
+    /// (<see cref="RecordSyncState.PendingUpdate"/>) that still carries its
+    /// <see cref="RemoteId"/>.
+    /// </summary>
+    public bool IsServerUpdate => SyncState == RecordSyncState.PendingUpdate && RemoteId is not null;
+
+    /// <summary>
     /// The mailbox this record currently belongs to, derived from its review
     /// status and transport state.
     /// </summary>
@@ -74,6 +92,54 @@ public sealed class CollectRecordEntry
 
         SyncState = RecordSyncState.Pending;
         LastError = null;
+    }
+
+    /// <summary>
+    /// Re-opens an already-<see cref="RecordSyncState.Synced"/> record for editing
+    /// (BACKLOG #38: post-sync editability). The record returns to a pending state
+    /// — <see cref="RecordSyncState.PendingUpdate"/> — while <em>preserving</em> its
+    /// <see cref="RemoteId"/> and <see cref="LastSyncedUtc"/>, so the next upload is
+    /// sent as an update against the existing server record (no duplicate insert).
+    /// Editing the <see cref="Record"/> values in place keeps the same
+    /// <see cref="Sdk.Field.Records.FieldRecord.RecordId"/>, so the record store
+    /// upserts the one row rather than creating a second.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the record has never synced (no <see cref="RemoteId"/>); only a
+    /// confirmed server record can be re-edited as an update. Records not yet sent
+    /// should simply be edited and re-queued with <see cref="MarkPending"/>.
+    /// </exception>
+    public void MarkEditedAfterSync()
+    {
+        if (SyncState is not (RecordSyncState.Synced or RecordSyncState.PendingUpdate))
+        {
+            throw new InvalidOperationException(
+                "Only a synced record can be re-edited as a server update. " +
+                "Records not yet sent should be re-queued with MarkPending().");
+        }
+
+        if (RemoteId is null)
+        {
+            throw new InvalidOperationException(
+                "A synced record without a server id cannot be re-edited as an update.");
+        }
+
+        // RemoteId and LastSyncedUtc are deliberately preserved so the upload is
+        // keyed to the existing server record.
+        SyncState = RecordSyncState.PendingUpdate;
+        LastError = null;
+    }
+
+    /// <summary>
+    /// Sets the current edit-history version. Used by the edit-history seam when an
+    /// edit is committed, and by the store when rehydrating a persisted entry, so
+    /// the monotonic version counter is restored exactly.
+    /// </summary>
+    /// <param name="version">The new (non-negative) version number.</param>
+    public void SetVersion(int version)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(version);
+        Version = version;
     }
 
     /// <summary>Marks the record as currently uploading.</summary>

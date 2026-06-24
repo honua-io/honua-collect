@@ -36,7 +36,8 @@ public static class RecordBoxClassifier
         }
 
         // Finished locally but not yet confirmed on the server -> Outbox
-        // (covers Pending, Uploading, Failed, and not-yet-queued Local records).
+        // (covers Pending, Uploading, Failed, not-yet-queued Local records, and
+        // PendingUpdate — a synced record re-edited offline awaiting an update).
         return RecordBox.Outbox;
     }
 }

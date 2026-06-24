@@ -64,11 +64,11 @@ public sealed class SqliteRecordStore : IRecordStore
             INSERT INTO {TableName}
                 (record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                  created_utc, submitted_utc, completed_utc, values_json,
-                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc)
+                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version)
             VALUES
                 ($record_id, $form_id, $status, $assigned_user_id, $lat, $lon, $accuracy,
                  $created_utc, $submitted_utc, $completed_utc, $values_json,
-                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc)
+                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version)
             ON CONFLICT(record_id) DO UPDATE SET
                 form_id = excluded.form_id,
                 status = excluded.status,
@@ -84,7 +84,8 @@ public sealed class SqliteRecordStore : IRecordStore
                 remote_id = excluded.remote_id,
                 last_error = excluded.last_error,
                 failed_attempts = excluded.failed_attempts,
-                last_synced_utc = excluded.last_synced_utc;
+                last_synced_utc = excluded.last_synced_utc,
+                version = excluded.version;
             """;
 
         var record = entry.Record;
@@ -106,6 +107,7 @@ public sealed class SqliteRecordStore : IRecordStore
         command.Parameters.AddWithValue("$last_error", (object?)entry.LastError ?? DBNull.Value);
         command.Parameters.AddWithValue("$failed_attempts", entry.FailedAttempts);
         command.Parameters.AddWithValue("$last_synced_utc", ToStorage(entry.LastSyncedUtc));
+        command.Parameters.AddWithValue("$version", entry.Version);
 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
@@ -118,7 +120,7 @@ public sealed class SqliteRecordStore : IRecordStore
         command.CommandText = $"""
             SELECT record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                    created_utc, submitted_utc, completed_utc, values_json,
-                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc
+                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version
             FROM {TableName};
             """;
 
@@ -179,8 +181,11 @@ public sealed class SqliteRecordStore : IRecordStore
         var lastError = reader.IsDBNull(13) ? null : reader.GetString(13);
         var failedAttempts = reader.GetInt32(14);
         var lastSyncedUtc = FromStorage(reader, 15);
+        var version = reader.IsDBNull(16) ? 0 : reader.GetInt32(16);
 
-        return Rehydrate(record, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc);
+        var entry = Rehydrate(record, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc);
+        entry.SetVersion(version);
+        return entry;
     }
 
     /// <summary>
@@ -214,6 +219,14 @@ public sealed class SqliteRecordStore : IRecordStore
 
             case RecordSyncState.Synced:
                 entry.MarkSynced(remoteId, lastSyncedUtc);
+                break;
+
+            case RecordSyncState.PendingUpdate:
+                // A synced record re-edited offline: restore the synced anchor
+                // (server id + synced timestamp) and then re-open it as an update,
+                // which preserves both while returning to a pending state.
+                entry.MarkSynced(remoteId, lastSyncedUtc);
+                entry.MarkEditedAfterSync();
                 break;
 
             case RecordSyncState.Failed:
@@ -332,16 +345,42 @@ public sealed class SqliteRecordStore : IRecordStore
                     remote_id TEXT NULL,
                     last_error TEXT NULL,
                     failed_attempts INTEGER NOT NULL,
-                    last_synced_utc TEXT NULL
+                    last_synced_utc TEXT NULL,
+                    version INTEGER NOT NULL DEFAULT 0
                 );
                 """;
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await EnsureVersionColumnAsync(connection, ct).ConfigureAwait(false);
             _schemaReady = true;
         }
         finally
         {
             _schemaGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Adds the <c>version</c> column to a database created before edit-history
+    /// tracking existed (BACKLOG #38). The <c>CREATE TABLE IF NOT EXISTS</c> above
+    /// only applies to brand-new databases, so an existing field device's table is
+    /// migrated here. SQLite has no <c>ADD COLUMN IF NOT EXISTS</c>, so the column
+    /// is probed first and added only when missing.
+    /// </summary>
+    private static async Task EnsureVersionColumnAsync(SqliteConnection connection, CancellationToken ct)
+    {
+        await using (var probe = connection.CreateCommand())
+        {
+            probe.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{TableName}') WHERE name = 'version';";
+            var result = await probe.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            if (result is not null and not DBNull && Convert.ToInt32(result) > 0)
+            {
+                return;
+            }
+        }
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {TableName} ADD COLUMN version INTEGER NOT NULL DEFAULT 0;";
+        await alter.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static object ToStorage(DateTimeOffset value)
