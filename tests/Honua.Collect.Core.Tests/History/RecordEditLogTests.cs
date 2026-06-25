@@ -63,10 +63,13 @@ public sealed class RecordEditLogTests : IDisposable
         Assert.Equal(3, change.OldValue);
         Assert.Equal(4, change.NewValue);
 
-        // The durable copy renders values to stable text.
+        // The durable copy PRESERVES the value's type rather than degrading it to
+        // text: an integral 3/4 round-trips as a long (never the string "3"), so a
+        // later revert restores the original typed value and re-diffing sees no
+        // spurious type-flip change.
         var persisted = Assert.Single(await _store.GetHistoryAsync("r1"));
-        Assert.Equal("3", persisted.Changes[0].OldValue);
-        Assert.Equal("4", persisted.Changes[0].NewValue);
+        Assert.Equal(3L, persisted.Changes[0].OldValue);
+        Assert.Equal(4L, persisted.Changes[0].NewValue);
     }
 
     [Fact]

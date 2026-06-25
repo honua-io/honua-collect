@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Text.Json;
+using Honua.Collect.Core.Field;
 
 namespace Honua.Collect.Core.History;
 
@@ -74,13 +76,39 @@ public sealed class RecordEditHistory
     /// <param name="toSequence">The edit sequence to revert to (inclusive); -1 for the original.</param>
     /// <returns>The reconstructed values (a new map; <paramref name="current"/> is not mutated).</returns>
     public IReadOnlyDictionary<string, object?> RevertTo(IReadOnlyDictionary<string, object?> current, long toSequence)
+        => ReverseApplyAfter(current, _edits, toSequence);
+
+    /// <summary>
+    /// Reconstructs the values as they were immediately after the edit with sequence
+    /// <paramref name="toSequence"/> by reverse-applying every later edit in
+    /// <paramref name="edits"/> to <paramref name="current"/>. This is the single,
+    /// shared reverse-apply both the in-memory history and the durable
+    /// <see cref="RecordEditLog"/>-backed revert path use, so neither hand-rolls its
+    /// own (drift-prone) reverse loop. Edits are located by their
+    /// <see cref="RecordEdit.Sequence"/>, not by list position, so a non-dense window
+    /// (only the recent edits loaded) still reverts correctly. Pass -1 to revert all
+    /// the way to the original.
+    /// </summary>
+    /// <param name="current">The record's current values.</param>
+    /// <param name="edits">The edits to reverse, in any order (sequence is authoritative).</param>
+    /// <param name="toSequence">The edit sequence to revert to (inclusive); -1 for the original.</param>
+    /// <returns>The reconstructed values (a new map; <paramref name="current"/> is not mutated).</returns>
+    public static IReadOnlyDictionary<string, object?> ReverseApplyAfter(
+        IReadOnlyDictionary<string, object?> current,
+        IReadOnlyList<RecordEdit> edits,
+        long toSequence)
     {
         ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(edits);
 
         var values = new Dictionary<string, object?>(current);
-        for (var i = _edits.Count - 1; i > toSequence; i--)
+
+        // Reverse-apply later edits highest-sequence-first so each edit's OldValue
+        // overwrites the NewValue a more-recent edit may have left. Order by sequence
+        // rather than trusting list order or assuming a dense [0..n) window.
+        foreach (var edit in edits.Where(e => e.Sequence > toSequence).OrderByDescending(e => e.Sequence))
         {
-            ReverseApply(values, _edits[i]);
+            ReverseApply(values, edit);
         }
 
         return values;
@@ -150,14 +178,34 @@ public sealed class RecordEditHistory
             return leftMissing && rightMissing;
         }
 
-        if (left is string || right is string)
+        // Unwrap scalar JsonElements (how the SQLite record/history stores rehydrate
+        // values) to their natural CLR shape so a live JsonElement compares equal to
+        // an in-memory long/double/bool/string of the same value — e.g. after a
+        // revert restores a typed value, the next diff sees no spurious change.
+        left = Unwrap(left);
+        right = Unwrap(right);
+
+        if (left is string ls && right is string rs)
         {
-            return Equals(left, right);
+            return string.Equals(ls, rs, StringComparison.Ordinal);
         }
 
-        if (left is IEnumerable leftSeq && right is IEnumerable rightSeq)
+        // Numbers compare by value across representations (5L == 5d == JSON 5).
+        if (FieldValues.TryAsDouble(left, out var ld) && FieldValues.TryAsDouble(right, out var rd))
         {
-            return leftSeq.Cast<object?>().SequenceEqual(rightSeq.Cast<object?>());
+            return ld.Equals(rd);
+        }
+
+        if (left is bool lb && right is bool rb)
+        {
+            return lb == rb;
+        }
+
+        if (left is IEnumerable leftSeq and not string && right is IEnumerable rightSeq and not string)
+        {
+            return leftSeq.Cast<object?>()
+                .Select(Unwrap)
+                .SequenceEqual(rightSeq.Cast<object?>().Select(Unwrap), ValueEqualityComparer.Instance);
         }
 
         return Equals(left, right);
@@ -167,7 +215,44 @@ public sealed class RecordEditHistory
     {
         null => true,
         string s => s.Length == 0,
+        JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => true,
+        JsonElement { ValueKind: JsonValueKind.Array } a => !a.EnumerateArray().Any(),
+        JsonElement => false,
         IEnumerable e => !e.Cast<object?>().Any(),
         _ => false,
     };
+
+    // Scalar JsonElements (string/number/bool/null) become their natural CLR value so
+    // downstream equality and reverse-apply don't have to special-case JSON wrappers.
+    // Arrays/objects are left as JsonElement and handled by the collection paths.
+    private static object? Unwrap(object? value) => value switch
+    {
+        JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+        JsonElement { ValueKind: JsonValueKind.String } e => e.GetString(),
+        JsonElement { ValueKind: JsonValueKind.True } => true,
+        JsonElement { ValueKind: JsonValueKind.False } => false,
+        JsonElement { ValueKind: JsonValueKind.Number } e => UnwrapNumber(e),
+        _ => value,
+    };
+
+    // Box to object per-branch: a `cond ? long : double` ternary unifies to double and
+    // would widen an integral value, so keep the branches separate.
+    private static object UnwrapNumber(JsonElement element)
+    {
+        if (element.TryGetInt64(out var l))
+        {
+            return l;
+        }
+
+        return element.GetDouble();
+    }
+
+    private sealed class ValueEqualityComparer : IEqualityComparer<object?>
+    {
+        public static readonly ValueEqualityComparer Instance = new();
+
+        public new bool Equals(object? x, object? y) => ValuesEqual(x, y);
+
+        public int GetHashCode(object? obj) => 0; // equality-only use (SequenceEqual)
+    }
 }
