@@ -8,11 +8,15 @@ namespace Honua.Collect.Core.History;
 /// captured records live in (BACKLOG #38 reuses the existing storage seam — no new
 /// database). Each <see cref="RecordEdit"/> is appended to a dedicated
 /// <c>record_edit_history</c> table keyed by <c>(record_id, sequence)</c>; the
-/// field-level <see cref="FieldChange"/>s are serialized to JSON with their values
-/// rendered to text, so the stored log is a stable snapshot independent of how the
-/// live record happens to be typed. The primary key plus the next-sequence check
-/// in <see cref="AppendAsync"/> keep the per-record sequence monotonic and gap-free,
-/// so the log is tamper-evident.
+/// field-level <see cref="FieldChange"/>s are serialized to JSON
+/// <em>preserving each value's type</em> (a long stays a number, a bool stays a
+/// boolean, a list stays an array) so a revert restores the original typed value
+/// and a follow-up diff sees no spurious type-flip change. Values round-trip back
+/// as <see cref="System.Text.Json.JsonElement"/>s — exactly as
+/// <see cref="Storage.SqliteRecordStore"/> rehydrates live record values — so the
+/// history and the live record compare like-for-like. The primary key plus the
+/// next-sequence check in <see cref="AppendAsync"/> keep the per-record sequence
+/// monotonic and gap-free, so the log is tamper-evident.
 /// </summary>
 public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
 {
@@ -150,13 +154,17 @@ public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
         return new RecordEdit(sequence, timestamp, editor, changes, afterSync, note);
     }
 
-    // FieldChange.OldValue/NewValue are loosely-typed object?; persist them as their
-    // stable text form so the stored log doesn't depend on the original CLR type and
-    // round-trips deterministically.
+    // FieldChange.OldValue/NewValue are loosely-typed object?; persist them as
+    // type-preserving JSON (number stays a number, bool a boolean, list an array)
+    // rather than flattening to text. Rendering to text would degrade a typed value
+    // — e.g. 5L would come back as the string "5" — so a revert would write the
+    // wrong CLR type over the live field and a follow-up diff would report a
+    // spurious type-flip change. Storing the value's JSON shape lets it round-trip
+    // back as a JsonElement, exactly as the live record store rehydrates values.
     private static string SerializeChanges(IReadOnlyList<FieldChange> changes)
     {
         var rows = changes
-            .Select(c => new PersistedChange(c.FieldId, Render(c.OldValue), Render(c.NewValue)))
+            .Select(c => new PersistedChange(c.FieldId, ToJson(c.OldValue), ToJson(c.NewValue)))
             .ToList();
         return JsonSerializer.Serialize(rows, ChangesJsonOptions);
     }
@@ -165,11 +173,45 @@ public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
     {
         var rows = JsonSerializer.Deserialize<List<PersistedChange>>(json, ChangesJsonOptions)
             ?? new List<PersistedChange>();
-        return rows.Select(r => new FieldChange(r.FieldId, r.Old, r.New)).ToList();
+        return rows.Select(r => new FieldChange(r.FieldId, FromJson(r.Old), FromJson(r.New))).ToList();
     }
 
-    private static string? Render(object? value)
-        => value is null ? null : Field.FieldValues.ToText(value);
+    // A missing element is persisted as JSON null; on read it becomes a real null so
+    // IsMissing()/ReverseApply treat the field as cleared, matching the in-memory path.
+    private static JsonElement ToJson(object? value)
+        => JsonSerializer.SerializeToElement(value, ChangesJsonOptions);
+
+    // Read JSON scalars back as their natural CLR type (string/long/double/bool) so
+    // a reverted value is the same shape the live form/store would hold — a long
+    // stays a long, not the string "5". Arrays/objects stay as JsonElement; the
+    // shared reverse-apply / diff treat them by contents, and the live store also
+    // rehydrates collections as JsonElement, so they compare like-for-like.
+    private static object? FromJson(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Null or JsonValueKind.Undefined => null,
+        JsonValueKind.String => element.GetString(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Number => ReadNumber(element),
+        _ => element, // arrays / objects: keep structured, compared by contents
+    };
+
+    // An integral JSON number (no decimal point or exponent) is read back as a long
+    // so a stored 5L stays a long, not a double. We key off the raw text rather than
+    // JsonElement.TryGetInt64 because a JsonElement materialized via deserialization
+    // doesn't always honor TryGetInt64 for an integral literal; the raw form is
+    // unambiguous.
+    private static object ReadNumber(JsonElement element)
+    {
+        // NB: box each branch to object explicitly. A `cond ? long : double` ternary
+        // unifies to double, which would silently widen an integral 5L to 5d.
+        if (element.TryGetInt64(out var l))
+        {
+            return l;
+        }
+
+        return element.GetDouble();
+    }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
     {
@@ -256,5 +298,5 @@ public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
     private static bool LooksLikeConnectionString(string value)
         => value.Contains('=', StringComparison.Ordinal);
 
-    private sealed record PersistedChange(string FieldId, string? Old, string? New);
+    private sealed record PersistedChange(string FieldId, JsonElement Old, JsonElement New);
 }

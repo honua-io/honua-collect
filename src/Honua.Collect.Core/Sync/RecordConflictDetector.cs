@@ -71,7 +71,12 @@ public static class RecordConflictDetector
         return FieldValues.AreEqual(left, right);
     }
 
-    private static bool IsMissing(object? value) => value switch
+    /// <summary>
+    /// Whether a value counts as "missing" for conflict/merge purposes: null, blank
+    /// text, JSON null, or an empty collection. Shared with the CRDT merge
+    /// (<see cref="CrdtRecordMerge"/>) so both decide "set vs cleared" identically.
+    /// </summary>
+    internal static bool IsMissing(object? value) => value switch
     {
         null => true,
         string text => string.IsNullOrWhiteSpace(text),
