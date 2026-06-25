@@ -1,4 +1,5 @@
 using Honua.Collect.Core.Field.Forms.Cascade;
+using Honua.Collect.Core.Field.Related;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Forms.Expressions;
 using Honua.Sdk.Field.Records;
@@ -35,14 +36,24 @@ public sealed class FormSession : ICaptureHost
     private readonly List<FieldState> _ordered = [];
     private readonly Dictionary<string, RepeatGroup> _groups = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ChoiceCascadeRule> _cascades = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RecordLinkBehavior> _linkBehaviors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RelatedRecords> _related = new(StringComparer.OrdinalIgnoreCase);
     private readonly FormDefinition _scalarForm;
 
     private FormSession(
         FormDefinition form,
         FieldRecord record,
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
-        IEnumerable<ChoiceCascadeRule>? cascadeRules = null)
+        IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
+        Localization.FormLocalization? localization = null,
+        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null)
     {
+        // When a localization service is supplied (BACKLOG F2), the runtime binds to
+        // the form localized to the active language. Field ids, types, validation,
+        // and logic are untouched, so the localized form captures identically.
+        Localization = localization;
+        form = localization?.Localize(form) ?? form;
+
         Form = form;
         Record = record;
 
@@ -51,6 +62,14 @@ public sealed class FormSession : ICaptureHost
             foreach (var rule in cascadeRules)
             {
                 _cascades[rule.FieldId] = rule;
+            }
+        }
+
+        if (linkBehaviors is not null)
+        {
+            foreach (var behavior in linkBehaviors)
+            {
+                _linkBehaviors[behavior.Key] = behavior.Value;
             }
         }
 
@@ -81,8 +100,22 @@ public sealed class FormSession : ICaptureHost
         RecomputeScalar();
     }
 
-    /// <summary>The form definition being captured.</summary>
+    /// <summary>
+    /// The form definition being captured. When the session was opened with a
+    /// <see cref="Localization"/> service, this is the form localized to its active
+    /// language (BACKLOG F2).
+    /// </summary>
     public FormDefinition Form { get; }
+
+    /// <summary>
+    /// The localization service backing this session, or <see langword="null"/> for a
+    /// single-language form (BACKLOG F2). <see cref="Localization.FormLocalization.ActiveLanguage"/>
+    /// is the language the session's <see cref="Form"/> text is presented in.
+    /// </summary>
+    public Localization.FormLocalization? Localization { get; }
+
+    /// <summary>The language the form text is currently presented in (BACKLOG F2).</summary>
+    public string? ActiveLanguage => Localization?.ActiveLanguage;
 
     /// <summary>
     /// The underlying SDK record. Its <see cref="FieldRecord.Values"/> and
@@ -114,6 +147,42 @@ public sealed class FormSession : ICaptureHost
             : throw new KeyNotFoundException($"Form '{Form.FormId}' has no repeatable section '{sectionId}'.");
     }
 
+    /// <summary>Field ids of the form's record-link fields (BACKLOG F4), in form order.</summary>
+    public IEnumerable<string> RelatedFields => _ordered
+        .Where(s => s.Field.Type == FormFieldType.RecordLink)
+        .Select(s => s.FieldId);
+
+    /// <summary>
+    /// Gets the one-to-many related-records model for a record-link field (BACKLOG F4),
+    /// the collection a related-records VM binds to. The same model is returned across
+    /// calls so links added through it stay in sync with the session's record. The
+    /// field's referential-integrity policy comes from the <c>linkBehaviors</c> map the
+    /// session was opened with (default <see cref="RecordLinkBehavior.Cascade"/>).
+    /// </summary>
+    /// <param name="fieldId">A <see cref="FormFieldType.RecordLink"/> field id.</param>
+    /// <returns>The related-records model bound to the session's record.</returns>
+    public RelatedRecords GetRelated(string fieldId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldId);
+
+        if (_related.TryGetValue(fieldId, out var existing))
+        {
+            return existing;
+        }
+
+        var state = GetField(fieldId);
+        if (state.Field.Type != FormFieldType.RecordLink)
+        {
+            throw new ArgumentException(
+                $"Field '{fieldId}' is {state.Field.Type}, not a RecordLink field.", nameof(fieldId));
+        }
+
+        var behavior = _linkBehaviors.TryGetValue(fieldId, out var b) ? b : RecordLinkBehavior.Cascade;
+        var related = new RelatedRecords(Record, state.Field, behavior);
+        _related[fieldId] = related;
+        return related;
+    }
+
     /// <summary>Opens a session over an existing record (for example, a saved draft).</summary>
     /// <param name="form">Form definition.</param>
     /// <param name="record">Existing record whose values seed the session.</param>
@@ -123,15 +192,27 @@ public sealed class FormSession : ICaptureHost
     /// these in package 1.1.0, so they are supplied here (BACKLOG F-depth).
     /// </param>
     /// <returns>A session bound to <paramref name="record"/>.</returns>
+    /// <param name="localization">
+    /// Optional multi-language service (BACKLOG F2). When supplied, the session
+    /// presents the form localized to its active language; field ids, types,
+    /// validation, and logic are unchanged.
+    /// </param>
+    /// <param name="linkBehaviors">
+    /// Optional referential-integrity policy per record-link field (BACKLOG F4),
+    /// keyed by field id. Surfaced through <see cref="GetRelated"/>; defaults to
+    /// <see cref="RecordLinkBehavior.Cascade"/> for any field not listed.
+    /// </param>
     public static FormSession Open(
         FormDefinition form,
         FieldRecord record,
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
-        IEnumerable<ChoiceCascadeRule>? cascadeRules = null)
+        IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
+        Localization.FormLocalization? localization = null,
+        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(record);
-        return new FormSession(form, record, repeatBounds, cascadeRules);
+        return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors);
     }
 
     /// <summary>Starts a session for a brand-new record.</summary>
@@ -161,6 +242,16 @@ public sealed class FormSession : ICaptureHost
     /// correct precedence. Applied after <paramref name="seedFrom"/>, so an
     /// explicit resolved default takes precedence over a copied previous value.
     /// </param>
+    /// <param name="localization">
+    /// Optional multi-language service (BACKLOG F2). When supplied, the session
+    /// presents the form localized to its active language; field ids, types,
+    /// validation, and logic are unchanged.
+    /// </param>
+    /// <param name="linkBehaviors">
+    /// Optional referential-integrity policy per record-link field (BACKLOG F4),
+    /// keyed by field id. Surfaced through <see cref="GetRelated"/>; defaults to
+    /// <see cref="RecordLinkBehavior.Cascade"/> for any field not listed.
+    /// </param>
     /// <returns>A session for a new draft record.</returns>
     public static FormSession CreateForNewRecord(
         FormDefinition form,
@@ -169,7 +260,9 @@ public sealed class FormSession : ICaptureHost
         IEnumerable<string>? seedFieldIds = null,
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
         IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
-        IReadOnlyDictionary<string, object?>? seedDefaults = null)
+        IReadOnlyDictionary<string, object?>? seedDefaults = null,
+        Localization.FormLocalization? localization = null,
+        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -186,7 +279,7 @@ public sealed class FormSession : ICaptureHost
             ApplyResolvedDefaults(form, record, seedDefaults);
         }
 
-        return new FormSession(form, record, repeatBounds, cascadeRules);
+        return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors);
     }
 
     /// <summary>Gets the live state for a field.</summary>
