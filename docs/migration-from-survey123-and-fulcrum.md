@@ -31,27 +31,59 @@ Practical path: export your Survey123 form as XLSForm, read the two sheets into
 call `Import`. Calculated fields and cascading selects are evaluated at runtime by
 `FormSession`, so they behave the same as in Survey123 once imported.
 
+#### From a published Survey123 / ArcGIS feature layer
+
+When the original XLSForm isn't on hand, import the **published feature-layer
+schema** instead — the JSON a FeatureServer layer's metadata endpoint returns:
+
+- `Honua.Collect.Core.Migration.Survey123LayerImporter.Import(layerSchemaJson, formId?)`
+  maps the layer's `fields` (Esri field types, `alias` → label, `nullable:false`
+  → required) into a `FormDefinition`.
+- A field carrying a **coded-value `domain`** becomes a single-choice field whose
+  choices are the coded values.
+- The layer's **geometry type** (`esriGeometryPoint` / `…Polyline` / `…Polygon`)
+  is surfaced as a leading `location` / geo-trace / geo-shape capture field.
+- Esri **system / editor-tracking columns** (`objectid`, `globalid`,
+  `created_*`, `last_edited_*`, `Shape_*`) and unsupported field types are dropped
+  and reported in `MigratedForm.Skipped`, so the import is auditable.
+
 ### From Fulcrum
 
 Fulcrum apps are not XLSForm, but their field model (text, choice, photo,
 signature, date, location, repeatable sections) maps cleanly onto the same
-`FormDefinition`. Re-express the app's fields as `survey`/`choices` rows (a
-one-time mechanical step) and import them with `XlsFormImporter`, or construct
-`FormDefinition` directly. The conditional-visibility and required rules carry
-over to `FormSession`.
+`FormDefinition`. Import the Fulcrum **app-schema export** directly:
+
+- `Honua.Collect.Core.Migration.FulcrumImporter.ImportForm(appSchemaJson, formId?)`
+  maps the app's `elements` (`TextField`, `ChoiceField`, `YesNoField`,
+  `PhotoField`, …) into a `FormDefinition`, carrying `choices`, `required`, and a
+  `location` field for the record position.
+- Nested **Sections / Repeatables** are flattened so their contained capture
+  fields survive; unknown element types are skipped and reported in
+  `MigratedForm.Skipped`.
+
+The conditional-visibility and required rules carry over to `FormSession`.
 
 ## Importing existing records
 
 Bring historical records in as `FieldRecord`s:
 
-- **Fulcrum** exports records as **CSV** and **GeoJSON**. Map each row/feature to a
-  `FieldRecord` (`RecordId`, `Values` keyed by field id, `Location` from the
-  geometry). Field ids should match the imported form's field ids so values land
-  in the right place.
+- **Fulcrum** exports records as **CSV** and **GeoJSON**, imported directly against
+  the form produced above:
+  - `FulcrumImporter.ImportGeoJsonRecords(form, geoJson)` maps each feature's point
+    `geometry` to the record `Location` and its `properties` to `Values` (filtered
+    to the form's fields; Fulcrum system columns like `fulcrum_id`/`_status` are
+    dropped).
+  - `FulcrumImporter.ImportCsvRecords(form, csv)` does the same from the CSV export,
+    reading the `latitude`/`longitude` columns into `Location`.
+  - Both return a `MigratedForm` whose `Records` are ready to persist, with any
+    malformed/geometry-less rows reported in `Skipped`.
 - **Survey123 / ArcGIS** feature layers are read over the GeoServices protocol
   Collect already speaks (`FeaturePullService`, `GeoServicesFeatureSync`) — the
   same wire format used to sync, so an existing FeatureServer layer can be pulled
-  in without an intermediate file.
+  in without an intermediate file. The round trip (query → decode → applyEdits
+  add/update/delete → attachment) is proven against a reference in-memory
+  FeatureServer in `GeoServicesRoundTripTests`, so interop is verified without a
+  live ArcGIS server.
 
 ## Exporting back out
 
