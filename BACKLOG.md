@@ -180,7 +180,7 @@ proven; these are device-sensor integrations.
 | # | Item | Status | Tier | Owner |
 |---|---|---|---|---|
 | S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | Pro | collect |
-| S2 | Selective / partial sync (per-layer, per-area opt-in) | 🧱 | Pro | collect |
+| S2 | Selective / partial sync (per-layer; spatial extent in layer CRS, attribute where, date/age, explicit selection) | 🧱✅ | Pro | collect |
 | S3 | Sync status center / per-record sync state UX | 🧱 | Community | collect |
 | S4 | Outbox / Sent / Drafts boxes (Survey123 parity) | 🧱 | Community | collect |
 
