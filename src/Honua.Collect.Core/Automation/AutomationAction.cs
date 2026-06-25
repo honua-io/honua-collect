@@ -1,3 +1,5 @@
+using Honua.Collect.Core.Automation.Http;
+
 namespace Honua.Collect.Core.Automation;
 
 /// <summary>Base type for the actions an automation rule can perform.</summary>
@@ -22,9 +24,56 @@ public sealed record InvalidateAction(string Message) : AutomationAction;
 /// "HTTP request, queued offline"). The runtime records it; it is replayed by the
 /// sync layer, so the automation stays fully offline-capable.
 /// </summary>
+/// <remarks>
+/// This is the lightweight, result-only form — the runtime simply accumulates a
+/// <see cref="QueuedRequest"/> for the host to durably enqueue and replay. For the
+/// full durable-outbox path (method/headers, idempotency key, retry/backoff, status
+/// tracking) use <see cref="HttpRequestAction"/>, which carries the richer
+/// <see cref="HttpOutboxRequest"/> the <see cref="Http.HttpRequestOutbox"/> drains.
+/// </remarks>
 /// <param name="Url">Destination URL.</param>
 /// <param name="Body">Optional request body.</param>
 public sealed record QueueRequestAction(string Url, string? Body = null) : AutomationAction;
+
+/// <summary>
+/// Performs an HTTP request as an automation step (BACKLOG #44 — "HTTP request,
+/// queued offline"). The runtime never touches the network itself: it records a
+/// <see cref="HttpOutboxRequest"/> in <see cref="AutomationResult.HttpRequests"/>,
+/// which the host enqueues into the durable <see cref="Http.HttpRequestOutbox"/>.
+/// Online, the outbox sends it through the wired transport; offline, the request
+/// stays queued and replays on the next connectivity drain — with an idempotency
+/// key so a replay is never a duplicate, plus retry/backoff and status tracking.
+/// </summary>
+/// <param name="Request">The request to queue (method, url, headers, body, idempotency key).</param>
+public sealed record HttpRequestAction(HttpOutboxRequest Request) : AutomationAction
+{
+    /// <summary>Convenience: a POST with a JSON body and an explicit idempotency key.</summary>
+    /// <param name="url">Destination URL.</param>
+    /// <param name="body">Request body (JSON).</param>
+    /// <param name="idempotencyKey">Stable key so replays de-duplicate at the server.</param>
+    /// <returns>The action.</returns>
+    public static HttpRequestAction Post(string url, string? body, string idempotencyKey)
+        => new(new HttpOutboxRequest
+        {
+            Method = "POST",
+            Url = url,
+            Body = body,
+            IdempotencyKey = idempotencyKey,
+        });
+}
+
+/// <summary>
+/// Opens a URL (a web page, a deep link, a <c>tel:</c>/<c>mailto:</c>/<c>geo:</c>
+/// scheme) as an automation step (BACKLOG #44 — "open URL"). This is a
+/// platform-neutral <em>intent</em> only: the runtime records an
+/// <see cref="OpenUrlIntent"/> in <see cref="AutomationResult.OpenUrlIntents"/> and
+/// the host (MAUI <c>Launcher</c>/<c>Browser</c>) performs the actual launch, so
+/// Core stays offline- and platform-agnostic and is fully testable.
+/// </summary>
+/// <param name="Url">The URL or scheme to open.</param>
+/// <param name="Target">Where to open it (in-app browser, external, or auto).</param>
+public sealed record OpenUrlAction(string Url, OpenUrlTarget Target = OpenUrlTarget.Default)
+    : AutomationAction;
 
 /// <summary>
 /// Sets a field to the result of an SDK form-expression (BACKLOG #44 — "compute").

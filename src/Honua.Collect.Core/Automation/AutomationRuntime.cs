@@ -159,6 +159,12 @@ public sealed class AutomationRuntime
             case QueueRequestAction request:
                 acc.Queued.Add(new QueuedRequest(request.Url, request.Body, ruleName));
                 break;
+            case HttpRequestAction http:
+                acc.HttpRequests.Add(new QueuedHttpRequest(http.Request, ruleName));
+                break;
+            case OpenUrlAction openUrl:
+                acc.OpenUrlIntents.Add(new OpenUrlIntent(openUrl.Url, openUrl.Target, ruleName));
+                break;
             case EnqueueNotificationAction note:
                 acc.Notifications.Add(new QueuedNotification(note.Title, note.Body, ruleName));
                 break;
@@ -216,6 +222,10 @@ public sealed class AutomationRuntime
 
         public List<QueuedRequest> Queued { get; } = [];
 
+        public List<QueuedHttpRequest> HttpRequests { get; } = [];
+
+        public List<OpenUrlIntent> OpenUrlIntents { get; } = [];
+
         public List<QueuedNotification> Notifications { get; } = [];
 
         public List<ScheduledFollowUp> FollowUps { get; } = [];
@@ -258,6 +268,8 @@ public sealed class AutomationRuntime
             Alerts = Alerts,
             ValidationErrors = Errors,
             QueuedRequests = Queued,
+            HttpRequests = HttpRequests,
+            OpenUrlIntents = OpenUrlIntents,
             Notifications = Notifications,
             FollowUps = FollowUps,
             Tags = _tags,
