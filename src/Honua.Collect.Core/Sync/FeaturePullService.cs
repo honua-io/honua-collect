@@ -96,7 +96,8 @@ public sealed class FeaturePullService
     public PullMergeResult Merge(
         FormDefinition form,
         IReadOnlyList<PulledRecord> pulled,
-        IReadOnlyDictionary<long, FieldRecord> localByObjectId)
+        IReadOnlyDictionary<long, FieldRecord> localByObjectId,
+        SelectiveSyncFilter? filter = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(pulled);
@@ -106,6 +107,15 @@ public sealed class FeaturePullService
 
         foreach (var feature in pulled)
         {
+            // Selective sync (BACKLOG S2): a partial pull only merges features that
+            // match the layer's scope. A non-matching feature is skipped entirely —
+            // it is never classified New (so it is not inserted) and never diffed
+            // against a local record (so any local record stays untouched).
+            if (filter is not null && !filter.IncludesPulled(feature))
+            {
+                continue;
+            }
+
             if (!localByObjectId.TryGetValue(feature.ObjectId, out var local))
             {
                 classifications.Add(new PullClassification(
