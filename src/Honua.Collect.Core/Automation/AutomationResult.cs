@@ -1,3 +1,5 @@
+using Honua.Collect.Core.Automation.Http;
+
 namespace Honua.Collect.Core.Automation;
 
 /// <summary>An alert surfaced by an automation run.</summary>
@@ -16,6 +18,16 @@ public sealed record AutomationValidationError(string Message, string RuleName);
 /// <param name="Body">Optional request body.</param>
 /// <param name="RuleName">The rule that queued it.</param>
 public sealed record QueuedRequest(string Url, string? Body, string RuleName);
+
+/// <summary>
+/// A richer HTTP request queued by a <see cref="HttpRequestAction"/> for durable
+/// offline replay through the <see cref="HttpRequestOutbox"/> — carries the full
+/// request (method/headers/body/idempotency key), unlike the lightweight
+/// <see cref="QueuedRequest"/>.
+/// </summary>
+/// <param name="Request">The request to enqueue.</param>
+/// <param name="RuleName">The rule that queued it.</param>
+public sealed record QueuedHttpRequest(HttpOutboxRequest Request, string RuleName);
 
 /// <summary>A notification enqueued offline by an automation run, for delivery by the host.</summary>
 /// <param name="Title">Notification title.</param>
@@ -52,8 +64,14 @@ public sealed record AutomationResult
     /// <summary>Validation errors raised (non-empty means save should be blocked).</summary>
     public IReadOnlyList<AutomationValidationError> ValidationErrors { get; init; } = [];
 
-    /// <summary>Requests queued for offline replay.</summary>
+    /// <summary>Lightweight requests queued for offline replay (url/body only).</summary>
     public IReadOnlyList<QueuedRequest> QueuedRequests { get; init; } = [];
+
+    /// <summary>Durable HTTP requests queued for the outbox (method/headers/body/idempotency key).</summary>
+    public IReadOnlyList<QueuedHttpRequest> HttpRequests { get; init; } = [];
+
+    /// <summary>Platform-neutral open-URL intents the host should launch.</summary>
+    public IReadOnlyList<OpenUrlIntent> OpenUrlIntents { get; init; } = [];
 
     /// <summary>Notifications enqueued for offline delivery.</summary>
     public IReadOnlyList<QueuedNotification> Notifications { get; init; } = [];
