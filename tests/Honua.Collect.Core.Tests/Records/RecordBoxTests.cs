@@ -164,6 +164,29 @@ public class RecordBoxTests
     }
 
     [Fact]
+    public void Resolving_a_conflict_on_a_synced_record_requeues_as_an_update_not_a_duplicate_add()
+    {
+        // The record already exists on the server (it carries a RemoteId), so the
+        // resolved version must upload as an UPDATE against that object id. If it
+        // re-queued as a plain Pending add it would duplicate the server feature.
+        var entry = new CollectRecordEntry(NewRecord(RecordStatus.Submitted));
+        entry.MarkPending();
+        entry.MarkSynced("srv-77");
+        var conflict = BuildConflict("Local", "Server");
+        entry.MarkConflicted(conflict);
+
+        var merged = conflict.ResolveAll(ConflictResolution.KeepLocal);
+        entry.ApplyResolution(merged);
+
+        Assert.Equal(RecordSyncState.PendingUpdate, entry.SyncState);
+        Assert.True(entry.IsServerUpdate);          // routes to UpdateAsync, not SubmitAsync
+        Assert.Equal("srv-77", entry.RemoteId);     // server id preserved
+        Assert.Equal(RecordBox.Outbox, entry.Box);
+        Assert.True(entry.IsPendingUpload);
+        Assert.Null(entry.Conflict);
+    }
+
+    [Fact]
     public void Applying_a_resolution_to_a_non_conflicted_record_throws()
     {
         var entry = new CollectRecordEntry(NewRecord(RecordStatus.Submitted));

@@ -335,6 +335,58 @@ public class GeoServicesFeatureSyncTests
         Assert.Equal(4, handler.Calls);
     }
 
+    // ---- Non-idempotent add retry safety (duplicate prevention) --------------
+
+    private const string OkAdd = """{"addResults":[{"objectId":5,"success":true}]}""";
+
+    [Fact]
+    public async Task SubmitAsync_does_not_retry_an_add_after_a_transport_failure()
+    {
+        // A transport failure leaves no server response: the add may already have
+        // committed. Auto-retrying would risk a duplicate feature, so the add must
+        // fail fast (one attempt) rather than re-POST. (Contrast: UpdateAsync, an
+        // idempotent edit, DOES retry the same transport failure.)
+        var handler = new FlakyHandler(new HttpRequestException("connection reset"), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).SubmitAsync(Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Equal(1, handler.Calls); // never retried -> cannot duplicate
+        Assert.Contains("connection reset", result.Error);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_does_not_retry_an_add_on_an_ambiguous_http_5xx()
+    {
+        // A 5xx may be a 502-after-commit, so the add is ambiguous and must not be
+        // auto-retried (which could duplicate the feature).
+        var handler = new SequencedHandler((HttpStatusCode.InternalServerError, "boom"), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).SubmitAsync(Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Equal(500, result.ErrorCode);
+        Assert.Equal(1, handler.Calls); // ambiguous 5xx not retried for a non-idempotent add
+    }
+
+    [Fact]
+    public async Task SubmitAsync_retries_an_add_on_a_server_acknowledged_transient_failure()
+    {
+        // An HTTP 200 with success:false under rollbackOnFailure is provably
+        // non-committed, so retrying the add is safe and is still done.
+        const string transientAddFail = """{"addResults":[{"success":false,"error":{"code":1000,"description":"Add failed."}}]}""";
+        var handler = new SequencedHandler((HttpStatusCode.OK, transientAddFail), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).SubmitAsync(Record(), T);
+
+        Assert.True(result.Success);
+        Assert.Equal(5, result.ObjectId);
+        Assert.Equal(2, handler.Calls); // safe transient retry still happens
+    }
+
     private sealed class QueryHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
     {
         public List<Uri> CapturedUris { get; } = [];
