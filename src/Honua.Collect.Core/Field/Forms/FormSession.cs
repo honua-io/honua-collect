@@ -589,7 +589,7 @@ public sealed class FormSession : ICaptureHost
         {
             // Never seed computed fields (they are recalculated) or media fields
             // (attachments are host-local and not reusable across records).
-            if (field.Type is FormFieldType.Calculated || IsMediaField(field.Type))
+            if (field.Type is FormFieldType.Calculated || FormFieldTypes.IsMedia(field.Type))
             {
                 continue;
             }
@@ -622,7 +622,7 @@ public sealed class FormSession : ICaptureHost
     {
         foreach (var field in form.Sections.Where(s => !s.Repeatable).SelectMany(s => s.Fields))
         {
-            if (field.Type is FormFieldType.Calculated || IsMediaField(field.Type))
+            if (field.Type is FormFieldType.Calculated || FormFieldTypes.IsMedia(field.Type))
             {
                 continue;
             }
@@ -634,9 +634,6 @@ public sealed class FormSession : ICaptureHost
         }
     }
 
-    private static bool IsMediaField(FormFieldType type)
-        => type is FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio
-            or FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File;
 }
 
 /// <summary>Event data for <see cref="FormSession.FieldChanged"/>.</summary>

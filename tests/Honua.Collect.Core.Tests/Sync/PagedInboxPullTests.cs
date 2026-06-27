@@ -218,4 +218,64 @@ public sealed class PagedInboxPullTests
         Assert.True(result.IsComplete);
         Assert.False(called);
     }
+
+    [Fact]
+    public async Task Streaming_callback_receives_every_page_and_result_does_not_buffer_them()
+    {
+        var progress = new FakeProgress();
+        var pull = new PagedInboxPull(progress);
+
+        Task<InboxPage> Fetch(int offset, CancellationToken ct) => offset switch
+        {
+            0 => Task.FromResult(new InboxPage([Pulled(1), Pulled(2)], HasMore: true, NextOffset: 2)),
+            2 => Task.FromResult(new InboxPage([Pulled(3)], HasMore: false, NextOffset: 3)),
+            _ => throw new InvalidOperationException($"unexpected offset {offset}"),
+        };
+
+        var pagesSeen = 0;
+        var streamed = 0;
+        Task OnPage(PullMergeResult page, CancellationToken ct)
+        {
+            pagesSeen++;
+            streamed += page.Classifications.Count;
+            return Task.CompletedTask;
+        }
+
+        var result = await pull.PullAllAsync(
+            Form(), new Dictionary<long, FieldRecord>(), Fetch, CancellationToken.None, OnPage);
+
+        // The callback saw both pages and all three records...
+        Assert.Equal(2, pagesSeen);
+        Assert.Equal(3, streamed);
+        // ...but the result buffered nothing (O(page) memory), exposing counts instead.
+        Assert.True(result.IsComplete);
+        Assert.Empty(result.Classifications);
+        Assert.Empty(result.NewRecords);
+        Assert.Equal(3, result.ClassifiedCount);
+        Assert.Equal(3, result.NewCount);
+        Assert.Equal(3, result.Cursor.PulledCount);
+    }
+
+    [Fact]
+    public async Task Streaming_counts_surface_new_and_conflict_totals()
+    {
+        var progress = new FakeProgress();
+        var pull = new PagedInboxPull(progress);
+
+        var local = new Dictionary<long, FieldRecord>
+        {
+            [1] = FieldRecords.WithValues("r1", ("name", "local-different")),
+        };
+
+        Task<InboxPage> Fetch(int offset, CancellationToken ct)
+            => Task.FromResult(new InboxPage([Pulled(1), Pulled(2)], HasMore: false, NextOffset: 2));
+
+        var result = await pull.PullAllAsync(
+            Form(), local, Fetch, CancellationToken.None, (_, _) => Task.CompletedTask);
+
+        Assert.Equal(2, result.ClassifiedCount);
+        Assert.Equal(1, result.NewCount);      // object 2
+        Assert.Equal(1, result.ConflictCount); // object 1
+        Assert.Empty(result.Conflicts);        // not buffered in streaming mode
+    }
 }

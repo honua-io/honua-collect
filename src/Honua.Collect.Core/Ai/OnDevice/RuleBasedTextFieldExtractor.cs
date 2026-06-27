@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 
 namespace Honua.Collect.Core.Ai.OnDevice;
@@ -68,11 +69,10 @@ public static class RuleBasedTextFieldExtractor
 
     private static IEnumerable<FormField> DataBearingFields(FormDefinition form)
     {
-        static bool IsExtractable(FormFieldType type) => type is not (
-            FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio or
-            FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File or
-            FormFieldType.Calculated or FormFieldType.RecordLink or
-            FormFieldType.Location or FormFieldType.GeoShape or FormFieldType.GeoTrace);
+        static bool IsExtractable(FormFieldType type)
+            => !FormFieldTypes.IsMedia(type) && type is not (
+                FormFieldType.Calculated or FormFieldType.RecordLink or
+                FormFieldType.Location or FormFieldType.GeoShape or FormFieldType.GeoTrace);
 
         return (form.Sections ?? [])
             .Where(s => s is { Repeatable: false })

@@ -38,6 +38,28 @@ The distinction between `SignatureInvalid` (metadata tampered) and
 `ContentMismatch` (media swapped) lets a reviewer say precisely *how* a record was
 altered, not just that it was.
 
+## Verifying the full capture→edit→sync chain
+
+For the multi-step history (a capture followed by signed edits and a sync),
+`Honua.Collect.Core.Provenance.ProvenanceChainVerifier` walks the hash-linked chain
+and checks every step's signature, sequence, and prior-hash link, plus (optionally)
+that the current bytes still match the head content hash.
+
+> **The chain must be anchored to a trusted signer key.** Each link carries its own
+> signer public key, so the signature/link checks alone prove only that the chain is
+> *internally consistent* — an attacker who fabricates a complete chain over forged
+> media with their **own** keypair produces an internally-consistent chain. The
+> parameterless `VerifyChain(chain)` / `Verify(chain, bytes)` overloads therefore
+> prove internal consistency **only** and must not be used as a standalone
+> legal/compliance verdict.
+>
+> For an identity-bound verdict, call the overloads that take a trusted-key allowlist:
+> `VerifyChain(chain, trustedSignerKeys)` (and `Verify(chain, bytes, trustedSignerKeys)`),
+> which require the genesis capture's signer key to be a **registered device/authority
+> key** — pass `requireEveryStepTrusted: true` to require it of every step. A chain
+> whose genesis (or, when required, any) signer is outside the allowlist returns
+> `UntrustedSigner` instead of `Valid`.
+
 ## Tamper-evident history
 
 Separately, on-device actions are recorded in an append-only, **hash-chained**

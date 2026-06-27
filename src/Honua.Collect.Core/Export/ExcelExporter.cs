@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
+using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -171,7 +172,7 @@ public static class ExcelExporter
     /// </summary>
     private static Cell CellFor(FieldRecord record, FormField field)
     {
-        if (record.Values.TryGetValue(field.FieldId, out var value) && value is not null && !IsMediaField(field.Type))
+        if (record.Values.TryGetValue(field.FieldId, out var value) && value is not null && !FormFieldTypes.IsMedia(field.Type))
         {
             switch (value)
             {
@@ -197,10 +198,6 @@ public static class ExcelExporter
 
     private static Cell NumberOrBlank(double? value)
         => value is { } v ? Cell.Number(v) : Cell.Text(string.Empty);
-
-    private static bool IsMediaField(FormFieldType type)
-        => type is FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio
-            or FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File;
 
     private static string SanitizeSheetName(string name)
     {

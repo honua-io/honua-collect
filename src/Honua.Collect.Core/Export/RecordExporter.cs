@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
+using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -279,7 +280,7 @@ public static class RecordExporter
 
     private static void WriteJsonValue(Utf8JsonWriter writer, FieldRecord record, FormField field)
     {
-        if (IsMediaField(field.Type))
+        if (FormFieldTypes.IsMedia(field.Type))
         {
             writer.WriteStartArray();
             foreach (var media in MediaFor(record, field))
@@ -332,7 +333,7 @@ public static class RecordExporter
     /// <summary>Renders a field's value to its canonical export string (shared across exporters).</summary>
     internal static string CellText(FieldRecord record, FormField field)
     {
-        if (IsMediaField(field.Type))
+        if (FormFieldTypes.IsMedia(field.Type))
         {
             return string.Join(';', MediaFor(record, field).Select(m => m.FileName));
         }
@@ -356,10 +357,6 @@ public static class RecordExporter
         => record.Media.Where(m =>
             string.IsNullOrWhiteSpace(m.FieldId) ||
             string.Equals(m.FieldId, field.FieldId, StringComparison.OrdinalIgnoreCase));
-
-    private static bool IsMediaField(FormFieldType type)
-        => type is FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio
-            or FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File;
 
     private static string ToText(object? value) => value switch
     {
