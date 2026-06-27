@@ -17,9 +17,21 @@ namespace Honua.Collect.App.Maps;
 /// </summary>
 public sealed class OsmTileLoader : IDisposable
 {
+    /// <summary>
+    /// Upper bound on decoded tiles held in memory. Each decoded tile is a full RGBA
+    /// bitmap (~256 KB for a 256px tile), so this caps the memory layer at roughly a
+    /// few tens of MB; the least-recently-used tile is evicted and disposed past it.
+    /// The on-disk <see cref="TileCache"/> remains the (bounded) backing store, so an
+    /// evicted tile is simply re-decoded from disk on the next view.
+    /// </summary>
+    private const int MaxCachedTiles = 256;
+
+    /// <summary>Per-tile network deadline so a slow fetch releases its concurrency slot quickly.</summary>
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
+
     private readonly HttpClient _http;
     private readonly TileCache _disk;
-    private readonly ConcurrentDictionary<string, IImage> _cache = new();
+    private readonly LruImageCache _cache = new(MaxCachedTiles);
     private readonly ConcurrentDictionary<string, byte> _inFlight = new();
     private readonly SemaphoreSlim _gate = new(6); // be polite to the tile server
 
@@ -57,7 +69,7 @@ public sealed class OsmTileLoader : IDisposable
     public IImage? Get(int zoom, int x, int y)
     {
         var key = OsmTileUrl.CacheKey(zoom, x, y);
-        if (_cache.TryGetValue(key, out var image))
+        if (_cache.TryGet(key, out var image))
         {
             return image;
         }
@@ -100,7 +112,7 @@ public sealed class OsmTileLoader : IDisposable
                 var img = PlatformImage.FromStream(ms);
                 if (img is not null)
                 {
-                    _cache[key] = img;
+                    _cache.Set(key, img);
                     TileLoaded?.Invoke(this, EventArgs.Empty);
                 }
             }
@@ -128,7 +140,7 @@ public sealed class OsmTileLoader : IDisposable
             var img = PlatformImage.FromStream(fs);
             if (img is not null)
             {
-                _cache[key] = img;
+                _cache.Set(key, img);
                 return true;
             }
         }
@@ -140,16 +152,24 @@ public sealed class OsmTileLoader : IDisposable
         return false;
     }
 
-    private async Task<byte[]?> DownloadAsync(int zoom, int x, int y)
+    private async Task<byte[]?> DownloadAsync(int zoom, int x, int y, CancellationToken cancellationToken = default)
     {
         var url = OsmTileUrl.For(zoom, x, y);
-        using var response = await _http.GetAsync(url).ConfigureAwait(false);
+
+        // Bound each fetch independently of the HttpClient default so a stalled tile
+        // releases the concurrency gate promptly instead of holding it for ~100s and
+        // starving the rest of the map. Linked to the caller's token so a real cancel
+        // (e.g. an aborted prefetch) still propagates.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(RequestTimeout);
+
+        using var response = await _http.GetAsync(url, cts.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             return null;
         }
 
-        return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+        return await response.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -193,20 +213,21 @@ public sealed class OsmTileLoader : IDisposable
                 await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
-                    var bytes = await DownloadAsync(t.Zoom, t.X, t.Y).ConfigureAwait(false);
+                    var bytes = await DownloadAsync(t.Zoom, t.X, t.Y, cancellationToken).ConfigureAwait(false);
                     if (bytes is not null)
                     {
                         await _disk.SaveAsync(t.Zoom, t.X, t.Y, bytes, cancellationToken).ConfigureAwait(false);
                     }
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
+                    // A real cancellation of the prefetch aborts the whole run.
                     throw;
                 }
                 catch
                 {
-                    // A single failed tile shouldn't abort the whole area; it
-                    // will be re-fetched on demand later when viewed.
+                    // A single failed tile (including a per-tile fetch timeout) shouldn't
+                    // abort the whole area; it will be re-fetched on demand later.
                 }
                 finally
                 {
@@ -226,6 +247,101 @@ public sealed class OsmTileLoader : IDisposable
     {
         // The HttpClient is owned by IHttpClientFactory, not this type.
         _gate.Dispose();
+        _cache.Dispose();
+    }
+
+    /// <summary>
+    /// A small thread-safe LRU cache of decoded tile images bounded by a tile count.
+    /// Reads and writes take a short lock; an entry pushed past the capacity (or a
+    /// value replaced for an existing key) is disposed so decoded bitmaps don't leak.
+    /// </summary>
+    private sealed class LruImageCache : IDisposable
+    {
+        private readonly int _capacity;
+        private readonly object _sync = new();
+        private readonly Dictionary<string, LinkedListNode<Entry>> _map;
+        private readonly LinkedList<Entry> _lru = new();
+
+        public LruImageCache(int capacity)
+        {
+            _capacity = Math.Max(1, capacity);
+            _map = new Dictionary<string, LinkedListNode<Entry>>(_capacity);
+        }
+
+        public bool TryGet(string key, out IImage image)
+        {
+            lock (_sync)
+            {
+                if (_map.TryGetValue(key, out var node))
+                {
+                    // Touch: move to the most-recently-used end.
+                    _lru.Remove(node);
+                    _lru.AddFirst(node);
+                    image = node.Value.Image;
+                    return true;
+                }
+            }
+
+            image = null!;
+            return false;
+        }
+
+        public void Set(string key, IImage image)
+        {
+            IImage? toDispose = null;
+            lock (_sync)
+            {
+                if (_map.TryGetValue(key, out var existing))
+                {
+                    if (!ReferenceEquals(existing.Value.Image, image))
+                    {
+                        toDispose = existing.Value.Image;
+                    }
+
+                    existing.Value = new Entry(key, image);
+                    _lru.Remove(existing);
+                    _lru.AddFirst(existing);
+                }
+                else
+                {
+                    var node = new LinkedListNode<Entry>(new Entry(key, image));
+                    _lru.AddFirst(node);
+                    _map[key] = node;
+
+                    if (_map.Count > _capacity)
+                    {
+                        var lru = _lru.Last!;
+                        _lru.RemoveLast();
+                        _map.Remove(lru.Value.Key);
+                        toDispose = lru.Value.Image;
+                    }
+                }
+            }
+
+            // Dispose the evicted/replaced bitmap outside the lock.
+            toDispose?.Dispose();
+        }
+
+        public void Dispose()
+        {
+            lock (_sync)
+            {
+                foreach (var entry in _lru)
+                {
+                    entry.Image.Dispose();
+                }
+
+                _lru.Clear();
+                _map.Clear();
+            }
+        }
+
+        private struct Entry(string key, IImage image)
+        {
+            public string Key { get; } = key;
+
+            public IImage Image { get; } = image;
+        }
     }
 }
 
