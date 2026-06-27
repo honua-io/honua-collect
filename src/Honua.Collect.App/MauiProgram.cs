@@ -28,6 +28,27 @@ public static class MauiProgram
 	/// <summary>Named HTTP client for the Anthropic API (no server auth).</summary>
 	public const string AnthropicHttpClient = "anthropic";
 
+	/// <summary>
+	/// Per-request deadline for server/token calls. Replaces the 100s HttpClient
+	/// default, which is far too long for interactive field use on flaky networks —
+	/// a hung sync would otherwise block ~100s per attempt.
+	/// </summary>
+	private static readonly TimeSpan ServerRequestTimeout = TimeSpan.FromSeconds(30);
+
+	/// <summary>
+	/// Per-request deadline for OSM tile fetches. Kept short so a slow tile releases
+	/// the loader's concurrency slot quickly instead of holding it for the 100s
+	/// default and stalling the whole map (head-of-line blocking).
+	/// </summary>
+	private static readonly TimeSpan TileRequestTimeout = TimeSpan.FromSeconds(20);
+
+	/// <summary>
+	/// Per-request deadline for the Anthropic API. More generous than the server
+	/// timeout because vision/extraction responses are slower, but still bounded so a
+	/// hung request fails instead of inheriting the 100s default indefinitely.
+	/// </summary>
+	private static readonly TimeSpan AiRequestTimeout = TimeSpan.FromSeconds(90);
+
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
@@ -137,7 +158,11 @@ public static class MauiProgram
 		// opt-in (configured pins only); with none set, platform TLS validation applies
 		// so self-hosted deployments aren't broken by a pin they didn't set.
 		var pinningCallback = CertificatePinning.CreateValidationCallback(settings.PinnedCertificateSpki);
-		builder.Services.AddHttpClient(ServerHttpClient, client => client.BaseAddress = settings.BaseUri)
+		builder.Services.AddHttpClient(ServerHttpClient, client =>
+			{
+				client.BaseAddress = settings.BaseUri;
+				client.Timeout = ServerRequestTimeout;
+			})
 			.AddHttpMessageHandler<AuthHeaderHandler>()
 			.ConfigurePrimaryHttpMessageHandler(() =>
 			{
@@ -154,7 +179,11 @@ public static class MauiProgram
 		// Token endpoint client: same server base address + cert pinning, but no auth
 		// handler — sign-in and token refresh present their own credential and must not
 		// recurse through the AuthHeaderHandler.
-		builder.Services.AddHttpClient(TokenHttpClient, client => client.BaseAddress = settings.BaseUri)
+		builder.Services.AddHttpClient(TokenHttpClient, client =>
+			{
+				client.BaseAddress = settings.BaseUri;
+				client.Timeout = ServerRequestTimeout;
+			})
 			.ConfigurePrimaryHttpMessageHandler(() =>
 			{
 				var handler = new HttpClientHandler();
@@ -168,9 +197,12 @@ public static class MauiProgram
 			});
 
 		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
-		builder.Services.AddHttpClient(TileHttpClient,
-			client => client.DefaultRequestHeaders.UserAgent.ParseAdd("HonuaCollect/1.0 (+https://honua.io)"));
-		builder.Services.AddHttpClient(AnthropicHttpClient);
+		builder.Services.AddHttpClient(TileHttpClient, client =>
+		{
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("HonuaCollect/1.0 (+https://honua.io)");
+			client.Timeout = TileRequestTimeout;
+		});
+		builder.Services.AddHttpClient(AnthropicHttpClient, client => client.Timeout = AiRequestTimeout);
 
 		// The feature-sync transport over the auth-aware server client.
 		builder.Services.AddTransient(sp =>
@@ -212,10 +244,28 @@ public static class MauiProgram
 	}
 
 	/// <summary>
-	/// Opens the SQLCipher-encrypted record store, self-healing past a legacy
-	/// unencrypted or corrupt local cache (which can't be opened with the key) by
-	/// recreating it — the records re-sync from the server.
+	/// SQLite primary result code for "file is not a database" (SQLITE_NOTADB). This is
+	/// what SQLCipher reports when the on-disk bytes are a legacy *unencrypted* cache or
+	/// cannot be decrypted with the current key — i.e. the only case where recreating
+	/// the store is the right self-heal.
 	/// </summary>
+	private const int SqliteNotADatabase = 26;
+
+	/// <summary>
+	/// Opens the SQLCipher-encrypted record store, self-healing past a legacy
+	/// unencrypted or undecryptable local cache by quarantining it and starting fresh.
+	/// </summary>
+	/// <remarks>
+	/// The self-heal is deliberately narrow. The local DB holds field captures that may
+	/// not yet have synced to the server, so it must NOT be wiped on a transient or
+	/// environmental fault — a locked/busy DB, an I/O error, low disk, or a rotated key
+	/// would all otherwise permanently destroy un-uploaded data (those records do not
+	/// "re-sync from the server"). We therefore only recreate on SQLITE_NOTADB (the
+	/// legacy-unencrypted / undecryptable case, whose bytes are unreadable with our key
+	/// regardless); every other <see cref="Microsoft.Data.Sqlite.SqliteException"/> is
+	/// surfaced to the caller instead of silently dropping the store. Even in the
+	/// recreate case the old file is moved aside, not deleted, so it can be recovered.
+	/// </remarks>
 	private static async Task<IRecordStore> OpenEncryptedStoreAsync(string dbPath)
 	{
 		var key = await DbKeyProvider.GetOrCreateKeyAsync();
@@ -225,14 +275,40 @@ public static class MauiProgram
 			await store.LoadAllAsync(); // probe: opens + applies the key
 			return store;
 		}
-		catch (Microsoft.Data.Sqlite.SqliteException)
+		catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == SqliteNotADatabase)
 		{
-			if (File.Exists(dbPath))
-			{
-				File.Delete(dbPath);
-			}
-
+			// Legacy-unencrypted or undecryptable-with-current-key cache: unreadable
+			// with our key in any case, so quarantine it and start fresh.
+			QuarantineUnreadableStore(dbPath);
 			return new SqliteRecordStore(dbPath, key);
+		}
+	}
+
+	/// <summary>
+	/// Moves an unreadable record DB aside (rather than deleting it) so a fresh store can
+	/// be created while the old bytes remain available for manual/forensic recovery. If
+	/// the file can't be renamed, it is deleted as a last resort — it is already
+	/// undecryptable with our key, so nothing the app can read is lost.
+	/// </summary>
+	private static void QuarantineUnreadableStore(string dbPath)
+	{
+		if (!File.Exists(dbPath))
+		{
+			return;
+		}
+
+		try
+		{
+			var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssfffZ");
+			File.Move(dbPath, $"{dbPath}.unreadable-{stamp}.bak");
+		}
+		catch (IOException)
+		{
+			File.Delete(dbPath);
+		}
+		catch (UnauthorizedAccessException)
+		{
+			File.Delete(dbPath);
 		}
 	}
 }
