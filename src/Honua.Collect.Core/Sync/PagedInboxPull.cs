@@ -59,12 +59,24 @@ public interface IInboxPullProgressStore
 /// already persisted via <see cref="IInboxPullProgressStore"/>, so a caller wanting
 /// the full picture reads it back from there rather than expecting this result to
 /// re-surface prior runs' findings. <see cref="Cursor"/> reflects all runs.
+///
+/// <para>
+/// When the run was driven with a per-page callback (the streaming overloads), the
+/// per-page classifications are handed to that callback and are <em>not</em> retained
+/// here — so <see cref="Classifications"/>, <see cref="NewRecords"/>, and
+/// <see cref="Conflicts"/> are empty and memory stays O(page). The count properties
+/// (<see cref="ClassifiedCount"/>, <see cref="NewCount"/>, <see cref="ConflictCount"/>)
+/// are always accurate regardless of mode.
+/// </para>
 /// </summary>
 public sealed class InboxPullResult
 {
     internal InboxPullResult(
         InboxPullCursor cursor,
         IReadOnlyList<PullClassification> classifications,
+        long classifiedCount,
+        long newCount,
+        long conflictCount,
         bool faulted,
         string? error)
     {
@@ -75,6 +87,9 @@ public sealed class InboxPullResult
             .Where(c => c.Disposition == PullDisposition.Conflict && c.Conflict is not null)
             .Select(c => c.Conflict!)
             .ToList();
+        ClassifiedCount = classifiedCount;
+        NewCount = newCount;
+        ConflictCount = conflictCount;
         Faulted = faulted;
         Error = error;
     }
@@ -82,14 +97,32 @@ public sealed class InboxPullResult
     /// <summary>The cursor to resume from; <see cref="InboxPullCursor.Completed"/> when done.</summary>
     public InboxPullCursor Cursor { get; }
 
-    /// <summary>Every feature classified in this run (this run's pages only).</summary>
+    /// <summary>
+    /// Every feature classified in this run (this run's pages only). Empty when the run
+    /// was driven with a per-page callback (streaming mode) — read counts instead.
+    /// </summary>
     public IReadOnlyList<PullClassification> Classifications { get; }
 
-    /// <summary>New-from-server features discovered in this run.</summary>
+    /// <summary>
+    /// New-from-server features discovered in this run. Empty in streaming mode; see
+    /// <see cref="NewCount"/>.
+    /// </summary>
     public IReadOnlyList<PullClassification> NewRecords { get; }
 
-    /// <summary>Conflicts discovered in this run.</summary>
+    /// <summary>
+    /// Conflicts discovered in this run. Empty in streaming mode; see
+    /// <see cref="ConflictCount"/>.
+    /// </summary>
     public IReadOnlyList<RecordConflict> Conflicts { get; }
+
+    /// <summary>Total features classified in this run, valid in both buffered and streaming modes.</summary>
+    public long ClassifiedCount { get; }
+
+    /// <summary>Count of new-from-server features in this run, valid in both modes.</summary>
+    public long NewCount { get; }
+
+    /// <summary>Count of conflicts in this run, valid in both modes.</summary>
+    public long ConflictCount { get; }
 
     /// <summary>Whether a page fetch faulted mid-run (progress up to the fault is persisted).</summary>
     public bool Faulted { get; }
@@ -108,9 +141,13 @@ public sealed class InboxPullResult
 ///
 /// <list type="number">
 ///   <item><description><b>Bounded memory.</b> Object ids are de-duplicated within a
-///   single page only; the cursor never accumulates an all-records "seen" set, so a
-///   million-row layer pulls in O(page) memory and the persisted cursor stays
-///   tiny.</description></item>
+///   single page only; the cursor never accumulates an all-records "seen" set, so the
+///   persisted cursor stays tiny. To pull a million-row layer in O(page) memory within
+///   a single run, drive it with a per-page callback (<c>onPageMerged</c>): the run
+///   then hands each page's classifications to the callback and never accumulates the
+///   whole run. Without a callback the result buffers this run's classifications for
+///   caller convenience, which is O(total-this-run) — fine for bounded layers but not
+///   the million-row case.</description></item>
 ///   <item><description><b>Incremental durability.</b> Each page is merged and its
 ///   progress persisted <em>before</em> the next fetch, so a fetch that throws
 ///   mid-run never discards already-merged pages — resuming continues from the next
@@ -140,19 +177,26 @@ public sealed class PagedInboxPull
     /// <param name="localByObjectId">Local records keyed by server object id.</param>
     /// <param name="fetchPageAsync">Fetches one page for a given offset.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="onPageMerged">
+    /// Optional per-page sink. When supplied, each page's merge result is handed to it
+    /// and is NOT retained in the returned result — so a million-row run completes in
+    /// O(page) memory. When null, this run's classifications are buffered into the
+    /// result for caller convenience (O(total-this-run)).
+    /// </param>
     /// <returns>This run's result (classifications from this run only; cursor reflects all runs).</returns>
     public async Task<InboxPullResult> ResumeAsync(
         FormDefinition form,
         IReadOnlyDictionary<long, FieldRecord> localByObjectId,
         Func<int, CancellationToken, Task<InboxPage>> fetchPageAsync,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Func<PullMergeResult, CancellationToken, Task>? onPageMerged = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(localByObjectId);
         ArgumentNullException.ThrowIfNull(fetchPageAsync);
 
         var cursor = await _progress.LoadCursorAsync(ct).ConfigureAwait(false);
-        return await PullFromAsync(form, localByObjectId, fetchPageAsync, cursor, ct).ConfigureAwait(false);
+        return await PullFromAsync(form, localByObjectId, fetchPageAsync, cursor, onPageMerged, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -163,18 +207,23 @@ public sealed class PagedInboxPull
     /// <param name="localByObjectId">Local records keyed by server object id.</param>
     /// <param name="fetchPageAsync">Fetches one page for a given offset.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <param name="onPageMerged">
+    /// Optional per-page sink; see <see cref="ResumeAsync"/>. When supplied the run is
+    /// O(page) in memory and the result's classification lists are empty (read counts).
+    /// </param>
     /// <returns>This run's result.</returns>
     public Task<InboxPullResult> PullAllAsync(
         FormDefinition form,
         IReadOnlyDictionary<long, FieldRecord> localByObjectId,
         Func<int, CancellationToken, Task<InboxPage>> fetchPageAsync,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Func<PullMergeResult, CancellationToken, Task>? onPageMerged = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(localByObjectId);
         ArgumentNullException.ThrowIfNull(fetchPageAsync);
 
-        return PullFromAsync(form, localByObjectId, fetchPageAsync, InboxPullCursor.Start, ct);
+        return PullFromAsync(form, localByObjectId, fetchPageAsync, InboxPullCursor.Start, onPageMerged, ct);
     }
 
     private async Task<InboxPullResult> PullFromAsync(
@@ -182,15 +231,28 @@ public sealed class PagedInboxPull
         IReadOnlyDictionary<long, FieldRecord> localByObjectId,
         Func<int, CancellationToken, Task<InboxPage>> fetchPageAsync,
         InboxPullCursor cursor,
+        Func<PullMergeResult, CancellationToken, Task>? onPageMerged,
         CancellationToken ct)
     {
-        // Accumulates only THIS run's classifications. Prior runs' findings are already
-        // persisted by the progress store — we never hold the whole dataset here.
-        var runClassifications = new List<PullClassification>();
+        // In streaming mode (a per-page callback) we never accumulate the whole run, so a
+        // million-row layer stays O(page); the running counts are kept either way so the
+        // result is informative in both modes.
+        var streaming = onPageMerged is not null;
+        var runClassifications = streaming ? null : new List<PullClassification>();
+        long classified = 0, newCount = 0, conflictCount = 0;
+
+        InboxPullResult BuildResult(bool faulted, string? error) => new(
+            cursor,
+            (IReadOnlyList<PullClassification>?)runClassifications ?? Array.Empty<PullClassification>(),
+            classified,
+            newCount,
+            conflictCount,
+            faulted,
+            error);
 
         if (cursor.Completed)
         {
-            return new InboxPullResult(cursor, runClassifications, faulted: false, error: null);
+            return BuildResult(faulted: false, error: null);
         }
 
         while (true)
@@ -214,7 +276,7 @@ public sealed class PagedInboxPull
                 // cursor and every prior page were persisted before this fetch, so we
                 // return the partial result with the last good cursor. Resuming starts
                 // at this same offset and re-fetches only this one (un-persisted) page.
-                return new InboxPullResult(cursor, runClassifications, faulted: true, error: ex.Message);
+                return BuildResult(faulted: true, error: ex.Message);
             }
 
             ArgumentNullException.ThrowIfNull(page);
@@ -224,7 +286,19 @@ public sealed class PagedInboxPull
             // defeat bounded memory and bloat the persisted cursor.
             var pageRecords = DedupeWithinPage(page.Records);
             var pageMerge = _merge.Merge(form, pageRecords, localByObjectId);
-            runClassifications.AddRange(pageMerge.Classifications);
+
+            classified += pageMerge.Classifications.Count;
+            newCount += pageMerge.NewRecords.Count;
+            conflictCount += pageMerge.Conflicts.Count;
+
+            if (streaming)
+            {
+                await onPageMerged!(pageMerge, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                runClassifications!.AddRange(pageMerge.Classifications);
+            }
 
             // Forward-progress guard: if the server claims more but doesn't advance the
             // offset, stop rather than loop forever.
@@ -241,7 +315,7 @@ public sealed class PagedInboxPull
 
             if (cursor.Completed)
             {
-                return new InboxPullResult(cursor, runClassifications, faulted: false, error: null);
+                return BuildResult(faulted: false, error: null);
             }
         }
     }

@@ -215,6 +215,77 @@ public class ProvenanceChainTests
         Assert.Equal(0, result.BreakIndex);
     }
 
+    // --- trust anchoring ------------------------------------------------------
+
+    [Fact]
+    public void A_fully_reforged_chain_passes_internal_checks_but_is_rejected_when_anchored()
+    {
+        // An attacker fabricates an internally-consistent chain over forged media,
+        // signing every step with their OWN keypair.
+        var (attackerPriv, _) = Ed25519Signing.GenerateKeyPair();
+        var (_, registeredDevicePub) = Ed25519Signing.GenerateKeyPair();
+        var forged = CaptureOnly(attackerPriv);
+
+        // Internal-consistency-only check is fooled (the documented limitation)...
+        Assert.True(ProvenanceChainVerifier.VerifyChain(forged).IsValid);
+
+        // ...but anchoring the genesis to a registered device key rejects it.
+        var anchored = ProvenanceChainVerifier.VerifyChain(forged, new[] { registeredDevicePub });
+        Assert.Equal(ProvenanceChainStatus.UntrustedSigner, anchored.Status);
+        Assert.Equal(0, anchored.BreakIndex);
+
+        var anchoredWithContent = ProvenanceChainVerifier.Verify(forged, Photo, new[] { registeredDevicePub });
+        Assert.Equal(ProvenanceChainStatus.UntrustedSigner, anchoredWithContent.Status);
+    }
+
+    [Fact]
+    public void A_genuine_chain_signed_by_the_trusted_genesis_key_verifies_when_anchored()
+    {
+        var (priv, pub) = Ed25519Signing.GenerateKeyPair();
+        var chain = CaptureOnly(priv);
+
+        Assert.True(ProvenanceChainVerifier.VerifyChain(chain, new[] { pub }).IsValid);
+        Assert.Equal(ProvenanceChainStatus.Valid, ProvenanceChainVerifier.Verify(chain, Photo, new[] { pub }).Status);
+    }
+
+    [Fact]
+    public void Require_every_step_trusted_rejects_a_step_signed_by_an_unregistered_key()
+    {
+        var (capPriv, capPub) = Ed25519Signing.GenerateKeyPair();
+        var (editPriv, editPub) = Ed25519Signing.GenerateKeyPair();
+
+        var chain = CaptureOnly(capPriv);
+        chain = ProvenanceChainBuilder.AppendEdit(
+            chain, ContentHash.Sha256Hex(Redacted), CapturedAt.AddMinutes(5),
+            actorId: "field-user-7", deviceId: "device-abc", privateKey: editPriv, note: "blurred faces");
+
+        // Anchoring only the genesis is satisfied — the capture signer is trusted.
+        Assert.True(ProvenanceChainVerifier.VerifyChain(chain, new[] { capPub }).IsValid);
+
+        // Requiring every step exposes the edit step's unregistered signer.
+        var strict = ProvenanceChainVerifier.VerifyChain(chain, new[] { capPub }, requireEveryStepTrusted: true);
+        Assert.Equal(ProvenanceChainStatus.UntrustedSigner, strict.Status);
+        Assert.Equal(1, strict.BreakIndex);
+
+        // With both signers registered, the strict check passes.
+        Assert.True(ProvenanceChainVerifier.VerifyChain(
+            chain, new[] { capPub, editPub }, requireEveryStepTrusted: true).IsValid);
+    }
+
+    [Fact]
+    public void Anchored_overloads_require_a_non_empty_trusted_key_set()
+    {
+        var (priv, _) = Ed25519Signing.GenerateKeyPair();
+        var chain = CaptureOnly(priv);
+
+        Assert.Throws<ArgumentException>(() =>
+            ProvenanceChainVerifier.VerifyChain(chain, Array.Empty<byte[]>()));
+        Assert.Throws<ArgumentNullException>(() =>
+            ProvenanceChainVerifier.VerifyChain(chain, null!));
+        Assert.Throws<ArgumentException>(() =>
+            ProvenanceChainVerifier.Verify(chain, Photo, Array.Empty<byte[]>()));
+    }
+
     [Fact]
     public void Empty_chain_is_reported()
     {

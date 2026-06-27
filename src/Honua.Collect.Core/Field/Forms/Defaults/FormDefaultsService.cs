@@ -177,7 +177,7 @@ public sealed class FormDefaultsService
         {
             foreach (var field in section.Fields)
             {
-                if (field.Type is FormFieldType.Calculated || IsMediaField(field.Type))
+                if (field.Type is FormFieldType.Calculated || FormFieldTypes.IsMedia(field.Type))
                 {
                     continue;
                 }
@@ -188,8 +188,4 @@ public sealed class FormDefaultsService
 
         return ids;
     }
-
-    private static bool IsMediaField(FormFieldType type)
-        => type is FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio
-            or FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File;
 }

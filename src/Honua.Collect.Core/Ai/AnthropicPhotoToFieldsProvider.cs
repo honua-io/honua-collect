@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 
 namespace Honua.Collect.Core.Ai;
@@ -154,10 +155,8 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
     {
         // Extract only data-bearing fields the model can read from an image; media,
         // signature, and computed fields are not values the model should invent.
-        static bool IsExtractable(FormFieldType type) => type is not (
-            FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio or
-            FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File or
-            FormFieldType.Calculated or FormFieldType.RecordLink);
+        static bool IsExtractable(FormFieldType type)
+            => !FormFieldTypes.IsMedia(type) && type is not (FormFieldType.Calculated or FormFieldType.RecordLink);
 
         return (form.Sections ?? [])
             .SelectMany(s => s?.Fields ?? [])

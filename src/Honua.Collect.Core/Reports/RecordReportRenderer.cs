@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Text;
 using Honua.Collect.Core.Editions;
+using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -183,7 +184,7 @@ public sealed class RecordReportRenderer
     {
         foreach (var field in fields)
         {
-            if (IsMediaField(field.Type))
+            if (FormFieldTypes.IsMedia(field.Type))
             {
                 if (!tpl.IncludeMedia)
                 {
@@ -276,8 +277,4 @@ public sealed class RecordReportRenderer
 
         return [];
     }
-
-    private static bool IsMediaField(FormFieldType type)
-        => type is FormFieldType.Photo or FormFieldType.Video or FormFieldType.Audio
-            or FormFieldType.Signature or FormFieldType.Sketch or FormFieldType.File;
 }
