@@ -4,9 +4,9 @@
 
 **Honua Collect** is an offline-first mobile field data collection product built
 on the [Honua](https://github.com/honua-io) platform — a source-available
-alternative to apps like Esri Survey123 and Fulcrum. Dynamic forms, GeoPackage
-offline storage, connectivity-aware sync, GPS/geometry capture, media capture,
-and 3D/AR scene support, with optional AI-assisted capture.
+alternative to apps like Esri Survey123 and Fulcrum. Dynamic forms, encrypted
+(SQLCipher) offline storage, connectivity-aware sync, GPS/geometry capture, media
+capture, and export to GeoPackage/CSV/Excel, with optional AI-assisted capture.
 
 ## Licensing (open core)
 

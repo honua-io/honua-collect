@@ -3,10 +3,11 @@ using Honua.Collect.Core.Licensing;
 namespace Honua.Collect.Core.Provenance;
 
 /// <summary>
-/// Signs capture provenance with an Ed25519 device key (BACKLOG, #41). On a real
-/// device the private key is hardware-backed (Keystore / Secure Enclave) and never
-/// leaves it; this is the platform-neutral signing operation over the manifest's
-/// canonical bytes. Pairs with <see cref="ProvenanceVerifier"/>.
+/// Signs capture provenance with an Ed25519 device key (BACKLOG, #41). This is the
+/// platform-neutral signing operation over the manifest's canonical bytes; binding
+/// the private key to platform hardware (Keystore / Secure Enclave) so it never
+/// leaves the device is a planned device-side step (#41) and is not yet wired.
+/// Pairs with <see cref="ProvenanceVerifier"/>.
 /// </summary>
 public static class ProvenanceSigner
 {

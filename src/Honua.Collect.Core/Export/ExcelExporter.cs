@@ -257,7 +257,10 @@ public static class ExcelExporter
             => new("b", value ? "1" : "0", inline: false);
 
         public static Cell Text(string value)
-            => new("inlineStr", value, inline: true);
+            // Neutralize spreadsheet formula injection (CWE-1236) on every string
+            // cell, matching the CSV exporter: an untrusted value starting with
+            // = + - @ or a control char is otherwise evaluated as a formula in Excel.
+            => new("inlineStr", RecordExporter.NeutralizeFormula(value), inline: true);
 
         public void Write(XmlWriter writer, string reference)
         {

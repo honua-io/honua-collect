@@ -17,9 +17,10 @@ At capture, Collect can bind a **capture provenance manifest**
 - the **GPS position** and its horizontal accuracy, when available.
 
 The manifest has a deterministic canonical encoding and is signed with an
-**Ed25519** device key (`ProvenanceSigner`). On a device the private key is
-hardware-backed (Keystore / Secure Enclave); the signing and verification logic
-is platform-neutral and unit-tested.
+**Ed25519** device key (`ProvenanceSigner`). The signing and verification logic
+is platform-neutral and unit-tested today; binding the private key to platform
+hardware (Keystore / Secure Enclave) so it never leaves the device is a planned
+device-side step that is **not yet wired** (see [Current limits](#current-limits-tracked-in-41)).
 
 ## What verification proves
 

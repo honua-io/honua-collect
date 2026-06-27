@@ -240,6 +240,7 @@ public sealed class GeoServicesFeatureSync
         var records = new List<PulledRecord>();
         var offset = 0;
         const int pageSize = 1000;
+        const string ObjectIdOrderField = "objectid";
 
         while (true)
         {
@@ -251,6 +252,14 @@ public sealed class GeoServicesFeatureSync
                 ["where"] = effectiveWhere,
                 ["outFields"] = "*",
                 ["returnGeometry"] = "true",
+                // resultOffset paging is only well-defined under a stable sort: the
+                // ArcGIS REST spec requires orderByFields, otherwise the server may
+                // return rows in an arbitrary/changing order across pages and a
+                // layer larger than the page size can silently skip or double-count
+                // features. Order by the object-id field (this product's layers key
+                // on "objectid"; Esri field references are case-insensitive in the
+                // SQL order-by, so this is stable against OBJECTID too).
+                ["orderByFields"] = ObjectIdOrderField,
                 ["resultOffset"] = offset.ToString(CultureInfo.InvariantCulture),
                 ["resultRecordCount"] = pageSize.ToString(CultureInfo.InvariantCulture),
             };
