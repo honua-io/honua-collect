@@ -1,3 +1,4 @@
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Field.Forms.Localization;
@@ -9,14 +10,9 @@ namespace Honua.Collect.Core.Field.Forms.Localization;
 /// form id, so re-opening a form restores the language the user last picked
 /// (BACKLOG F2). The schema is created lazily on first use.
 /// </summary>
-public sealed class SqliteLocaleStore : ILocaleStore
+public sealed class SqliteLocaleStore : SqliteStoreBase, ILocaleStore
 {
     private const string Table = "collect_form_locale";
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>
     /// Creates a store over the given connection string or database file path —
@@ -30,23 +26,12 @@ public sealed class SqliteLocaleStore : ILocaleStore
     /// device database is encrypted at rest.
     /// </param>
     public SqliteLocaleStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "locale database";
 
     /// <inheritdoc />
     public async Task SetActiveLanguageAsync(string formId, string language, CancellationToken ct = default)
@@ -78,81 +63,17 @@ public sealed class SqliteLocaleStore : ILocaleStore
         return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {Table} (
+                form_id TEXT PRIMARY KEY,
+                language TEXT NOT NULL
+            );
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            cipherVersion = await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to store the active locale unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {Table} (
-                    form_id TEXT PRIMARY KEY,
-                    language TEXT NOT NULL
-                );
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
-    }
-
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 }

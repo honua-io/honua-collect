@@ -1,4 +1,5 @@
 using Honua.Sdk.Field.Records;
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Field.Related;
@@ -11,14 +12,9 @@ namespace Honua.Collect.Core.Field.Related;
 /// a display label, and the <see cref="RecordLinkBehavior"/> so referential
 /// integrity is enforced at delete time. The schema is created lazily on first use.
 /// </summary>
-public sealed class SqliteRelatedRecordStore : IRelatedRecordStore
+public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordStore
 {
     private const string Table = "collect_record_links";
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>
     /// Creates a store over the given connection string or database file path — pass
@@ -32,23 +28,12 @@ public sealed class SqliteRelatedRecordStore : IRelatedRecordStore
     /// database is encrypted at rest.
     /// </param>
     public SqliteRelatedRecordStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "record-links database";
 
     /// <inheritdoc />
     public async Task LinkAsync(
@@ -184,90 +169,26 @@ public sealed class SqliteRelatedRecordStore : IRelatedRecordStore
         return cascaded;
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {Table} (
+                parent_record_id TEXT NOT NULL,
+                field_id TEXT NOT NULL,
+                child_record_id TEXT NOT NULL,
+                child_form_id TEXT NULL,
+                source_id TEXT NULL,
+                label TEXT NULL,
+                behavior INTEGER NOT NULL,
+                ordinal INTEGER NOT NULL,
+                PRIMARY KEY (parent_record_id, field_id, child_record_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_collect_record_links_parent
+                ON {Table} (parent_record_id);
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            cipherVersion = await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to store record links unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {Table} (
-                    parent_record_id TEXT NOT NULL,
-                    field_id TEXT NOT NULL,
-                    child_record_id TEXT NOT NULL,
-                    child_form_id TEXT NULL,
-                    source_id TEXT NULL,
-                    label TEXT NULL,
-                    behavior INTEGER NOT NULL,
-                    ordinal INTEGER NOT NULL,
-                    PRIMARY KEY (parent_record_id, field_id, child_record_id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_collect_record_links_parent
-                    ON {Table} (parent_record_id);
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
-    }
-
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 }

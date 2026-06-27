@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.History;
@@ -18,16 +19,11 @@ namespace Honua.Collect.Core.History;
 /// next-sequence check in <see cref="AppendAsync"/> keep the per-record sequence
 /// monotonic and gap-free, so the log is tamper-evident.
 /// </summary>
-public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
+public sealed class SqliteRecordHistoryStore : SqliteStoreBase, IRecordHistoryStore
 {
     private const string TableName = "record_edit_history";
 
     private static readonly JsonSerializerOptions ChangesJsonOptions = new(JsonSerializerDefaults.General);
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>
     /// Creates a history store over the given connection string or database file
@@ -37,23 +33,12 @@ public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
     /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
     /// <param name="encryptionKey">Optional SQLCipher key; when set, the database must be encrypted at rest.</param>
     public SqliteRecordHistoryStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "field history database";
 
     /// <inheritdoc />
     public async Task AppendAsync(string recordId, RecordEdit edit, CancellationToken ct = default)
@@ -213,90 +198,24 @@ public sealed class SqliteRecordHistoryStore : IRecordHistoryStore
         return element.GetDouble();
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {TableName} (
+                record_id TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                timestamp_utc TEXT NOT NULL,
+                editor_user_id TEXT NOT NULL,
+                after_sync INTEGER NOT NULL,
+                note TEXT NULL,
+                changes_json TEXT NOT NULL,
+                PRIMARY KEY (record_id, sequence)
+            );
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
-
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            cipherVersion = result as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to open the field history database unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {TableName} (
-                    record_id TEXT NOT NULL,
-                    sequence INTEGER NOT NULL,
-                    timestamp_utc TEXT NOT NULL,
-                    editor_user_id TEXT NOT NULL,
-                    after_sync INTEGER NOT NULL,
-                    note TEXT NULL,
-                    changes_json TEXT NOT NULL,
-                    PRIMARY KEY (record_id, sequence)
-                );
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
-    }
-
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 
     private sealed record PersistedChange(string FieldId, JsonElement Old, JsonElement New);
 }
