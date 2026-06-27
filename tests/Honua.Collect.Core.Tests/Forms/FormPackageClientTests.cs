@@ -131,6 +131,24 @@ public class FormPackageClientTests
             () => new FormPackageClient(client).DownloadAsync("svc1", "inspection"));
     }
 
+    [Fact]
+    public async Task DownloadAsync_surfaces_a_geoservices_error_body_returned_with_http_200()
+    {
+        // GeoServices surfaces auth/token/permission failures as an HTTP 200 with a
+        // root {"error":{...}} body. It must read as a distinct, code-carrying error
+        // (not a malformed/empty package), so operators can tell a permissions
+        // problem from a corrupt package.
+        const string errorBody = """{"error":{"code":403,"message":"Token required.","details":[]}}""";
+        var handler = new StubHandler(errorBody); // HTTP 200
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
+
+        var ex = await Assert.ThrowsAsync<FormPackageException>(
+            () => new FormPackageClient(client).DownloadAsync("svc1", "inspection"));
+
+        Assert.Equal(403, ex.ErrorCode);
+        Assert.Contains("Token required", ex.Message);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("  ")]

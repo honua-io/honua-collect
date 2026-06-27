@@ -53,6 +53,40 @@ public class RecordExporterTests
         Assert.Contains("45.5,-122.6", lines[1]);
     }
 
+    [Theory]
+    [InlineData("=HYPERLINK(\"http://evil\",\"x\")")]
+    [InlineData("+1+1")]
+    [InlineData("-2+3")]
+    [InlineData("@SUM(A1)")]
+    [InlineData("\tleading tab")]
+    public void Csv_neutralizes_formula_injection_in_untrusted_cells(string payload)
+    {
+        var record = new FieldRecord { RecordId = "r1", FormId = "f", Status = RecordStatus.Submitted };
+        record.Values["name"] = payload;
+
+        var csv = RecordExporter.ToCsv(Form(), [record]);
+        var dataLine = csv.TrimEnd().Split('\n').Last().TrimEnd('\r');
+
+        // The dangerous cell must be neutralized with a leading apostrophe so a
+        // spreadsheet renders it as text rather than evaluating it (CWE-1236). The
+        // apostrophe sits inside the quotes when the cell is also CSV-quoted.
+        Assert.Contains("'" + payload[0], dataLine);
+        Assert.DoesNotContain($",{payload[0]}", dataLine); // no bare risky leading char after a delimiter
+    }
+
+    [Fact]
+    public void Csv_leaves_safe_values_unprefixed()
+    {
+        var record = new FieldRecord { RecordId = "r1", FormId = "f", Status = RecordStatus.Submitted };
+        record.Values["name"] = "Normal Site";
+
+        var csv = RecordExporter.ToCsv(Form(), [record]);
+        var dataLine = csv.TrimEnd().Split('\n').Last().TrimEnd('\r');
+
+        Assert.Contains("Normal Site", dataLine);
+        Assert.DoesNotContain("'Normal Site", dataLine);
+    }
+
     [Fact]
     public void Csv_emits_a_row_per_record_with_blank_cells_for_missing_values()
     {

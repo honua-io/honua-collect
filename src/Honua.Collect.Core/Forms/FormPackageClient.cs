@@ -106,6 +106,32 @@ public sealed class FormPackageClient
             throw new FormPackageException("The form package response was empty.");
         }
 
+        // A GeoServices endpoint returns auth/token/permission failures as an HTTP
+        // 200 carrying a root {"error":{code,message}} body, not an HTTP error
+        // status. Detect that shape first and surface the server's code/message as a
+        // distinct error — otherwise it falls through and looks like a malformed or
+        // empty package, masking expired-token/authz problems (mirrors
+        // GeoServicesFeatureSync.ParseResult).
+        try
+        {
+            using var probe = JsonDocument.Parse(json);
+            if (probe.RootElement.ValueKind == JsonValueKind.Object
+                && probe.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.Object)
+            {
+                var message = error.TryGetProperty("message", out var m) ? m.GetString() : null;
+                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+                throw new FormPackageException(
+                    $"The form server returned an error{(code is { } k ? $" ({k.ToString(CultureInfo.InvariantCulture)})" : string.Empty)}: " +
+                    $"{message ?? "unspecified error"}.",
+                    code);
+            }
+        }
+        catch (JsonException ex)
+        {
+            throw new FormPackageException("The form package response was not valid JSON.", ex);
+        }
+
         FormPackageDto? package;
         try
         {
@@ -285,6 +311,25 @@ public sealed class FormPackageException : Exception
         : base(message)
     {
     }
+
+    /// <summary>
+    /// Creates the exception for a server-returned GeoServices error body, carrying
+    /// the server's error code so callers can distinguish an auth/token/permission
+    /// failure from a malformed package.
+    /// </summary>
+    /// <param name="message">Describes the failure (includes the server message).</param>
+    /// <param name="errorCode">The GeoServices error code from the response, when present.</param>
+    public FormPackageException(string message, int? errorCode)
+        : base(message)
+    {
+        ErrorCode = errorCode;
+    }
+
+    /// <summary>
+    /// The GeoServices error code when this exception was raised from a server
+    /// <c>{"error":{...}}</c> body; <see langword="null"/> for parse/shape failures.
+    /// </summary>
+    public int? ErrorCode { get; }
 
     /// <summary>Creates the exception with a message and inner cause.</summary>
     /// <param name="message">Describes the failure.</param>

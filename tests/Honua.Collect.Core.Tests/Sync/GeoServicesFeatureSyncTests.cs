@@ -447,6 +447,24 @@ public class GeoServicesFeatureSyncTests
     }
 
     [Fact]
+    public async Task QueryAsync_sends_orderByFields_so_offset_paging_is_deterministic()
+    {
+        // resultOffset paging is only well-defined under a stable sort; without
+        // orderByFields a layer larger than the page size can skip or double-count
+        // rows. Every page request must carry orderByFields=objectid.
+        const string page1 = """{ "objectIdFieldName": "objectid", "exceededTransferLimit": true, "features": [ { "attributes": { "objectid": 1 } } ] }""";
+        const string page2 = """{ "objectIdFieldName": "objectid", "features": [ { "attributes": { "objectid": 2 } } ] }""";
+        var handler = new QueryHandler((HttpStatusCode.OK, page1), (HttpStatusCode.OK, page2));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.True(result.Success);
+        Assert.Equal(2, handler.CapturedUris.Count);
+        Assert.All(handler.CapturedUris, u => Assert.Contains("orderByFields=objectid", u.AbsoluteUri));
+    }
+
+    [Fact]
     public async Task QueryAsync_follows_paging_until_transfer_limit_clears()
     {
         const string page1 = """

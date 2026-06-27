@@ -371,11 +371,50 @@ public static class RecordExporter
 
     private static string EscapeCsv(string value)
     {
-        if (value.IndexOfAny(['"', ',', '\n', '\r']) < 0)
+        var safe = NeutralizeFormula(value);
+        if (safe.IndexOfAny(['"', ',', '\n', '\r']) < 0)
+        {
+            return safe;
+        }
+
+        return $"\"{safe.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    /// <summary>
+    /// Neutralizes spreadsheet formula injection (CWE-1236) in an exported cell.
+    /// Field-collected and migrated values are untrusted, and a value whose first
+    /// character is <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, or a leading control
+    /// character (tab/CR/LF) is evaluated as a formula when the export is opened in
+    /// Excel/Google Sheets — enabling exfiltration via <c>HYPERLINK</c>/
+    /// <c>WEBSERVICE</c>/DDE. Per OWASP guidance the cell is prefixed with a single
+    /// quote so the spreadsheet renders it as literal text. Shared by the CSV and
+    /// XLSX exporters so both hand-offs are safe.
+    /// </summary>
+    /// <param name="value">The raw cell text.</param>
+    /// <returns>The cell text, prefixed with <c>'</c> when it starts with a risky character.</returns>
+    internal static string NeutralizeFormula(string value)
+    {
+        if (string.IsNullOrEmpty(value))
         {
             return value;
         }
 
-        return $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+        var first = value[0];
+        if (first is not ('=' or '+' or '-' or '@' or '\t' or '\r' or '\n'))
+        {
+            return value;
+        }
+
+        // A leading + or - on a well-formed number (e.g. a negative longitude
+        // "-122.6") is legitimate data, not a formula, so leave it intact —
+        // otherwise every negative coordinate/measurement would be corrupted.
+        // = @ and leading control chars are always neutralized.
+        if (first is '+' or '-'
+            && double.TryParse(value, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _))
+        {
+            return value;
+        }
+
+        return "'" + value;
     }
 }

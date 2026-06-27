@@ -74,6 +74,25 @@ public class ExcelExporterTests
         }).ToArray();
     }
 
+    [Theory]
+    [InlineData("=cmd|'/c calc'!A1")]
+    [InlineData("+1+1")]
+    [InlineData("-2+3")]
+    [InlineData("@SUM(A1)")]
+    public void Xlsx_neutralizes_formula_injection_in_string_cells(string payload)
+    {
+        var record = new FieldRecord { RecordId = "r1", FormId = "f", Status = RecordStatus.Submitted };
+        record.Values["name"] = payload;
+
+        var xlsx = ExcelExporter.Export(Form(), [record]);
+        var sheet = Part(xlsx, "xl/worksheets/sheet1.xml");
+        var nameCell = Row(sheet, 2)[4].Value; // record_id,status,lat,lon,name -> index 4
+
+        // The cell must be stored as text prefixed with an apostrophe so Excel does
+        // not evaluate it as a formula (CWE-1236).
+        Assert.Equal("'" + payload, nameCell);
+    }
+
     [Fact]
     public void Output_is_a_valid_openxml_package_with_the_required_parts()
     {
