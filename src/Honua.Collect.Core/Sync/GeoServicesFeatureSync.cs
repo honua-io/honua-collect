@@ -30,7 +30,27 @@ public sealed record GeoServicesTarget(string BaseUrl, string ServiceId, int Lay
 /// <param name="Error">Error message, when not successful.</param>
 /// <param name="ErrorCode">Server error code, when not successful.</param>
 /// <param name="Attempts">Number of attempts made (including retries).</param>
-public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Error, int? ErrorCode = null, int Attempts = 1);
+public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Error, int? ErrorCode = null, int Attempts = 1)
+{
+    /// <summary>Builds a successful result for the given server object id.</summary>
+    /// <param name="objectId">The server-assigned object id, when known.</param>
+    public static FeatureSyncResult Ok(long? objectId) => new(true, objectId, null);
+
+    /// <summary>Builds a failed result carrying the error message and optional code.</summary>
+    /// <param name="error">The failure message.</param>
+    /// <param name="code">The server/HTTP error code, when known.</param>
+    public static FeatureSyncResult Fail(string error, int? code = null) => new(false, null, error, code);
+
+    /// <summary>
+    /// A single one-line description of this result's failure (message plus code when
+    /// present), suitable for surfacing in the sync center; empty when successful.
+    /// </summary>
+    public string FailureDescription => Success
+        ? string.Empty
+        : ErrorCode is { } code
+            ? $"{Error ?? "Upload was rejected."} (code {code.ToString(CultureInfo.InvariantCulture)})"
+            : Error ?? "Upload was rejected.";
+}
 
 /// <summary>
 /// A single feature pulled back from the server, decoded into a portable
@@ -107,6 +127,12 @@ public sealed record FeatureSyncRetryPolicy(int MaxAttempts = 4, TimeSpan BaseDe
 /// </summary>
 public sealed class GeoServicesFeatureSync
 {
+    /// <summary>
+    /// This product's default object-id field name. Esri field references are
+    /// case-insensitive, so this is stable against <c>OBJECTID</c> too.
+    /// </summary>
+    private const string DefaultObjectIdField = "objectid";
+
     private readonly HttpClient _http;
     private readonly FeatureSyncRetryPolicy _retry;
 
@@ -147,21 +173,161 @@ public sealed class GeoServicesFeatureSync
         return PostEditsAsync(target, "adds", BuildFeaturesJson(record, null), "addResults", idempotent: false, cancellationToken);
     }
 
+    /// <summary>
+    /// Submits many records as a single <c>applyEdits</c> with a multi-feature
+    /// <c>adds</c> array — one HTTP round-trip for the whole batch instead of one per
+    /// record. This is the bulk field-submission path: pushing hundreds of queued
+    /// captures one-at-a-time is a throughput and battery sink, whereas a single
+    /// batched call lets the server apply them together.
+    /// </summary>
+    /// <param name="records">The records to add, in order.</param>
+    /// <param name="target">Target service/layer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// One result per input record, aligned by index (the server returns
+    /// <c>addResults</c> in submitted order). A whole-request failure yields a failed
+    /// result for every record.
+    /// </returns>
+    /// <remarks>
+    /// Like <see cref="SubmitAsync"/>, a batch of <c>adds</c> is <em>not idempotent</em>;
+    /// a transport failure with no server response is ambiguous, so the batch is not
+    /// auto-retried here — the failed records stay queued for the caller to re-submit.
+    /// <c>rollbackOnFailure</c> is intentionally <em>not</em> set for the batch so one
+    /// bad record does not reject the whole batch; each record's outcome is reported
+    /// independently in its result.
+    /// </remarks>
+    public async Task<IReadOnlyList<FeatureSyncResult>> SubmitBatchAsync(
+        IReadOnlyList<FieldRecord> records,
+        GeoServicesTarget target,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(target);
+        if (records.Count == 0)
+        {
+            return [];
+        }
+
+        var addsJson = BuildFeaturesArrayJson(records);
+
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["f"] = "json",
+            ["adds"] = addsJson,
+            // No rollbackOnFailure: report each record's outcome independently rather
+            // than failing the whole batch on one bad record.
+            ["rollbackOnFailure"] = "false",
+        });
+
+        string body;
+        try
+        {
+            using var response = await _http.PostAsync(target.ApplyEditsUrl, content, cancellationToken).ConfigureAwait(false);
+            body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return FailEach(records.Count, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            return FailEach(records.Count, ex.Message);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            return FailEach(records.Count, ex.Message); // request timeout
+        }
+
+        return ParseBatchResults(body, records.Count);
+    }
+
+    private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null)
+    {
+        var results = new FeatureSyncResult[count];
+        Array.Fill(results, FeatureSyncResult.Fail(error, code));
+        return results;
+    }
+
+    private static IReadOnlyList<FeatureSyncResult> ParseBatchResults(string body, int expectedCount)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("error", out var error))
+            {
+                var msg = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
+                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+                return FailEach(expectedCount, msg, code);
+            }
+
+            var results = new FeatureSyncResult[expectedCount];
+            JsonElement addResults = default;
+            var haveResults = root.TryGetProperty("addResults", out addResults)
+                && addResults.ValueKind == JsonValueKind.Array;
+
+            for (var i = 0; i < expectedCount; i++)
+            {
+                if (!haveResults || i >= addResults.GetArrayLength())
+                {
+                    results[i] = FeatureSyncResult.Fail("The server returned no result for this record.");
+                    continue;
+                }
+
+                var item = addResults[i];
+                var success = item.TryGetProperty("success", out var s) && s.GetBoolean();
+                long? oid = item.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
+                if (success)
+                {
+                    results[i] = FeatureSyncResult.Ok(oid);
+                    continue;
+                }
+
+                string detail = "Edit was not applied.";
+                int? errCode = null;
+                if (item.TryGetProperty("error", out var e))
+                {
+                    detail = (e.TryGetProperty("description", out var d) ? d.GetString() : detail) ?? detail;
+                    errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
+                }
+
+                results[i] = FeatureSyncResult.Fail(detail, errCode);
+            }
+
+            return results;
+        }
+        catch (JsonException ex)
+        {
+            return FailEach(expectedCount, $"Invalid response: {ex.Message}");
+        }
+    }
+
     /// <summary>Updates an existing feature, identified by its object id.</summary>
     /// <param name="objectId">Server object id to update.</param>
     /// <param name="record">Record carrying the new attribute/geometry values.</param>
     /// <param name="target">Target service/layer.</param>
+    /// <param name="objectIdField">
+    /// The layer's object-id field name to write the id under. Defaults to
+    /// <c>objectid</c> (this product's layer convention); pass the layer's actual
+    /// <c>objectIdFieldName</c> (e.g. <c>OBJECTID</c>, <c>FID</c>) when it differs,
+    /// so the update keys the correct feature instead of silently creating an
+    /// unrecognized attribute and updating nothing.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result for the update.</returns>
     public Task<FeatureSyncResult> UpdateAsync(
         long objectId,
         FieldRecord record,
         GeoServicesTarget target,
+        string objectIdField = DefaultObjectIdField,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
-        return PostEditsAsync(target, "updates", BuildFeaturesJson(record, objectId), "updateResults", idempotent: true, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(objectIdField);
+        return PostEditsAsync(target, "updates", BuildFeaturesJson(record, objectId, objectIdField), "updateResults", idempotent: true, cancellationToken);
     }
 
     /// <summary>Deletes a feature by its object id.</summary>
@@ -205,8 +371,15 @@ public sealed class GeoServicesFeatureSync
         var textPart = new StringContent("json");
         content.Add(textPart, "f");
 
-        var fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
-        var filePart = new ByteArrayContent(fileBytes);
+        // Stream the file straight from disk instead of buffering the whole thing
+        // into a byte[] — a field photo/video can be tens to hundreds of MB, and
+        // ReadAllBytes would pin all of it in managed memory (OOM/GC risk on a
+        // memory-constrained device). The MultipartFormDataContent owns the
+        // StreamContent and disposes the FileStream when `content` is disposed.
+        var fileStream = new FileStream(
+            filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 81920, useAsync: true);
+        var filePart = new StreamContent(fileStream);
         filePart.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue(
                 string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
@@ -253,11 +426,29 @@ public sealed class GeoServicesFeatureSync
         var records = new List<PulledRecord>();
         var offset = 0;
         const int pageSize = 1000;
-        const string ObjectIdOrderField = "objectid";
+        const string ObjectIdOrderField = DefaultObjectIdField;
+
+        // Hard upper bound on pages followed in a single pull. A server that always
+        // reports exceededTransferLimit (a misbehaving/old server that ignores
+        // resultOffset, or a pathologically large layer) would otherwise loop
+        // forever and exhaust device memory accumulating records. 10k pages ×
+        // 1k = 10M features is far beyond any realistic on-device pull, so hitting
+        // it means the server is not paging correctly — fail with a clear error
+        // rather than OOM the app.
+        const int maxPages = 10_000;
+        var pagesFetched = 0;
 
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (pagesFetched++ >= maxPages)
+            {
+                return FeatureQueryResult.Fail(
+                    $"Server did not stop paging after {maxPages.ToString(CultureInfo.InvariantCulture)} pages " +
+                    $"({records.Count.ToString(CultureInfo.InvariantCulture)} features pulled); aborting to bound memory. " +
+                    "The layer's query endpoint may be ignoring resultOffset/orderByFields.");
+            }
 
             var query = new Dictionary<string, string?>
             {
@@ -559,47 +750,72 @@ public sealed class GeoServicesFeatureSync
         return BuildFeaturesJson(record, null);
     }
 
-    private static string BuildFeaturesJson(FieldRecord record, long? objectId)
+    private static string BuildFeaturesJson(FieldRecord record, long? objectId, string objectIdField = DefaultObjectIdField)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartArray();
-            writer.WriteStartObject();
-
-            if (record.Location is { } location)
-            {
-                writer.WriteStartObject("geometry");
-                writer.WriteNumber("x", location.Longitude);
-                writer.WriteNumber("y", location.Latitude);
-                writer.WriteStartObject("spatialReference");
-                writer.WriteNumber("wkid", 4326);
-                writer.WriteEndObject();
-                writer.WriteEndObject();
-            }
-
-            writer.WriteStartObject("attributes");
-            if (objectId is { } oid)
-            {
-                writer.WriteNumber("objectid", oid);
-            }
-
-            foreach (var (key, value) in record.Values)
-            {
-                if (value is null || string.Equals(key, "objectid", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                WriteAttribute(writer, key, value);
-            }
-
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+            WriteFeature(writer, record, objectId, objectIdField);
             writer.WriteEndArray();
         }
 
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static string BuildFeaturesArrayJson(IReadOnlyList<FieldRecord> records)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartArray();
+            foreach (var record in records)
+            {
+                WriteFeature(writer, record, objectId: null, DefaultObjectIdField);
+            }
+
+            writer.WriteEndArray();
+        }
+
+        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteFeature(Utf8JsonWriter writer, FieldRecord record, long? objectId, string objectIdField)
+    {
+        writer.WriteStartObject();
+
+        if (record.Location is { } location)
+        {
+            writer.WriteStartObject("geometry");
+            writer.WriteNumber("x", location.Longitude);
+            writer.WriteNumber("y", location.Latitude);
+            writer.WriteStartObject("spatialReference");
+            writer.WriteNumber("wkid", 4326);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        writer.WriteStartObject("attributes");
+        if (objectId is { } oid)
+        {
+            // Write the id under the layer's actual object-id field so an update
+            // keys the right feature (a wrong/lowercased name would be treated as
+            // an unknown attribute and the update would match nothing).
+            writer.WriteNumber(objectIdField, oid);
+        }
+
+        foreach (var (key, value) in record.Values)
+        {
+            if (value is null || string.Equals(key, objectIdField, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            WriteAttribute(writer, key, value);
+        }
+
+        writer.WriteEndObject();
+        writer.WriteEndObject();
     }
 
     private static void WriteAttribute(Utf8JsonWriter writer, string key, object value)

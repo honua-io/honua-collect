@@ -25,7 +25,7 @@ public class ScreenViewModelTests
     public async Task SyncCenter_uploads_pending_and_moves_them_to_sent()
     {
         var entries = new[] { Outbox("a"), Outbox("b"), new CollectRecordEntry(new FieldRecord { RecordId = "draft", FormId = "f" }) };
-        var vm = new SyncCenterViewModel(entries, (entry, _) => Task.FromResult<string?>($"srv-{entry.Record.RecordId}"));
+        var vm = new SyncCenterViewModel(entries, (entry, _) => Task.FromResult(FeatureSyncResult.Ok(entry.Record.RecordId == "a" ? 1 : 2)));
 
         Assert.Equal(2, vm.Summary.Outbox);
         Assert.Equal(2, vm.Pending.Count);
@@ -42,7 +42,7 @@ public class ScreenViewModelTests
     public async Task SyncCenter_marks_failures_and_keeps_them_pending()
     {
         var entries = new[] { Outbox("a") };
-        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult<string?>(null)); // rejected
+        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult(FeatureSyncResult.Fail("rejected"))); // rejected
 
         var synced = await vm.SyncAsync();
 

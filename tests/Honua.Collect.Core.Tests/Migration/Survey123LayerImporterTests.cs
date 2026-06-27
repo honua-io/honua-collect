@@ -146,6 +146,30 @@ public sealed class Survey123LayerImporterTests
         => Assert.Equal("custom_id", Survey123LayerImporter.Import(LayerSchema, "custom_id").Form.FormId);
 
     [Fact]
+    public void Maps_date_time_variants_distinctly()
+    {
+        // A date-only field has no time component → Date; a timestamp / timestamp-offset
+        // both carry a time → DateTime.
+        const string schema = """
+            {
+              "name": "dates",
+              "fields": [
+                { "name": "d", "type": "esriFieldTypeDateOnly" },
+                { "name": "ts", "type": "esriFieldTypeDate" },
+                { "name": "tso", "type": "esriFieldTypeTimestampOffset" },
+                { "name": "t", "type": "esriFieldTypeTimeOnly" }
+              ]
+            }
+            """;
+        var form = Survey123LayerImporter.Import(schema).Form;
+
+        Assert.Equal(FormFieldType.Date, Field(form, "d").Type);
+        Assert.Equal(FormFieldType.DateTime, Field(form, "ts").Type);
+        Assert.Equal(FormFieldType.DateTime, Field(form, "tso").Type);
+        Assert.Equal(FormFieldType.Time, Field(form, "t").Type);
+    }
+
+    [Fact]
     public void Invalid_json_throws_migration_import_exception()
         => Assert.Throws<MigrationImportException>(() => Survey123LayerImporter.Import("{ not json"));
 

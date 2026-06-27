@@ -147,12 +147,25 @@ public sealed class FormPackageClient
             throw new FormPackageException("The form package response did not contain a form definition.");
         }
 
-        // Group fields by section id (case-sensitive, matching the package keys),
-        // preserving the order fields appear in the package.
-        var fieldsBySection = (package.Fields ?? [])
+        var validFields = (package.Fields ?? [])
             .Where(f => f is not null && !string.IsNullOrWhiteSpace(f.FieldId))
+            .ToList();
+
+        // Group fields by section id (case-sensitive, matching the package keys),
+        // preserving the order fields appear in the package. This is the fallback
+        // for a section that does not declare an explicit fieldIds list.
+        var fieldsBySection = validFields
             .GroupBy(f => f.SectionId ?? string.Empty, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+        // Index by field id so a section's fieldIds list can resolve membership and
+        // order explicitly. Last write wins on a duplicate id (the package is
+        // malformed if that happens; we don't reject it).
+        var fieldsById = new Dictionary<string, FormFieldDto>(StringComparer.Ordinal);
+        foreach (var field in validFields)
+        {
+            fieldsById[field.FieldId!] = field;
+        }
 
         var sections = new List<FormSection>();
         foreach (var section in package.Sections ?? [])
@@ -162,9 +175,34 @@ public sealed class FormPackageClient
                 continue;
             }
 
-            var fields = fieldsBySection.TryGetValue(section.SectionId, out var sectionFields)
-                ? sectionFields.Select(MapField).ToList()
-                : [];
+            // When a section declares fieldIds, that list is authoritative for both
+            // which fields belong to the section and the order they render in — honor
+            // it (skipping blanks, unknown ids, and duplicates). Only when no
+            // fieldIds list is present do we fall back to grouping by each field's
+            // own sectionId in package order.
+            List<FormField> fields;
+            if (section.FieldIds is { Count: > 0 } fieldIds)
+            {
+                fields = [];
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var fieldId in fieldIds)
+                {
+                    if (string.IsNullOrWhiteSpace(fieldId)
+                        || !seen.Add(fieldId)
+                        || !fieldsById.TryGetValue(fieldId, out var dto))
+                    {
+                        continue;
+                    }
+
+                    fields.Add(MapField(dto));
+                }
+            }
+            else
+            {
+                fields = fieldsBySection.TryGetValue(section.SectionId, out var sectionFields)
+                    ? sectionFields.Select(MapField).ToList()
+                    : [];
+            }
 
             sections.Add(new FormSection
             {

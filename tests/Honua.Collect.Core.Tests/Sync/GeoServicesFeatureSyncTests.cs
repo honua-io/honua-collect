@@ -779,6 +779,92 @@ public class GeoServicesFeatureSyncTests
         Assert.Equal(2, handler.Calls);
     }
 
+    [Fact]
+    public async Task UpdateAsync_writes_the_object_id_under_the_layer_object_id_field()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, OkUpdate);
+        using var http = new HttpClient(handler);
+
+        await new GeoServicesFeatureSync(http).UpdateAsync(42, Record(), T, objectIdField: "OBJECTID");
+
+        // The id rides under the layer's actual field name, not a hardcoded "objectid".
+        var updates = Uri.UnescapeDataString(handler.CapturedBody!);
+        Assert.Contains("\"OBJECTID\":42", updates);
+        Assert.DoesNotContain("\"objectid\":42", updates);
+    }
+
+    [Fact]
+    public async Task SubmitBatchAsync_sends_one_applyEdits_with_all_features_and_maps_results_by_index()
+    {
+        var handler = new CapturingHandler(
+            HttpStatusCode.OK,
+            """{"addResults":[{"objectId":11,"success":true},{"objectId":0,"success":false,"error":{"code":1000,"description":"bad"}},{"objectId":13,"success":true}]}""");
+        using var http = new HttpClient(handler);
+
+        var results = await new GeoServicesFeatureSync(http).SubmitBatchAsync([Record(), Record(), Record()], T);
+
+        Assert.Equal(3, results.Count);
+        Assert.True(results[0].Success);
+        Assert.Equal(11, results[0].ObjectId);
+        Assert.False(results[1].Success);
+        Assert.Equal(1000, results[1].ErrorCode);
+        Assert.True(results[2].Success);
+        Assert.Equal(13, results[2].ObjectId);
+
+        // One round-trip carrying all three features in the adds array.
+        var body = Uri.UnescapeDataString(handler.CapturedBody!);
+        using var doc = JsonDocument.Parse(ExtractFormValue(body, "adds"));
+        Assert.Equal(3, doc.RootElement.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task SubmitBatchAsync_fails_every_record_on_a_whole_request_error()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, """{"error":{"code":498,"message":"token expired"}}""");
+        using var http = new HttpClient(handler);
+
+        var results = await new GeoServicesFeatureSync(http).SubmitBatchAsync([Record(), Record()], T);
+
+        Assert.Equal(2, results.Count);
+        Assert.All(results, r => Assert.False(r.Success));
+        Assert.All(results, r => Assert.Equal(498, r.ErrorCode));
+    }
+
+    [Fact]
+    public async Task SubmitBatchAsync_returns_empty_for_no_records()
+        => Assert.Empty(await new GeoServicesFeatureSync(new HttpClient(new CapturingHandler(HttpStatusCode.OK, "{}"))).SubmitBatchAsync([], T));
+
+    [Fact]
+    public async Task QueryAsync_aborts_with_a_clear_error_when_the_server_never_stops_paging()
+    {
+        // A server that always reports exceededTransferLimit would loop forever and
+        // exhaust memory; the pull must bail out with a clear message instead.
+        var handler = new QueryHandler(
+            (HttpStatusCode.OK,
+             """{ "objectIdFieldName": "objectid", "exceededTransferLimit": true, "features": [ { "attributes": { "objectid": 1 } } ] }"""));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http).QueryAsync(new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Contains("did not stop paging", result.Error);
+        Assert.Equal(10_000, handler.CapturedUris.Count); // bounded, did not run away
+    }
+
+    private static string ExtractFormValue(string decodedBody, string key)
+    {
+        // decodedBody is "f=json&adds=[...]&rollbackOnFailure=false"; pull the adds value.
+        foreach (var pair in decodedBody.Split('&'))
+        {
+            if (pair.StartsWith(key + "=", StringComparison.Ordinal))
+            {
+                return pair[(key.Length + 1)..];
+            }
+        }
+
+        throw new InvalidOperationException($"key '{key}' not found in body");
+    }
+
     private sealed class ThrowingHandler(Exception ex) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

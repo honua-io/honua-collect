@@ -40,6 +40,29 @@ public sealed class InMemoryHttpOutboxStore : IHttpOutboxStore
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<HttpOutboxEntry>> LoadDueAsync(DateTimeOffset now, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var due = _entries
+                .Where(e => e.IsDue(now))
+                .OrderBy(e => e.EnqueuedAtUtc)
+                .ToList();
+            return Task.FromResult<IReadOnlyList<HttpOutboxEntry>>(due);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<int> PurgeTerminalAsync(CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var removed = _entries.RemoveAll(e => e.Status is HttpOutboxStatus.Sent or HttpOutboxStatus.Failed);
+            return Task.FromResult(removed);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<HttpOutboxEntry?> FindByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
