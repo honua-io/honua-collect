@@ -110,6 +110,42 @@ public sealed class SqliteHttpOutboxStore : IHttpOutboxStore
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<HttpOutboxEntry>> LoadDueAsync(DateTimeOffset now, CancellationToken ct = default)
+    {
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        // Indexed by (status, next_attempt_utc): only Pending rows that are past their
+        // next-attempt time are scanned, so accumulated Sent/Failed rows never touch
+        // the drain path. Timestamps are stored in a single canonical UTC "O" format,
+        // so the lexicographic compare is chronological.
+        command.CommandText =
+            $"{SelectColumns} FROM {TableName} " +
+            "WHERE status = $pending AND next_attempt_utc <= $now ORDER BY enqueued_utc;";
+        command.Parameters.AddWithValue("$pending", (int)HttpOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$now", ToStorage(now));
+
+        var entries = new List<HttpOutboxEntry>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            entries.Add(ReadEntry(reader));
+        }
+
+        return entries;
+    }
+
+    /// <inheritdoc />
+    public async Task<int> PurgeTerminalAsync(CancellationToken ct = default)
+    {
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"DELETE FROM {TableName} WHERE status IN ($sent, $failed);";
+        command.Parameters.AddWithValue("$sent", (int)HttpOutboxStatus.Sent);
+        command.Parameters.AddWithValue("$failed", (int)HttpOutboxStatus.Failed);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task<HttpOutboxEntry?> FindByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
@@ -274,6 +310,13 @@ public sealed class SqliteHttpOutboxStore : IHttpOutboxStore
             indexCommand.CommandText =
                 $"CREATE UNIQUE INDEX IF NOT EXISTS idx_{TableName}_key ON {TableName} (idempotency_key);";
             await indexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+            // Serves the drain query (due Pending rows only) without scanning the
+            // accumulated terminal rows.
+            await using var dueIndexCommand = connection.CreateCommand();
+            dueIndexCommand.CommandText =
+                $"CREATE INDEX IF NOT EXISTS idx_{TableName}_due ON {TableName} (status, next_attempt_utc);";
+            await dueIndexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
             _schemaReady = true;
         }

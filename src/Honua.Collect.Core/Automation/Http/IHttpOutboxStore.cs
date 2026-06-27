@@ -24,6 +24,19 @@ public interface IHttpOutboxStore
     /// <returns>All entries.</returns>
     Task<IReadOnlyList<HttpOutboxEntry>> LoadAllAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Loads only the entries eligible to send at <paramref name="now"/> — those that
+    /// are <see cref="HttpOutboxStatus.Pending"/> and past their next-attempt time —
+    /// in enqueue order. This is the drain path: it must not rescan the whole table
+    /// (terminal <see cref="HttpOutboxStatus.Sent"/>/<see cref="HttpOutboxStatus.Failed"/>
+    /// rows that accumulate over the app's life), so implementations should serve it
+    /// from an index on the status/next-attempt columns.
+    /// </summary>
+    /// <param name="now">Current UTC time.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The due pending entries, in enqueue order.</returns>
+    Task<IReadOnlyList<HttpOutboxEntry>> LoadDueAsync(DateTimeOffset now, CancellationToken ct = default);
+
     /// <summary>Finds an entry by its idempotency key, or null if none is queued.</summary>
     /// <param name="idempotencyKey">The key to look up.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -34,4 +47,14 @@ public interface IHttpOutboxStore
     /// <param name="id">The entry id to remove.</param>
     /// <param name="ct">Cancellation token.</param>
     Task DeleteAsync(string id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes all terminal entries (<see cref="HttpOutboxStatus.Sent"/> and
+    /// <see cref="HttpOutboxStatus.Failed"/>), which are never retried and would
+    /// otherwise grow the table without bound. The host calls this periodically (e.g.
+    /// after a drain) to keep the outbox small.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The number of entries purged.</returns>
+    Task<int> PurgeTerminalAsync(CancellationToken ct = default);
 }

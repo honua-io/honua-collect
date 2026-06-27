@@ -247,8 +247,13 @@ public static class Survey123LayerImporter
             "esriFieldTypeSmallInteger" or "esriFieldTypeInteger"
                 or "esriFieldTypeBigInteger"
                 or "esriFieldTypeSingle" or "esriFieldTypeDouble" => FormFieldType.Numeric,
-            "esriFieldTypeDate" or "esriFieldTypeDateOnly"
-                or "esriFieldTypeTimestampOffset" => FormFieldType.DateTime,
+            // esriFieldTypeDate (a timestamp) and esriFieldTypeTimestampOffset (a
+            // timestamp with a zone) both carry a time component → DateTime. A
+            // date-only field has no time component, so map it to the dedicated
+            // Date type rather than widening it to a DateTime the user would have
+            // to fill a spurious time on.
+            "esriFieldTypeDate" or "esriFieldTypeTimestampOffset" => FormFieldType.DateTime,
+            "esriFieldTypeDateOnly" => FormFieldType.Date,
             "esriFieldTypeTimeOnly" => FormFieldType.Time,
             "esriFieldTypeGUID" or "esriFieldTypeGlobalID" => FormFieldType.Text,
             "esriFieldTypeBlob" or "esriFieldTypeRaster" => FormFieldType.File,

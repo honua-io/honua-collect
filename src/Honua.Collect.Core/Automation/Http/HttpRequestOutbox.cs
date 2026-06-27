@@ -144,18 +144,17 @@ public sealed class HttpRequestOutbox
     /// <returns>A summary of what happened in this drain.</returns>
     public async Task<HttpDrainResult> DrainAsync(CancellationToken ct = default)
     {
-        var entries = await _store.LoadAllAsync(ct).ConfigureAwait(false);
+        // Query only the due Pending rows (indexed) rather than reloading and sorting
+        // the whole table — terminal Sent/Failed rows accumulate over the app's life
+        // and must not be rescanned on every connectivity tick.
+        var entries = await _store.LoadDueAsync(Now, ct).ConfigureAwait(false);
         var sent = 0;
         var retried = 0;
         var failed = 0;
 
-        foreach (var entry in entries.OrderBy(e => e.EnqueuedAtUtc))
+        foreach (var entry in entries)
         {
             ct.ThrowIfCancellationRequested();
-            if (!entry.IsDue(Now))
-            {
-                continue;
-            }
 
             var outcome = await AttemptAsync(entry, ct).ConfigureAwait(false);
             switch (outcome)
@@ -174,6 +173,17 @@ public sealed class HttpRequestOutbox
 
         return new HttpDrainResult(sent, retried, failed);
     }
+
+    /// <summary>
+    /// Purges terminal (delivered or permanently-failed) entries from the durable
+    /// store so the outbox table does not grow without bound over the app's life. Safe
+    /// to call after a drain or on a maintenance tick; terminal entries are never
+    /// retried, so dropping them loses no pending work.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The number of entries purged.</returns>
+    public Task<int> PurgeTerminalAsync(CancellationToken ct = default)
+        => _store.PurgeTerminalAsync(ct);
 
     private async Task<AttemptOutcome> AttemptAsync(HttpOutboxEntry entry, CancellationToken ct)
     {

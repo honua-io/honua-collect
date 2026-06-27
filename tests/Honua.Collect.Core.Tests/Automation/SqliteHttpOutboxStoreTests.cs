@@ -50,6 +50,38 @@ public class SqliteHttpOutboxStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadDue_returns_only_pending_rows_past_their_next_attempt_time()
+    {
+        var store = new SqliteHttpOutboxStore(_dbPath);
+        var t0 = new DateTimeOffset(2026, 6, 21, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Entry("due", "due") with { NextAttemptUtc = t0 });
+        await store.SaveAsync(Entry("later", "later") with { NextAttemptUtc = t0.AddMinutes(10) });
+        await store.SaveAsync(Entry("sent", "sent") with { Status = HttpOutboxStatus.Sent });
+        await store.SaveAsync(Entry("failed", "failed") with { Status = HttpOutboxStatus.Failed });
+
+        var due = await store.LoadDueAsync(t0.AddMinutes(1));
+
+        var entry = Assert.Single(due); // not the future one, not the terminal ones
+        Assert.Equal("due", entry.Id);
+    }
+
+    [Fact]
+    public async Task PurgeTerminal_deletes_sent_and_failed_but_keeps_pending()
+    {
+        var store = new SqliteHttpOutboxStore(_dbPath);
+        await store.SaveAsync(Entry("p", "p")); // pending
+        await store.SaveAsync(Entry("s", "s") with { Status = HttpOutboxStatus.Sent });
+        await store.SaveAsync(Entry("f", "f") with { Status = HttpOutboxStatus.Failed });
+
+        var purged = await store.PurgeTerminalAsync();
+
+        Assert.Equal(2, purged);
+        var remaining = Assert.Single(await store.LoadAllAsync());
+        Assert.Equal("p", remaining.Id);
+    }
+
+    [Fact]
     public async Task Delivery_state_updates_persist()
     {
         var store = new SqliteHttpOutboxStore(_dbPath);

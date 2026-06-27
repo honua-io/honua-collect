@@ -234,4 +234,25 @@ public class HttpRequestOutboxTests
         var sent = await outbox.DrainAsync();
         Assert.Equal(1, sent.Sent);
     }
+
+    [Fact]
+    public async Task PurgeTerminal_drops_delivered_entries_but_keeps_pending_work()
+    {
+        var store = new InMemoryHttpOutboxStore();
+        var transport = new FakeTransport(HttpSendResult.Ok(), HttpSendResult.Ok());
+        var outbox = new HttpRequestOutbox(store, transport, new FakeClock(Start));
+
+        await outbox.EnqueueAsync(Request("a"));
+        await outbox.EnqueueAsync(Request("b"));
+        await outbox.DrainAsync(); // both delivered -> Sent (terminal)
+
+        var purged = await outbox.PurgeTerminalAsync();
+        Assert.Equal(2, purged);
+        Assert.Empty(await store.LoadAllAsync()); // delivered rows no longer accumulate
+
+        // A freshly queued (still-pending) request is never purged.
+        await outbox.EnqueueAsync(Request("c"));
+        Assert.Equal(0, await outbox.PurgeTerminalAsync());
+        Assert.Single(await store.LoadAllAsync());
+    }
 }

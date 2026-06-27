@@ -115,6 +115,66 @@ public sealed class ResumableUploadDriver
         return new ResumableUploadOutcome(upload.ChunkCount, attemptsUsed, integrityOk);
     }
 
+    /// <summary>
+    /// Streaming overload of <see cref="UploadAsync(ResumableUpload, byte[], string, CancellationToken)"/>
+    /// that reads each chunk from a seekable <paramref name="content"/> stream on demand
+    /// instead of requiring the whole file as a byte[]. A field photo/video can be tens to
+    /// hundreds of MB; this keeps only one chunk's worth of bytes resident at a time, so the
+    /// upload path does not pin the entire file in managed memory (OOM/GC risk on-device).
+    /// </summary>
+    /// <param name="upload">The plan/tracker; already-completed chunks (a resume) are skipped.</param>
+    /// <param name="content">The file as a readable, seekable stream (length must equal <see cref="ResumableUpload.TotalBytes"/>).</param>
+    /// <param name="expectedSha256Hex">The expected lowercase-hex SHA-256 of the whole file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The upload result, including whether final integrity passed.</returns>
+    /// <exception cref="ArgumentException">If the stream is not readable/seekable or its length != the planned total.</exception>
+    /// <exception cref="ChunkUploadException">If a chunk exhausts its retry budget.</exception>
+    public async Task<ResumableUploadOutcome> UploadAsync(
+        ResumableUpload upload,
+        Stream content,
+        string expectedSha256Hex,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(upload);
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrEmpty(expectedSha256Hex);
+        if (!content.CanRead || !content.CanSeek)
+        {
+            throw new ArgumentException("The content stream must be readable and seekable.", nameof(content));
+        }
+
+        if (content.Length != upload.TotalBytes)
+        {
+            throw new ArgumentException(
+                $"Content length {content.Length} does not match the planned total {upload.TotalBytes}.",
+                nameof(content));
+        }
+
+        var attemptsUsed = 0;
+
+        while (upload.NextPending() is { } chunk)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Read exactly this chunk's bytes from its offset; only one chunk is held
+            // in memory at a time rather than the whole file.
+            var buffer = new byte[chunk.Length];
+            content.Position = chunk.Offset;
+            await content.ReadExactlyAsync(buffer.AsMemory(0, (int)chunk.Length), cancellationToken).ConfigureAwait(false);
+
+            var bytes = new ReadOnlyMemory<byte>(buffer);
+            var hash = Convert.ToHexStringLower(SHA256.HashData(bytes.Span));
+
+            attemptsUsed += await SendWithRetryAsync(chunk, bytes, hash, cancellationToken)
+                .ConfigureAwait(false);
+
+            upload.MarkUploaded(chunk.Index, hash);
+        }
+
+        var integrityOk = upload.VerifyFinalIntegrity(content, expectedSha256Hex);
+        return new ResumableUploadOutcome(upload.ChunkCount, attemptsUsed, integrityOk);
+    }
+
     // Sends one chunk, retrying transient ChunkUploadExceptions with backoff. Returns the
     // number of attempts made (>=1). Throws once the attempt budget is exhausted.
     private async Task<int> SendWithRetryAsync(

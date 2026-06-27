@@ -55,6 +55,37 @@ public class ResumableUploadDriverTests
     }
 
     [Fact]
+    public async Task Stream_overload_uploads_each_chunk_without_buffering_the_whole_file()
+    {
+        // AUD-251: the streaming path reads each chunk from a seekable stream on
+        // demand, so the whole file is never materialized as one byte[].
+        var content = Enumerable.Range(0, 250).Select(i => (byte)i).ToArray();
+        var upload = new ResumableUpload(content.Length, chunkSize: 100);
+        var sink = new FakeSink();
+        var driver = new ResumableUploadDriver(sink, delay: NoDelay);
+
+        using var stream = new MemoryStream(content, writable: false);
+        var outcome = await driver.UploadAsync(upload, stream, Sha256Hex(content));
+
+        Assert.True(upload.IsComplete);
+        Assert.True(outcome.IntegrityVerified);
+        Assert.Equal(3, outcome.ChunkCount);
+        Assert.Equal(content, sink.Assemble(content.Length)); // byte-identical reassembly
+        Assert.Equal([0, 1, 2], sink.Received.Select(c => c.Index));
+    }
+
+    [Fact]
+    public async Task Stream_overload_rejects_a_length_mismatch()
+    {
+        var upload = new ResumableUpload(totalBytes: 10, chunkSize: 4);
+        var driver = new ResumableUploadDriver(new FakeSink(), delay: NoDelay);
+        using var stream = new MemoryStream(new byte[9]); // wrong length
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => driver.UploadAsync(upload, stream, "deadbeef"));
+    }
+
+    [Fact]
     public async Task Uploads_all_chunks_and_verifies_final_integrity()
     {
         var content = Enumerable.Range(0, 250).Select(i => (byte)i).ToArray();

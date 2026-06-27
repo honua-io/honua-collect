@@ -1,4 +1,5 @@
 using Honua.Collect.Core.Records;
+using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Mvvm;
 using Honua.Collect.Presentation.Sync;
 using Honua.Sdk.Field.Records;
@@ -19,7 +20,7 @@ public class SyncCenterCommandTests
     [Fact]
     public async Task SyncCommand_is_disabled_the_moment_a_sync_starts()
     {
-        var gate = new TaskCompletionSource<string?>();
+        var gate = new TaskCompletionSource<FeatureSyncResult>();
         var entries = new[] { PendingEntry("r1") };
         var vm = new SyncCenterViewModel(entries, (_, _) => gate.Task);
 
@@ -37,7 +38,7 @@ public class SyncCenterCommandTests
         Assert.False(vm.SyncCommand.CanExecute(null));
         Assert.True(canExecuteChanges >= 1);
 
-        gate.SetResult("remote-1");
+        gate.SetResult(FeatureSyncResult.Ok(1));
         await run;
 
         Assert.False(vm.IsSyncing);
@@ -53,7 +54,7 @@ public class SyncCenterCommandTests
         var entry = PendingEntry("r1");
         var vm = new SyncCenterViewModel(
             new[] { entry },
-            (_, _) => Task.FromResult<string?>("remote-1"),
+            (_, _) => Task.FromResult(FeatureSyncResult.Ok(1)),
             puller: null,
             form: null,
             persist: e => { persisted.Add((e.Record.RecordId, e.SyncState)); return Task.CompletedTask; });
@@ -75,7 +76,7 @@ public class SyncCenterCommandTests
         var entry = PendingEntry("r1");
         var vm = new SyncCenterViewModel(
             new[] { entry },
-            (_, _) => Task.FromResult<string?>("remote-1"),
+            (_, _) => Task.FromResult(FeatureSyncResult.Ok(1)),
             puller: null,
             form: null,
             persist: _ => throw new InvalidOperationException("disk full"));
@@ -87,9 +88,53 @@ public class SyncCenterCommandTests
     }
 
     [Fact]
+    public async Task SyncAsync_batches_adds_into_chunked_round_trips()
+    {
+        // AUD-256: with a batch uploader, new-record adds go up in chunked applyEdits
+        // round-trips rather than one HTTP request per record.
+        var entries = new[] { PendingEntry("r1"), PendingEntry("r2"), PendingEntry("r3") };
+        var batchSizes = new List<int>();
+        BatchRecordUploader batch = (es, _) =>
+        {
+            batchSizes.Add(es.Count);
+            IReadOnlyList<FeatureSyncResult> results =
+                es.Select((_, i) => FeatureSyncResult.Ok(100 + i)).ToList();
+            return Task.FromResult(results);
+        };
+        var vm = new SyncCenterViewModel(
+            entries,
+            (_, _) => Task.FromResult(FeatureSyncResult.Fail("per-record uploader must not run for adds")),
+            puller: null, form: null, persist: null, batchUploader: batch, batchSize: 2);
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(3, synced);
+        Assert.Equal([2, 1], batchSizes); // chunked at 2 -> [r1,r2] then [r3]
+        Assert.All(entries, e => Assert.Equal(RecordSyncState.Synced, e.SyncState));
+    }
+
+    [Fact]
+    public async Task SyncAsync_batch_marks_an_unreported_tail_record_as_failed()
+    {
+        var entries = new[] { PendingEntry("r1"), PendingEntry("r2") };
+        BatchRecordUploader batch = (_, _) =>
+            Task.FromResult<IReadOnlyList<FeatureSyncResult>>([FeatureSyncResult.Ok(1)]); // short by one
+        var vm = new SyncCenterViewModel(
+            entries,
+            (_, _) => Task.FromResult(FeatureSyncResult.Fail("unused")),
+            puller: null, form: null, persist: null, batchUploader: batch);
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(1, synced);
+        Assert.Equal(RecordSyncState.Synced, entries[0].SyncState);
+        Assert.Equal(RecordSyncState.Failed, entries[1].SyncState);
+    }
+
+    [Fact]
     public async Task A_second_sync_while_one_is_running_is_a_no_op()
     {
-        var gate = new TaskCompletionSource<string?>();
+        var gate = new TaskCompletionSource<FeatureSyncResult>();
         var calls = 0;
         var entries = new[] { PendingEntry("r1") };
         var vm = new SyncCenterViewModel(entries, (_, _) => { calls++; return gate.Task; });
@@ -99,7 +144,7 @@ public class SyncCenterCommandTests
 
         Assert.Equal(0, second);
 
-        gate.SetResult("remote-1");
+        gate.SetResult(FeatureSyncResult.Ok(1));
         await first;
 
         Assert.Equal(1, calls); // the uploader ran exactly once

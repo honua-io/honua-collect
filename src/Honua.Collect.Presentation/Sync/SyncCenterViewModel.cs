@@ -15,8 +15,30 @@ namespace Honua.Collect.Presentation.Sync;
 /// </summary>
 /// <param name="entry">The record to upload.</param>
 /// <param name="cancellationToken">Cancellation token.</param>
-/// <returns>The server-assigned id on success, or <see langword="null"/> to signal failure.</returns>
-public delegate Task<string?> RecordUploader(CollectRecordEntry entry, CancellationToken cancellationToken);
+/// <returns>
+/// The <see cref="FeatureSyncResult"/> describing the outcome — success with the
+/// server-assigned object id, or failure carrying the server error message and
+/// code. The sync center threads this straight through to
+/// <see cref="CollectRecordEntry.MarkFailed"/>, so a permissions/token error is
+/// surfaced verbatim instead of being collapsed to a generic "rejected" sentinel.
+/// </returns>
+public delegate Task<FeatureSyncResult> RecordUploader(CollectRecordEntry entry, CancellationToken cancellationToken);
+
+/// <summary>
+/// Uploads a batch of records to the server in one round-trip (a GeoServices
+/// <c>applyEdits</c> with a multi-feature <c>adds</c> array). Implemented by the
+/// app; injected so the sync center is testable. When supplied, the sync center
+/// uses this for new-record adds instead of one HTTP request per record.
+/// </summary>
+/// <param name="entries">The records to upload together, in order.</param>
+/// <param name="cancellationToken">Cancellation token.</param>
+/// <returns>
+/// One <see cref="FeatureSyncResult"/> per input entry, aligned by index. A short
+/// list is treated as a failure for the unreported tail entries.
+/// </returns>
+public delegate Task<IReadOnlyList<FeatureSyncResult>> BatchRecordUploader(
+    IReadOnlyList<CollectRecordEntry> entries,
+    CancellationToken cancellationToken);
 
 /// <summary>
 /// Durably persists an entry's transport state after the sync center mutates it.
@@ -47,8 +69,13 @@ public delegate Task<FeatureQueryResult> FeaturePuller(CancellationToken cancell
 /// </summary>
 public sealed class SyncCenterViewModel : ObservableObject
 {
+    /// <summary>Default number of records sent in one batch <c>applyEdits</c> round-trip.</summary>
+    public const int DefaultBatchSize = 100;
+
     private readonly List<CollectRecordEntry> _entries;
     private readonly RecordUploader _uploader;
+    private readonly BatchRecordUploader? _batchUploader;
+    private readonly int _batchSize;
     private readonly RecordStatePersister? _persist;
     private readonly FeaturePuller? _puller;
     private readonly FormDefinition? _form;
@@ -78,15 +105,27 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// upload, so a synced record is not re-uploaded (and duplicated) after a
     /// restart. When null, state changes are in-memory only.
     /// </param>
+    /// <param name="batchUploader">
+    /// Optional bulk uploader; when supplied, new-record adds are sent in batched
+    /// <c>applyEdits</c> round-trips (chunked at <paramref name="batchSize"/>) instead
+    /// of one HTTP request per record. Server updates still go one-at-a-time through
+    /// <paramref name="uploader"/>. When null, every record uses <paramref name="uploader"/>.
+    /// </param>
+    /// <param name="batchSize">Maximum records per batch round-trip (defaults to <see cref="DefaultBatchSize"/>).</param>
     public SyncCenterViewModel(
         IEnumerable<CollectRecordEntry> entries,
         RecordUploader uploader,
         FeaturePuller? puller,
         FormDefinition? form,
-        RecordStatePersister? persist = null)
+        RecordStatePersister? persist = null,
+        BatchRecordUploader? batchUploader = null,
+        int batchSize = DefaultBatchSize)
     {
         ArgumentNullException.ThrowIfNull(entries);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
         _uploader = uploader ?? throw new ArgumentNullException(nameof(uploader));
+        _batchUploader = batchUploader;
+        _batchSize = batchSize;
         _persist = persist;
         _puller = puller;
         _form = form;
@@ -275,33 +314,21 @@ public sealed class SyncCenterViewModel : ObservableObject
         var synced = 0;
         try
         {
-            foreach (var entry in _entries.Where(e => e.IsPendingUpload).ToList())
-            {
-                entry.MarkUploading();
-                try
-                {
-                    var remoteId = await _uploader(entry, cancellationToken).ConfigureAwait(false);
-                    if (remoteId is not null)
-                    {
-                        entry.MarkSynced(remoteId);
-                        synced++;
-                    }
-                    else
-                    {
-                        entry.MarkFailed("Upload was rejected.");
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    entry.MarkFailed(ex.Message);
-                }
+            var pending = _entries.Where(e => e.IsPendingUpload).ToList();
 
-                // Persist the post-upload transport state durably so a restart does
-                // not re-upload an already-synced record (which would duplicate the
-                // server feature). Persistence is best-effort: a failure to write
-                // local state must not downgrade the in-memory result we just
-                // computed (the record is already on the server).
-                await PersistAsync(entry).ConfigureAwait(false);
+            if (_batchUploader is not null)
+            {
+                // New-record adds can be batched into one applyEdits round-trip; a
+                // server update (PendingUpdate keyed by RemoteId) stays one-at-a-time
+                // because applyEdits batching here targets the adds array only.
+                var adds = pending.Where(e => !e.IsServerUpdate).ToList();
+                var updates = pending.Where(e => e.IsServerUpdate).ToList();
+                synced += await SyncBatchedAsync(adds, cancellationToken).ConfigureAwait(false);
+                synced += await SyncPerRecordAsync(updates, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                synced += await SyncPerRecordAsync(pending, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -311,6 +338,106 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
 
         return synced;
+    }
+
+    private async Task<int> SyncPerRecordAsync(
+        IReadOnlyList<CollectRecordEntry> entries,
+        CancellationToken cancellationToken)
+    {
+        var synced = 0;
+        foreach (var entry in entries)
+        {
+            entry.MarkUploading();
+            try
+            {
+                var result = await _uploader(entry, cancellationToken).ConfigureAwait(false);
+                if (ApplyResult(entry, result))
+                {
+                    synced++;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                entry.MarkFailed(ex.Message);
+            }
+
+            await PersistAsync(entry).ConfigureAwait(false);
+        }
+
+        return synced;
+    }
+
+    private async Task<int> SyncBatchedAsync(
+        IReadOnlyList<CollectRecordEntry> adds,
+        CancellationToken cancellationToken)
+    {
+        var synced = 0;
+        for (var start = 0; start < adds.Count; start += _batchSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var chunk = adds.Skip(start).Take(_batchSize).ToList();
+            foreach (var entry in chunk)
+            {
+                entry.MarkUploading();
+            }
+
+            IReadOnlyList<FeatureSyncResult> results;
+            try
+            {
+                results = await _batchUploader!(chunk, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A whole-batch transport failure fails every record in the chunk;
+                // they stay in the Outbox to retry on the next pass.
+                foreach (var entry in chunk)
+                {
+                    entry.MarkFailed(ex.Message);
+                    await PersistAsync(entry).ConfigureAwait(false);
+                }
+
+                continue;
+            }
+
+            for (var i = 0; i < chunk.Count; i++)
+            {
+                // A result list shorter than the chunk means the server did not
+                // report that entry — treat the unreported tail as failed rather than
+                // silently marking it synced.
+                var result = i < results.Count
+                    ? results[i]
+                    : FeatureSyncResult.Fail("The server did not return a result for this record.");
+                if (ApplyResult(chunk[i], result))
+                {
+                    synced++;
+                }
+
+                await PersistAsync(chunk[i]).ConfigureAwait(false);
+            }
+        }
+
+        return synced;
+    }
+
+    /// <summary>
+    /// Applies an upload outcome to an entry, threading the server's error message
+    /// and code through to <see cref="CollectRecordEntry.MarkFailed"/> (no null
+    /// sentinel). Returns whether the upload succeeded.
+    /// </summary>
+    private static bool ApplyResult(CollectRecordEntry entry, FeatureSyncResult result)
+    {
+        if (result.Success)
+        {
+            // An update returns the same object id; preserve the existing RemoteId
+            // when the server echoes none back.
+            var remoteId = result.ObjectId?.ToString(CultureInfo.InvariantCulture) ?? entry.RemoteId;
+            entry.MarkSynced(remoteId);
+            return true;
+        }
+
+        entry.MarkFailed(result.FailureDescription);
+        return false;
     }
 
     private async Task PersistAsync(CollectRecordEntry entry)

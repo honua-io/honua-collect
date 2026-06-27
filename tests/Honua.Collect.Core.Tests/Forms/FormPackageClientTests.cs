@@ -286,6 +286,32 @@ public class FormPackageClientTests
         return await new FormPackageClient(client).DownloadAsync("svc", "form");
     }
 
+    [Fact]
+    public async Task Map_honors_section_fieldIds_for_membership_and_order()
+    {
+        // fieldIds is authoritative: it sets which fields belong to the section and
+        // the order they render — independent of each field's own sectionId and of
+        // the order fields appear in the package. "c" is excluded (not listed); "b"
+        // is included (listed) despite a different sectionId; order follows fieldIds.
+        const string package = """
+            {
+              "formId": "f",
+              "sections": [ { "sectionId": "s", "label": "S", "fieldIds": ["b", "a"] } ],
+              "fields": [
+                { "fieldId": "a", "label": "A", "type": "text", "sectionId": "s" },
+                { "fieldId": "b", "label": "B", "type": "text", "sectionId": "other" },
+                { "fieldId": "c", "label": "C", "type": "text", "sectionId": "s" }
+              ]
+            }
+            """;
+        using var client = new HttpClient(new StubHandler(package)) { BaseAddress = new Uri("https://s.example") };
+
+        var form = await new FormPackageClient(client).DownloadAsync("svc", "f");
+
+        var section = Assert.Single(form.Sections);
+        Assert.Equal(["b", "a"], section.Fields.Select(f => f.FieldId));
+    }
+
     private sealed class StubHandler(string body, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
         public Uri? LastRequestUri { get; private set; }

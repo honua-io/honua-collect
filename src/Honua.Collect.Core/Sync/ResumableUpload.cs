@@ -234,4 +234,41 @@ public sealed class ResumableUpload
         var actual = Convert.ToHexStringLower(SHA256.HashData(content));
         return string.Equals(actual, expectedSha256Hex, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Stream overload of <see cref="VerifyFinalIntegrity(byte[], string)"/> that hashes
+    /// the file straight from a seekable stream without buffering it all into memory —
+    /// the final gate for the streaming <see cref="ResumableUploadDriver"/> path so a
+    /// multi-hundred-MB media file is never materialized as a single byte[].
+    /// </summary>
+    /// <param name="content">The full file as a readable, seekable stream (length must equal <see cref="TotalBytes"/>).</param>
+    /// <param name="expectedSha256Hex">The expected lowercase-hex SHA-256 of the whole file.</param>
+    /// <returns><see langword="true"/> when complete and the digest matches.</returns>
+    /// <exception cref="InvalidOperationException">If the upload is not yet complete.</exception>
+    /// <exception cref="ArgumentException">If the stream is not seekable or its length != <see cref="TotalBytes"/>.</exception>
+    public bool VerifyFinalIntegrity(Stream content, string expectedSha256Hex)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrEmpty(expectedSha256Hex);
+        if (!IsComplete)
+        {
+            throw new InvalidOperationException("Cannot verify integrity before all chunks are uploaded.");
+        }
+
+        if (!content.CanSeek)
+        {
+            throw new ArgumentException("The content stream must be seekable to verify whole-file integrity.", nameof(content));
+        }
+
+        if (content.Length != TotalBytes)
+        {
+            throw new ArgumentException(
+                $"Content length {content.Length} does not match the planned total {TotalBytes}.",
+                nameof(content));
+        }
+
+        content.Position = 0;
+        var actual = Convert.ToHexStringLower(SHA256.HashData(content));
+        return string.Equals(actual, expectedSha256Hex, StringComparison.OrdinalIgnoreCase);
+    }
 }
