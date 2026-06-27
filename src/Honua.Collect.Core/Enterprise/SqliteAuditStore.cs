@@ -1,4 +1,5 @@
 using System.Globalization;
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Enterprise;
@@ -11,36 +12,20 @@ namespace Honua.Collect.Core.Enterprise;
 /// key, so an out-of-order or duplicate sequence is rejected by the database itself,
 /// reinforcing the monotonic ordering the hash chain depends on.
 /// </summary>
-public sealed class SqliteAuditStore : IAuditStore
+public sealed class SqliteAuditStore : SqliteStoreBase, IAuditStore
 {
     private const string TableName = "collect_audit";
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>Creates the store over a connection string or database file path.</summary>
     /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
     /// <param name="encryptionKey">Optional SQLCipher key; applied as the connection password when non-empty.</param>
     public SqliteAuditStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (connectionStringOrPath.Contains('=', StringComparison.Ordinal))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "audit trail database";
 
     /// <inheritdoc />
     public async Task<long> HeadSequenceAsync(CancellationToken ct = default)
@@ -145,84 +130,22 @@ public sealed class SqliteAuditStore : IAuditStore
         return entries;
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
-    }
-
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            cipherVersion = await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for the audit database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to write the audit trail unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {TableName} (
-                    sequence INTEGER PRIMARY KEY,
-                    timestamp_utc TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    action INTEGER NOT NULL,
-                    record_id TEXT NULL,
-                    details TEXT NULL,
-                    previous_hash TEXT NOT NULL,
-                    hash TEXT NOT NULL
-                );
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {TableName} (
+                sequence INTEGER PRIMARY KEY,
+                timestamp_utc TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                action INTEGER NOT NULL,
+                record_id TEXT NULL,
+                details TEXT NULL,
+                previous_hash TEXT NOT NULL,
+                hash TEXT NOT NULL
+            );
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 }

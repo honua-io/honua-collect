@@ -182,6 +182,15 @@ public sealed class SqliteHttpOutboxStore : IHttpOutboxStore
         {
             await connection.OpenAsync(ct).ConfigureAwait(false);
             await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
+            await using (var pragma = connection.CreateCommand())
+            {
+                // Wait (not fail) on a contended lock, and use WAL so a reader and a
+                // writer don't block each other (AUD-252). journal_mode returns a row
+                // that the non-query execution harmlessly ignores.
+                pragma.CommandText = "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;";
+                await pragma.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+
             await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
             return connection;
         }

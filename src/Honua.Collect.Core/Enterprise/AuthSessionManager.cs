@@ -38,6 +38,12 @@ public sealed class AuthSessionManager
     private readonly TimeProvider _clock;
     private readonly TimeSpan _refreshSkew;
 
+    // Serializes token refresh so a burst of near-expiry requests does not all call
+    // the refresh endpoint at once and rotate refresh tokens that mutually invalidate
+    // each other into 401s (AUD-255). The first caller refreshes; the rest wait, then
+    // reuse the freshly stored session instead of refreshing again.
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+
     /// <summary>Creates the lifecycle manager.</summary>
     /// <param name="store">The shared session store the transport reads from.</param>
     /// <param name="persistence">Secure-storage persistence for cross-restart resume.</param>
@@ -124,24 +130,75 @@ public sealed class AuthSessionManager
             return null;
         }
 
-        var state = current.StateAt(Now, _refreshSkew);
-        if (state == AuthSessionState.Active)
+        if (current.StateAt(Now, _refreshSkew) == AuthSessionState.Active)
         {
             return current;
         }
 
-        // Expiring or expired: try a refresh when both a refresher and a token exist.
+        // Expiring or expired: try a single-flighted refresh when both a refresher and
+        // a token exist. The refresh is serialized so concurrent near-expiry callers
+        // don't stampede the endpoint and rotate tokens into mutual 401s.
         if (_refresher is not null && current.CanRefresh)
         {
+            var refreshed = await RefreshSingleFlightAsync(current, cancellationToken).ConfigureAwait(false);
+            if (refreshed is not null)
+            {
+                return refreshed;
+            }
+        }
+
+        // Re-read: a concurrent caller may have refreshed the stored session while we
+        // were deciding, so honor the freshest state.
+        current = _store.Current ?? current;
+        var state = current.StateAt(Now, _refreshSkew);
+        if (state is AuthSessionState.Active or AuthSessionState.Expiring)
+        {
+            // Active (someone else just refreshed) or still within the token's life:
+            // keep using it until it actually expires.
+            return current;
+        }
+
+        // Expired and unrecoverable: surface a graceful re-sign-in.
+        await SignOutAsync(cancellationToken).ConfigureAwait(false);
+        SessionExpired?.Invoke(this, EventArgs.Empty);
+        return null;
+    }
+
+    /// <summary>
+    /// Refreshes the session under a single-flight lock: only one refresh runs at a
+    /// time, and a caller that finds the stored session already refreshed (Active)
+    /// while it waited reuses it rather than calling the endpoint again.
+    /// </summary>
+    /// <param name="seen">The expiring/expired session the caller observed.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A usable refreshed session, or null when refresh was unavailable/refused.</returns>
+    private async Task<AuthSession?> RefreshSingleFlightAsync(AuthSession seen, CancellationToken cancellationToken)
+    {
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Double-check: another caller may have refreshed while we held in the queue.
+            var current = _store.Current;
+            if (current is not null && current.StateAt(Now, _refreshSkew) == AuthSessionState.Active)
+            {
+                return current;
+            }
+
+            var toRefresh = current ?? seen;
+            if (_refresher is null || !toRefresh.CanRefresh)
+            {
+                return null;
+            }
+
             AuthSession? refreshed;
             try
             {
-                refreshed = await _refresher(current, cancellationToken).ConfigureAwait(false);
+                refreshed = await _refresher(toRefresh, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // A failed refresh is not fatal on its own — fall through to the
-                // expiry decision below (cancellation propagates intentionally).
+                // A failed refresh is not fatal on its own — the caller falls through
+                // to the expiry decision (cancellation propagates intentionally).
                 refreshed = null;
             }
 
@@ -150,17 +207,12 @@ public sealed class AuthSessionManager
                 await SignInAsync(refreshed, cancellationToken).ConfigureAwait(false);
                 return refreshed;
             }
-        }
 
-        if (state == AuthSessionState.Expiring)
+            return null;
+        }
+        finally
         {
-            // Still within the access token's life; keep using it until it expires.
-            return current;
+            _refreshGate.Release();
         }
-
-        // Expired and unrecoverable: surface a graceful re-sign-in.
-        await SignOutAsync(cancellationToken).ConfigureAwait(false);
-        SessionExpired?.Invoke(this, EventArgs.Empty);
-        return null;
     }
 }

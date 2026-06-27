@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Field.Forms.Defaults;
@@ -11,17 +12,12 @@ namespace Honua.Collect.Core.Field.Forms.Defaults;
 /// as <see cref="JsonElement"/> exactly like captured record values, so the
 /// defaults the form layer reads are shaped identically to loaded record values.
 /// </summary>
-public sealed class SqliteAnswerMemoryStore : IAnswerMemoryStore
+public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStore
 {
     private const string LastTable = "collect_answer_last";
     private const string FavoritesTable = "collect_answer_favorites";
 
     private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>
     /// Creates a store over the given connection string or database file path —
@@ -35,23 +31,12 @@ public sealed class SqliteAnswerMemoryStore : IAnswerMemoryStore
     /// device database is encrypted at rest.
     /// </param>
     public SqliteAnswerMemoryStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "remembered-answers database";
 
     /// <inheritdoc />
     public async Task RememberLastAsync(string formId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
@@ -155,87 +140,23 @@ public sealed class SqliteAnswerMemoryStore : IAnswerMemoryStore
         => JsonSerializer.Deserialize<Dictionary<string, object?>>(json, ValuesJsonOptions)
             ?? new Dictionary<string, object?>();
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {LastTable} (
+                form_id TEXT PRIMARY KEY,
+                values_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS {FavoritesTable} (
+                form_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                values_json TEXT NOT NULL,
+                PRIMARY KEY (form_id, name)
+            );
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            cipherVersion = await command.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to store remembered answers unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {LastTable} (
-                    form_id TEXT PRIMARY KEY,
-                    values_json TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS {FavoritesTable} (
-                    form_id TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    values_json TEXT NOT NULL,
-                    PRIMARY KEY (form_id, name)
-                );
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
-    }
-
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 }

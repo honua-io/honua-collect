@@ -221,6 +221,33 @@ public class AuthSessionLifecycleTests
     }
 
     [Fact]
+    public async Task EnsureValidAsync_single_flights_concurrent_refreshes()
+    {
+        // AUD-255: a burst of near-expiry requests must trigger exactly one refresh,
+        // not a stampede that rotates refresh tokens into mutual 401s. The waiters
+        // reuse the freshly stored session instead of refreshing again.
+        var refreshed = Session(TimeSpan.FromHours(1), refresh: "rt2", token: "fresh");
+        var calls = 0;
+        var gate = new TaskCompletionSource();
+        SessionRefresher refresher = async (_, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            await gate.Task.ConfigureAwait(false); // hold the first refresh so the rest queue
+            return refreshed;
+        };
+        var (manager, store, _, _) = Build(refresher);
+        store.Set(Session(TimeSpan.FromMinutes(2), refresh: "rt1"));
+
+        var tasks = Enumerable.Range(0, 5).Select(_ => manager.EnsureValidAsync()).ToArray();
+        gate.SetResult();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.Equal(1, calls);
+        Assert.All(results, r => Assert.Same(refreshed, r));
+        Assert.Same(refreshed, store.Current);
+    }
+
+    [Fact]
     public async Task EnsureValidAsync_expiring_refresh_refused_keeps_current()
     {
         var current = Session(TimeSpan.FromMinutes(2), refresh: "rt1");

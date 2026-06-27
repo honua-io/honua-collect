@@ -26,6 +26,32 @@ public sealed class SqliteRecordStoreTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Database_is_opened_in_WAL_mode()
+    {
+        await _store.SaveAsync(new CollectRecordEntry(NewRecord("r1", RecordStatus.Submitted)));
+
+        await using var raw = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_dbPath}");
+        await raw.OpenAsync();
+        await using var cmd = raw.CreateCommand();
+        cmd.CommandText = "PRAGMA journal_mode;";
+        var mode = (string?)await cmd.ExecuteScalarAsync();
+
+        Assert.Equal("wal", mode, ignoreCase: true); // AUD-252
+    }
+
+    [Fact]
+    public async Task Concurrent_writes_do_not_throw_sqlite_busy()
+    {
+        // busy_timeout + WAL let a concurrent writer wait for the lock instead of
+        // throwing SQLITE_BUSY immediately (AUD-252).
+        var saves = Enumerable.Range(0, 24)
+            .Select(i => _store.SaveAsync(new CollectRecordEntry(NewRecord($"r{i}", RecordStatus.Submitted))));
+        await Task.WhenAll(saves);
+
+        Assert.Equal(24, (await _store.LoadAllAsync()).Count);
+    }
+
     private static FieldRecord NewRecord(
         string recordId,
         RecordStatus status,

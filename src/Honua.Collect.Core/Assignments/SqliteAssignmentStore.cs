@@ -1,5 +1,6 @@
 using System.Globalization;
 using Honua.Sdk.Field.Records;
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Assignments;
@@ -12,36 +13,20 @@ namespace Honua.Collect.Core.Assignments;
 /// fresh device file is usable immediately, and an existing record database can be
 /// reused — the assignments table is independent of <c>collect_records</c>.
 /// </summary>
-public sealed class SqliteAssignmentStore : IAssignmentStore
+public sealed class SqliteAssignmentStore : SqliteStoreBase, IAssignmentStore
 {
     private const string TableName = "collect_assignments";
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>Creates a store over the given connection string or database file path.</summary>
     /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
     /// <param name="encryptionKey">Optional SQLCipher key; when non-empty the database is encrypted at rest.</param>
     public SqliteAssignmentStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "assignment database";
 
     /// <inheritdoc />
     public async Task SaveAsync(FieldAssignment assignment, CancellationToken ct = default)
@@ -176,105 +161,36 @@ public sealed class SqliteAssignmentStore : IAssignmentStore
         return assignment;
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
-    }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {TableName} (
+                assignment_id TEXT PRIMARY KEY,
+                form_id TEXT NOT NULL,
+                assigned_user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                instructions TEXT NULL,
+                lat REAL NULL,
+                lon REAL NULL,
+                accuracy REAL NULL,
+                due_utc TEXT NULL,
+                priority INTEGER NOT NULL,
+                created_utc TEXT NULL,
+                status INTEGER NOT NULL,
+                record_id TEXT NULL,
+                accepted_utc TEXT NULL,
+                completed_utc TEXT NULL
+            );
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
-    /// <summary>
-    /// When an encryption key was supplied, fails closed unless SQLCipher is actually
-    /// active, so the assignment database is never silently written in plaintext (same
-    /// guard as <see cref="Storage.SqliteRecordStore"/>).
-    /// </summary>
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
+        await using var indexCommand = connection.CreateCommand();
+        indexCommand.CommandText =
+            $"CREATE INDEX IF NOT EXISTS idx_{TableName}_user ON {TableName} (assigned_user_id);";
+        await indexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            cipherVersion = result as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to open the assignment " +
-                "database unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {TableName} (
-                    assignment_id TEXT PRIMARY KEY,
-                    form_id TEXT NOT NULL,
-                    assigned_user_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    instructions TEXT NULL,
-                    lat REAL NULL,
-                    lon REAL NULL,
-                    accuracy REAL NULL,
-                    due_utc TEXT NULL,
-                    priority INTEGER NOT NULL,
-                    created_utc TEXT NULL,
-                    status INTEGER NOT NULL,
-                    record_id TEXT NULL,
-                    accepted_utc TEXT NULL,
-                    completed_utc TEXT NULL
-                );
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-            await using var indexCommand = connection.CreateCommand();
-            indexCommand.CommandText =
-                $"CREATE INDEX IF NOT EXISTS idx_{TableName}_user ON {TableName} (assigned_user_id);";
-            await indexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
     }
 
     private static object ToStorage(DateTimeOffset value)
@@ -289,6 +205,4 @@ public sealed class SqliteAssignmentStore : IAssignmentStore
             : DateTimeOffset.Parse(reader.GetString(ordinal), CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind);
 
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 }

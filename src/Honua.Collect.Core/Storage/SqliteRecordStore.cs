@@ -12,16 +12,11 @@ namespace Honua.Collect.Core.Storage;
 /// to JSON; on load they round-trip back as <see cref="JsonElement"/> values,
 /// which the form layer reads positionally.
 /// </summary>
-public sealed class SqliteRecordStore : IRecordStore
+public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 {
     private const string TableName = "collect_records";
 
     private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>
     /// Creates a store over the given connection string or database file path.
@@ -35,23 +30,12 @@ public sealed class SqliteRecordStore : IRecordStore
     /// <c>PRAGMA key</c>). Null/empty opens an unencrypted database.
     /// </param>
     public SqliteRecordStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey; // SQLCipher: applied as PRAGMA key on open
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "field database";
 
     /// <inheritdoc />
     public async Task SaveAsync(CollectRecordEntry entry, CancellationToken ct = default)
@@ -254,81 +238,11 @@ public sealed class SqliteRecordStore : IRecordStore
         return entry;
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// When an encryption key was supplied, fails closed unless SQLCipher is
-    /// actually active. Stock <c>Microsoft.Data.Sqlite</c> over the non-SQLCipher
-    /// native bundle silently ignores the <c>Password</c> (no <c>PRAGMA key</c>),
-    /// so the file would be written in plaintext. <c>PRAGMA cipher_version</c>
-    /// returns the SQLCipher version when the cipher is wired in, and nothing
-    /// otherwise — we use that as the engaged-or-not signal.
-    /// </summary>
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            cipherVersion = result as string;
-        }
-        catch (SqliteException)
-        {
-            // Stock SQLite doesn't recognize the SQLCipher-specific pragma; treat
-            // that as "cipher not engaged" rather than a hard error here so the
-            // single InvalidOperationException below is the one consistent failure.
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). The native SQLCipher bundle " +
-                "(e.g. SQLitePCLRaw.bundle_e_sqlcipher) is not wired in, so the database would " +
-                "be stored in plaintext. Refusing to open the field database unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
                 CREATE TABLE IF NOT EXISTS {TableName} (
                     record_id TEXT PRIMARY KEY,
                     form_id TEXT NOT NULL,
@@ -349,14 +263,8 @@ public sealed class SqliteRecordStore : IRecordStore
                     version INTEGER NOT NULL DEFAULT 0
                 );
                 """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            await EnsureVersionColumnAsync(connection, ct).ConfigureAwait(false);
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await EnsureVersionColumnAsync(connection, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -394,7 +302,4 @@ public sealed class SqliteRecordStore : IRecordStore
             ? null
             : DateTimeOffset.Parse(reader.GetString(ordinal), System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.RoundtripKind);
-
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 }
