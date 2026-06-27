@@ -44,6 +44,49 @@ public class SyncCenterCommandTests
     }
 
     [Fact]
+    public async Task A_successful_sync_persists_the_synced_entry_state()
+    {
+        // The upload mutates the entry to Synced; that state must be persisted so a
+        // restart does not reload it as Pending and re-upload (duplicating the
+        // server feature). AUD-214.
+        var persisted = new List<(string Id, RecordSyncState State)>();
+        var entry = PendingEntry("r1");
+        var vm = new SyncCenterViewModel(
+            new[] { entry },
+            (_, _) => Task.FromResult<string?>("remote-1"),
+            puller: null,
+            form: null,
+            persist: e => { persisted.Add((e.Record.RecordId, e.SyncState)); return Task.CompletedTask; });
+
+        await vm.SyncAsync();
+
+        Assert.Equal(RecordSyncState.Synced, entry.SyncState);
+        var saved = Assert.Single(persisted);
+        Assert.Equal("r1", saved.Id);
+        Assert.Equal(RecordSyncState.Synced, saved.State); // durable state reflects the upload
+    }
+
+    [Fact]
+    public async Task A_persistence_failure_does_not_downgrade_a_synced_record()
+    {
+        // If the local durable write fails after the server already accepted the
+        // upload, the in-memory Synced state must stand: flipping it back to a
+        // re-uploadable state would risk a duplicate on the next pass.
+        var entry = PendingEntry("r1");
+        var vm = new SyncCenterViewModel(
+            new[] { entry },
+            (_, _) => Task.FromResult<string?>("remote-1"),
+            puller: null,
+            form: null,
+            persist: _ => throw new InvalidOperationException("disk full"));
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(1, synced);
+        Assert.Equal(RecordSyncState.Synced, entry.SyncState);
+    }
+
+    [Fact]
     public async Task A_second_sync_while_one_is_running_is_a_no_op()
     {
         var gate = new TaskCompletionSource<string?>();

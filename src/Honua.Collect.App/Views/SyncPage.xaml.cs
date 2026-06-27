@@ -1,3 +1,4 @@
+using System.Globalization;
 using Honua.Collect.App.Services;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
@@ -26,15 +27,31 @@ public partial class SyncPage : ContentPage
         base.OnAppearing();
         await _book.InitializeAsync();
         // 4-arg form enables bidirectional sync: the puller queries the server and
-        // the active form lets the merge classify new-vs-conflicting records.
-        BindingContext = new SyncCenterViewModel(_book.All, UploadAsync, PullAsync, SampleForms.FieldSite());
+        // the active form lets the merge classify new-vs-conflicting records. The
+        // persister durably saves each entry's post-upload state so a restart does
+        // not re-upload (and duplicate) an already-synced record.
+        BindingContext = new SyncCenterViewModel(
+            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync);
     }
 
     private async Task<string?> UploadAsync(Core.Records.CollectRecordEntry entry, CancellationToken cancellationToken)
     {
-        var result = await ServiceHelper.Get<GeoServicesFeatureSync>()
-            .SubmitAsync(entry.Record, _settings.Target, cancellationToken);
-        return result.Success ? result.ObjectId?.ToString() : null;
+        var sync = ServiceHelper.Get<GeoServicesFeatureSync>();
+
+        // Route by the record's transport state. A re-edited, already-synced record
+        // (PendingUpdate carrying its RemoteId) must upload as an UPDATE against the
+        // existing object id — sending it as an add would duplicate the server
+        // feature. A brand-new record uploads as an add.
+        if (entry.IsServerUpdate
+            && long.TryParse(entry.RemoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
+        {
+            var updated = await sync.UpdateAsync(objectId, entry.Record, _settings.Target, cancellationToken);
+            // Preserve the existing RemoteId on success (an update returns the same id).
+            return updated.Success ? (updated.ObjectId?.ToString(CultureInfo.InvariantCulture) ?? entry.RemoteId) : null;
+        }
+
+        var result = await sync.SubmitAsync(entry.Record, _settings.Target, cancellationToken);
+        return result.Success ? result.ObjectId?.ToString(CultureInfo.InvariantCulture) : null;
     }
 
     private async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)

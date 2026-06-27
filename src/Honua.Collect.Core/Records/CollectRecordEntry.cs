@@ -228,6 +228,11 @@ public sealed class CollectRecordEntry
 
         Conflict = null;
         LastError = null;
-        SyncState = RecordSyncState.Pending;
+
+        // A resolved conflict on a record that already exists on the server
+        // (it carries a RemoteId) must upload as an UPDATE against that object id,
+        // not a fresh add — re-adding would duplicate the server feature. Only a
+        // never-synced local record (no RemoteId) re-queues as a plain Pending add.
+        SyncState = RemoteId is not null ? RecordSyncState.PendingUpdate : RecordSyncState.Pending;
     }
 }

@@ -19,6 +19,18 @@ namespace Honua.Collect.Presentation.Sync;
 public delegate Task<string?> RecordUploader(CollectRecordEntry entry, CancellationToken cancellationToken);
 
 /// <summary>
+/// Durably persists an entry's transport state after the sync center mutates it.
+/// Implemented by the host over the record store (typically
+/// <see cref="Core.Storage.RecordBook.SaveAsync"/>); injected so the sync path is
+/// testable without a store. Persisting the post-upload state is what stops an
+/// already-synced record from re-uploading (and duplicating the server feature)
+/// after an app restart.
+/// </summary>
+/// <param name="entry">The entry whose current state should be persisted.</param>
+/// <returns>A task that completes when the state is durably written.</returns>
+public delegate Task RecordStatePersister(CollectRecordEntry entry);
+
+/// <summary>
 /// Pulls the server's current features for the sync center. Implemented by the app
 /// over the platform transport (typically wrapping
 /// <see cref="GeoServicesFeatureSync.QueryAsync"/>); injected so the pull path is
@@ -37,6 +49,7 @@ public sealed class SyncCenterViewModel : ObservableObject
 {
     private readonly List<CollectRecordEntry> _entries;
     private readonly RecordUploader _uploader;
+    private readonly RecordStatePersister? _persist;
     private readonly FeaturePuller? _puller;
     private readonly FormDefinition? _form;
     private readonly FeaturePullService _pullService = new();
@@ -60,14 +73,21 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// <param name="uploader">Uploads a single record.</param>
     /// <param name="puller">Pulls the server's current features.</param>
     /// <param name="form">Form definition used to diff local vs server records.</param>
+    /// <param name="persist">
+    /// Optional sink that durably persists an entry's transport state after each
+    /// upload, so a synced record is not re-uploaded (and duplicated) after a
+    /// restart. When null, state changes are in-memory only.
+    /// </param>
     public SyncCenterViewModel(
         IEnumerable<CollectRecordEntry> entries,
         RecordUploader uploader,
         FeaturePuller? puller,
-        FormDefinition? form)
+        FormDefinition? form,
+        RecordStatePersister? persist = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         _uploader = uploader ?? throw new ArgumentNullException(nameof(uploader));
+        _persist = persist;
         _puller = puller;
         _form = form;
         _entries = entries.ToList();
@@ -275,6 +295,13 @@ public sealed class SyncCenterViewModel : ObservableObject
                 {
                     entry.MarkFailed(ex.Message);
                 }
+
+                // Persist the post-upload transport state durably so a restart does
+                // not re-upload an already-synced record (which would duplicate the
+                // server feature). Persistence is best-effort: a failure to write
+                // local state must not downgrade the in-memory result we just
+                // computed (the record is already on the server).
+                await PersistAsync(entry).ConfigureAwait(false);
             }
         }
         finally
@@ -284,6 +311,27 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
 
         return synced;
+    }
+
+    private async Task PersistAsync(CollectRecordEntry entry)
+    {
+        if (_persist is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _persist(entry).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Local persistence failed; keep the computed in-memory state. The
+            // server side already reflects the upload, so we must not flip a synced
+            // record back to a re-uploadable state here. The next SaveAsync (e.g.
+            // on the following sync pass) will re-attempt the durable write.
+            _ = ex;
+        }
     }
 
     private void RebuildState()

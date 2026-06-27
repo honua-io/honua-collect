@@ -124,6 +124,19 @@ public sealed class GeoServicesFeatureSync
     /// <param name="target">Target service/layer.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The sync result with the server-assigned object id on success.</returns>
+    /// <remarks>
+    /// An <c>add</c> is <em>not idempotent</em>: the Feature Server is not a dedup
+    /// authority, so a retried add creates a second feature. When a request fails
+    /// without a server response (transport reset, request timeout, or a 5xx that
+    /// may have committed before the connection dropped) it is impossible to tell
+    /// whether the add already committed, so this method does <strong>not</strong>
+    /// auto-retry an add in that ambiguous window — it surfaces the failure for the
+    /// caller to reconcile (re-queue once) instead of silently duplicating. Adds are
+    /// still retried on a server-acknowledged transient per-edit failure
+    /// (HTTP 200 with <c>success:false</c> under <c>rollbackOnFailure</c>), which is
+    /// provably non-committed. Add submission therefore carries at-least-once
+    /// semantics; full at-most-once requires server-side dedupe on a client key.
+    /// </remarks>
     public Task<FeatureSyncResult> SubmitAsync(
         FieldRecord record,
         GeoServicesTarget target,
@@ -131,7 +144,7 @@ public sealed class GeoServicesFeatureSync
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
-        return PostEditsAsync(target, "adds", BuildFeaturesJson(record, null), "addResults", cancellationToken);
+        return PostEditsAsync(target, "adds", BuildFeaturesJson(record, null), "addResults", idempotent: false, cancellationToken);
     }
 
     /// <summary>Updates an existing feature, identified by its object id.</summary>
@@ -148,7 +161,7 @@ public sealed class GeoServicesFeatureSync
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
-        return PostEditsAsync(target, "updates", BuildFeaturesJson(record, objectId), "updateResults", cancellationToken);
+        return PostEditsAsync(target, "updates", BuildFeaturesJson(record, objectId), "updateResults", idempotent: true, cancellationToken);
     }
 
     /// <summary>Deletes a feature by its object id.</summary>
@@ -163,7 +176,7 @@ public sealed class GeoServicesFeatureSync
     {
         ArgumentNullException.ThrowIfNull(target);
         var deletes = $"[{objectId.ToString(CultureInfo.InvariantCulture)}]";
-        return PostEditsAsync(target, "deletes", deletes, "deleteResults", cancellationToken);
+        return PostEditsAsync(target, "deletes", deletes, "deleteResults", idempotent: true, cancellationToken);
     }
 
     /// <summary>
@@ -422,6 +435,7 @@ public sealed class GeoServicesFeatureSync
         string editKey,
         string editJson,
         string resultKey,
+        bool idempotent,
         CancellationToken cancellationToken)
     {
         FeatureSyncResult result = new(false, null, "No attempt was made.");
@@ -434,18 +448,28 @@ public sealed class GeoServicesFeatureSync
                 result = (await AttemptAsync(target, editKey, editJson, resultKey, cancellationToken).ConfigureAwait(false))
                     with { Attempts = attempt };
 
-                if (result.Success || isLast || !IsRetryable(result))
+                if (result.Success || isLast || !IsRetryable(result, idempotent))
                 {
                     return result;
                 }
             }
-            catch (HttpRequestException ex) when (!isLast)
+            catch (HttpRequestException ex)
             {
                 result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt);
+                // A transport failure left no server response, so a non-idempotent
+                // add is ambiguous (it may have committed) — never auto-retry it.
+                if (!idempotent || isLast)
+                {
+                    return result;
+                }
             }
-            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested && !isLast)
+            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt); // request timeout
+                if (!idempotent || isLast)
+                {
+                    return result;
+                }
             }
 
             await Task.Delay(BackoffDelay(attempt), cancellationToken).ConfigureAwait(false);
@@ -480,12 +504,21 @@ public sealed class GeoServicesFeatureSync
         return ParseResult(body, resultKey);
     }
 
-    private static bool IsRetryable(FeatureSyncResult result)
+    private static bool IsRetryable(FeatureSyncResult result, bool idempotent)
     {
         // HTTP-level failures carry their status as the code: only 408/429/5xx
         // are transient; other 4xx (auth/validation) are permanent.
         if (result.ErrorCode is >= 400 and < 600 and var http)
         {
+            // For a non-idempotent add a 408/429/5xx is ambiguous — the write may
+            // have committed before the failure response (e.g. 502-after-commit),
+            // so retrying risks a duplicate feature. Only idempotent update/delete
+            // are auto-retried at the HTTP level.
+            if (!idempotent)
+            {
+                return false;
+            }
+
             return http is 408 or 429 or (>= 500 and <= 599);
         }
 
