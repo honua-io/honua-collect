@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
+using Honua.Collect.Core.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Automation.Http;
@@ -14,36 +15,20 @@ namespace Honua.Collect.Core.Automation.Http;
 /// and replays queued requests on the next connectivity drain. Headers are stored as
 /// a JSON object; the idempotency key is uniquely indexed so an enqueue can de-dupe.
 /// </summary>
-public sealed class SqliteHttpOutboxStore : IHttpOutboxStore
+public sealed class SqliteHttpOutboxStore : SqliteStoreBase, IHttpOutboxStore
 {
     private const string TableName = "collect_http_outbox";
-
-    private readonly string _connectionString;
-    private readonly bool _encryptionRequested;
-    private readonly SemaphoreSlim _schemaGate = new(1, 1);
-    private bool _schemaReady;
 
     /// <summary>Creates a store over the given connection string or database file path.</summary>
     /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
     /// <param name="encryptionKey">Optional SQLCipher key; when non-empty the database is encrypted at rest.</param>
     public SqliteHttpOutboxStore(string connectionStringOrPath, string? encryptionKey = null)
+        : base(connectionStringOrPath, encryptionKey)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
-        if (!string.IsNullOrEmpty(encryptionKey))
-        {
-            builder.Password = encryptionKey;
-            _encryptionRequested = true;
-        }
-
-        _connectionString = builder.ToString();
     }
+
+    /// <inheritdoc />
+    protected override string StoreDescription => "HTTP outbox database";
 
     /// <inheritdoc />
     public async Task SaveAsync(HttpOutboxEntry entry, CancellationToken ct = default)
@@ -211,119 +196,40 @@ public sealed class SqliteHttpOutboxStore : IHttpOutboxStore
             : map;
     }
 
-    private async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    /// <inheritdoc />
+    protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
-        try
-        {
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await EnsureCipherEngagedAsync(connection, ct).ConfigureAwait(false);
-            await using (var pragma = connection.CreateCommand())
-            {
-                // Wait (not fail) on a contended lock, and use WAL so a reader and a
-                // writer don't block each other (AUD-252). journal_mode returns a row
-                // that the non-query execution harmlessly ignores.
-                pragma.CommandText = "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;";
-                await pragma.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            }
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            CREATE TABLE IF NOT EXISTS {TableName} (
+                id TEXT PRIMARY KEY,
+                idempotency_key TEXT NOT NULL,
+                method TEXT NOT NULL,
+                url TEXT NOT NULL,
+                headers TEXT NULL,
+                body TEXT NULL,
+                rule_name TEXT NULL,
+                status INTEGER NOT NULL,
+                attempts INTEGER NOT NULL,
+                enqueued_utc TEXT NOT NULL,
+                next_attempt_utc TEXT NOT NULL,
+                last_status_code INTEGER NULL,
+                last_error TEXT NULL
+            );
+            """;
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
-            await EnsureSchemaAsync(connection, ct).ConfigureAwait(false);
-            return connection;
-        }
-        catch
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
-    }
+        await using var indexCommand = connection.CreateCommand();
+        indexCommand.CommandText =
+            $"CREATE UNIQUE INDEX IF NOT EXISTS idx_{TableName}_key ON {TableName} (idempotency_key);";
+        await indexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
-    /// <summary>
-    /// When an encryption key was supplied, fails closed unless SQLCipher is actually
-    /// active, so the outbox database is never silently written in plaintext (same
-    /// guard as <see cref="Storage.SqliteRecordStore"/>).
-    /// </summary>
-    private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (!_encryptionRequested)
-        {
-            return;
-        }
-
-        string? cipherVersion = null;
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA cipher_version;";
-            var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            cipherVersion = result as string;
-        }
-        catch (SqliteException)
-        {
-            cipherVersion = null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cipherVersion))
-        {
-            throw new InvalidOperationException(
-                "An encryption key was provided but SQLCipher is not active for this database " +
-                "(PRAGMA cipher_version returned nothing). Refusing to open the HTTP outbox " +
-                "database unencrypted.");
-        }
-    }
-
-    private async Task EnsureSchemaAsync(SqliteConnection connection, CancellationToken ct)
-    {
-        if (_schemaReady)
-        {
-            return;
-        }
-
-        await _schemaGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_schemaReady)
-            {
-                return;
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                CREATE TABLE IF NOT EXISTS {TableName} (
-                    id TEXT PRIMARY KEY,
-                    idempotency_key TEXT NOT NULL,
-                    method TEXT NOT NULL,
-                    url TEXT NOT NULL,
-                    headers TEXT NULL,
-                    body TEXT NULL,
-                    rule_name TEXT NULL,
-                    status INTEGER NOT NULL,
-                    attempts INTEGER NOT NULL,
-                    enqueued_utc TEXT NOT NULL,
-                    next_attempt_utc TEXT NOT NULL,
-                    last_status_code INTEGER NULL,
-                    last_error TEXT NULL
-                );
-                """;
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-            await using var indexCommand = connection.CreateCommand();
-            indexCommand.CommandText =
-                $"CREATE UNIQUE INDEX IF NOT EXISTS idx_{TableName}_key ON {TableName} (idempotency_key);";
-            await indexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-            // Serves the drain query (due Pending rows only) without scanning the
-            // accumulated terminal rows.
-            await using var dueIndexCommand = connection.CreateCommand();
-            dueIndexCommand.CommandText =
-                $"CREATE INDEX IF NOT EXISTS idx_{TableName}_due ON {TableName} (status, next_attempt_utc);";
-            await dueIndexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
-            _schemaReady = true;
-        }
-        finally
-        {
-            _schemaGate.Release();
-        }
+        // Serves the drain query (due Pending rows only) without scanning the
+        // accumulated terminal rows.
+        await using var dueIndexCommand = connection.CreateCommand();
+        dueIndexCommand.CommandText =
+            $"CREATE INDEX IF NOT EXISTS idx_{TableName}_due ON {TableName} (status, next_attempt_utc);";
+        await dueIndexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     private static string ToStorage(DateTimeOffset value)
@@ -331,7 +237,4 @@ public sealed class SqliteHttpOutboxStore : IHttpOutboxStore
 
     private static DateTimeOffset FromStorage(string value)
         => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-
-    private static bool LooksLikeConnectionString(string value)
-        => value.Contains('=', StringComparison.Ordinal);
 }
