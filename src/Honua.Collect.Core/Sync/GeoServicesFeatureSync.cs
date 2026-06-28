@@ -385,12 +385,29 @@ public sealed class GeoServicesFeatureSync
                 string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
         content.Add(filePart, "attachment", Path.GetFileName(filePath));
 
-        using var response = await _http.PostAsync(target.AttachmentUrl(objectId), content, cancellationToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+        // Convert transport faults into a failed result like SubmitBatchAsync/
+        // QueryAsync/PostEditsAsync do, rather than letting them escape: an uncaught
+        // throw here reaches the upload caller (which has no catch) and can MarkFailed
+        // a record that was already MarkSynced, re-queuing it and risking a duplicate
+        // attachment add on the next drain.
+        string body;
+        try
         {
-            return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
+            using var response = await _http.PostAsync(target.AttachmentUrl(objectId), content, cancellationToken).ConfigureAwait(false);
+            body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            return FeatureSyncResult.Fail(ex.Message);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            return FeatureSyncResult.Fail(ex.Message); // request timeout
         }
 
         return ParseAttachmentResult(body);
