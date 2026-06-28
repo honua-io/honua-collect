@@ -22,6 +22,17 @@ public static class MauiProgram
 	/// </summary>
 	public const string TokenHttpClient = "honua-token";
 
+	/// <summary>
+	/// Named HTTP client for large attachment/media uploads to the server. Same
+	/// base address, auth handler, and certificate pinning as <see cref="ServerHttpClient"/>,
+	/// but with an effectively-infinite <see cref="HttpClient.Timeout"/>: the upload
+	/// is bounded by a per-request, file-size-derived deadline inside
+	/// GeoServicesFeatureSync instead, so a multi-hundred-MB attachment on a slow
+	/// field uplink isn't aborted by the short total timeout the small query/edit
+	/// requests use.
+	/// </summary>
+	public const string UploadHttpClient = "honua-upload";
+
 	/// <summary>Named HTTP client for OpenStreetMap tile requests (no server auth).</summary>
 	public const string TileHttpClient = "osm";
 
@@ -176,6 +187,31 @@ public static class MauiProgram
 				return handler;
 			});
 
+		// Upload client: identical to the server client (base address + auth +
+		// optional cert pinning) but WITHOUT a short total timeout. Attachment bodies
+		// can be tens to hundreds of MB; HttpClient.Timeout is a total per-request
+		// deadline that covers the streamed body, so the 30s ServerRequestTimeout
+		// would abort any large upload on a slow field link regardless of progress.
+		// GeoServicesFeatureSync.AddAttachmentAsync applies its own size-derived
+		// per-request deadline instead, so this client is left effectively unbounded.
+		builder.Services.AddHttpClient(UploadHttpClient, client =>
+			{
+				client.BaseAddress = settings.BaseUri;
+				client.Timeout = Timeout.InfiniteTimeSpan;
+			})
+			.AddHttpMessageHandler<AuthHeaderHandler>()
+			.ConfigurePrimaryHttpMessageHandler(() =>
+			{
+				var handler = new HttpClientHandler();
+				if (pinningCallback is not null)
+				{
+					handler.ServerCertificateCustomValidationCallback =
+						(request, certificate, chain, errors) => pinningCallback(request, certificate, chain, errors);
+				}
+
+				return handler;
+			});
+
 		// Token endpoint client: same server base address + cert pinning, but no auth
 		// handler — sign-in and token refresh present their own credential and must not
 		// recurse through the AuthHeaderHandler.
@@ -204,9 +240,15 @@ public static class MauiProgram
 		});
 		builder.Services.AddHttpClient(AnthropicHttpClient, client => client.Timeout = AiRequestTimeout);
 
-		// The feature-sync transport over the auth-aware server client.
+		// The feature-sync transport over the auth-aware server client, with a
+		// dedicated unbounded-timeout client for large attachment uploads.
 		builder.Services.AddTransient(sp =>
-			new GeoServicesFeatureSync(sp.GetRequiredService<IHttpClientFactory>().CreateClient(ServerHttpClient)));
+		{
+			var factory = sp.GetRequiredService<IHttpClientFactory>();
+			return new GeoServicesFeatureSync(
+				factory.CreateClient(ServerHttpClient),
+				uploadHttp: factory.CreateClient(UploadHttpClient));
+		});
 
 		// The shared, thread-safe record book over a SQLCipher-encrypted store. The
 		// book builds the store lazily so the encryption key is fetched from secure
