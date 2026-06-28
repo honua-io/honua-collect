@@ -133,15 +133,44 @@ public sealed class GeoServicesFeatureSync
     /// </summary>
     private const string DefaultObjectIdField = "objectid";
 
+    /// <summary>
+    /// Minimum upload throughput (bytes/second) assumed when sizing the
+    /// attachment-upload deadline. A slow field uplink is the worst case this must
+    /// tolerate; 8 KB/s (~64 kbit/s) is well below even a poor cellular link, so a
+    /// file that is making any forward progress at all will finish inside the
+    /// derived deadline rather than tripping a flat wall-clock timeout.
+    /// </summary>
+    private const long MinUploadBytesPerSecond = 8 * 1024;
+
+    /// <summary>
+    /// Floor for the attachment-upload deadline, so tiny files still get a sane
+    /// allowance for connection setup, TLS, and server processing.
+    /// </summary>
+    private static readonly TimeSpan MinUploadTimeout = TimeSpan.FromSeconds(60);
+
     private readonly HttpClient _http;
+    private readonly HttpClient _uploadHttp;
     private readonly FeatureSyncRetryPolicy _retry;
 
     /// <summary>Creates the sync client over a configured HTTP client.</summary>
     /// <param name="http">HTTP client (base address/auth headers set by the host).</param>
     /// <param name="retryPolicy">Retry policy; defaults to <see cref="FeatureSyncRetryPolicy.Default"/>.</param>
-    public GeoServicesFeatureSync(HttpClient http, FeatureSyncRetryPolicy? retryPolicy = null)
+    /// <param name="uploadHttp">
+    /// Optional dedicated client for large attachment bodies. Its
+    /// <see cref="HttpClient.Timeout"/> MUST be long (ideally
+    /// <see cref="System.Threading.Timeout.InfiniteTimeSpan"/>) because
+    /// <see cref="AddAttachmentAsync"/> bounds the upload with its own
+    /// size-derived per-request deadline instead — a short total timeout on this
+    /// client would defeat that and abort large media on slow links. Defaults to
+    /// <paramref name="http"/> when not supplied (e.g. in tests).
+    /// </param>
+    public GeoServicesFeatureSync(
+        HttpClient http,
+        FeatureSyncRetryPolicy? retryPolicy = null,
+        HttpClient? uploadHttp = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _uploadHttp = uploadHttp ?? _http;
         _retry = retryPolicy ?? FeatureSyncRetryPolicy.Default;
     }
 
@@ -385,6 +414,18 @@ public sealed class GeoServicesFeatureSync
                 string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
         content.Add(filePart, "attachment", Path.GetFileName(filePath));
 
+        // Bound the upload with a deadline sized to the file, NOT a flat per-request
+        // timeout. _uploadHttp is configured with an effectively-infinite
+        // HttpClient.Timeout precisely so this size-derived budget governs instead:
+        // a multi-hundred-MB attachment over a slow field uplink cannot complete in
+        // the 30s the small query/edit requests use, so reusing that cap here would
+        // abort every large upload regardless of progress. The deadline is generous
+        // (min-throughput floor) so an upload that is making forward progress
+        // finishes, while a truly stalled one still fails instead of hanging forever.
+        var uploadBudget = ComputeUploadTimeout(fileStream.Length);
+        using var uploadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        uploadCts.CancelAfter(uploadBudget);
+
         // Convert transport faults into a failed result like SubmitBatchAsync/
         // QueryAsync/PostEditsAsync do, rather than letting them escape: an uncaught
         // throw here reaches the upload caller (which has no catch) and can MarkFailed
@@ -393,8 +434,8 @@ public sealed class GeoServicesFeatureSync
         string body;
         try
         {
-            using var response = await _http.PostAsync(target.AttachmentUrl(objectId), content, cancellationToken).ConfigureAwait(false);
-            body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            using var response = await _uploadHttp.PostAsync(target.AttachmentUrl(objectId), content, uploadCts.Token).ConfigureAwait(false);
+            body = await response.Content.ReadAsStringAsync(uploadCts.Token).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -405,12 +446,36 @@ public sealed class GeoServicesFeatureSync
         {
             return FeatureSyncResult.Fail(ex.Message);
         }
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            return FeatureSyncResult.Fail(ex.Message); // request timeout
+            // The caller's token was not cancelled, so this is the upload deadline
+            // firing (or an HttpClient request timeout) — a transport failure, not a
+            // user cancel. Surface it as a failed result so the upload is retried.
+            return FeatureSyncResult.Fail(ex.Message);
         }
 
         return ParseAttachmentResult(body);
+    }
+
+    /// <summary>
+    /// Derives an attachment-upload deadline from the file size: the time it would
+    /// take to send the body at <see cref="MinUploadBytesPerSecond"/>, floored at
+    /// <see cref="MinUploadTimeout"/>. This replaces a flat wall-clock timeout so
+    /// large media on a slow link is judged on whether it is making progress, not
+    /// on a fixed cap it can never beat.
+    /// </summary>
+    /// <param name="fileLengthBytes">Size of the file being uploaded, in bytes.</param>
+    /// <returns>The per-request deadline for the upload.</returns>
+    private static TimeSpan ComputeUploadTimeout(long fileLengthBytes)
+    {
+        if (fileLengthBytes <= 0)
+        {
+            return MinUploadTimeout;
+        }
+
+        var seconds = (double)fileLengthBytes / MinUploadBytesPerSecond;
+        var derived = TimeSpan.FromSeconds(seconds);
+        return derived > MinUploadTimeout ? derived : MinUploadTimeout;
     }
 
     /// <summary>
@@ -500,6 +565,15 @@ public sealed class GeoServicesFeatureSync
             }
             catch (HttpRequestException ex)
             {
+                return FeatureQueryResult.Fail(ex.Message);
+            }
+            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                // A TaskCanceledException whose token is NOT the caller's is an
+                // HttpClient request timeout, not a user cancel. Surface it as a
+                // failed pull (matching SubmitAsync/AddAttachmentAsync/PostEditsAsync)
+                // so the caller reports a sync error and can retry, rather than
+                // silently treating the aborted pull as a deliberate cancellation.
                 return FeatureQueryResult.Fail(ex.Message);
             }
 

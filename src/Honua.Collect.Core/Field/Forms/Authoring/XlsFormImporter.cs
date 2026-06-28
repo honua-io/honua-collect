@@ -146,6 +146,8 @@ public static class XlsFormImporter
             "select_one" => FormFieldType.SingleChoice,
             "select_multiple" => FormFieldType.MultipleChoice,
             "geopoint" => FormFieldType.Location,
+            "geotrace" => FormFieldType.GeoTrace,
+            "geoshape" => FormFieldType.GeoShape,
             "image" => FormFieldType.Photo,
             "audio" => FormFieldType.Audio,
             "video" => FormFieldType.Video,

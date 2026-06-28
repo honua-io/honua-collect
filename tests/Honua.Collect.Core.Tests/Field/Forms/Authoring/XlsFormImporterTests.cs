@@ -110,6 +110,8 @@ public class XlsFormImporterTests
     [InlineData("datetime", FormFieldType.DateTime)]
     [InlineData("dateTime", FormFieldType.DateTime)]
     [InlineData("geopoint", FormFieldType.Location)]
+    [InlineData("geotrace", FormFieldType.GeoTrace)]
+    [InlineData("geoshape", FormFieldType.GeoShape)]
     [InlineData("image", FormFieldType.Photo)]
     [InlineData("audio", FormFieldType.Audio)]
     [InlineData("video", FormFieldType.Video)]
