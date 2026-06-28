@@ -204,42 +204,65 @@ public sealed class OsmTileLoader : IDisposable
         var done = 0;
         progress?.Report(new TilePrefetchProgress(0, total));
 
+        // Dispatch every missing tile concurrently and let the shared 6-slot gate cap
+        // in-flight downloads. Awaiting each download inside the foreach (the previous
+        // shape) serialized the whole run — the gate gave zero parallelism — so a large
+        // offline area downloaded ~6x slower than the design's budget and one slow tile
+        // stalled everything behind it. The same gate also bounds the on-demand Get
+        // path, so total concurrency across both stays at 6.
+        var tasks = new List<Task>(total);
         foreach (var t in plan.Tiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!_disk.Contains(t.Zoom, t.X, t.Y))
+            if (_disk.Contains(t.Zoom, t.X, t.Y))
             {
-                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    var bytes = await DownloadAsync(t.Zoom, t.X, t.Y, cancellationToken).ConfigureAwait(false);
-                    if (bytes is not null)
-                    {
-                        await _disk.SaveAsync(t.Zoom, t.X, t.Y, bytes, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    // A real cancellation of the prefetch aborts the whole run.
-                    throw;
-                }
-                catch
-                {
-                    // A single failed tile (including a per-tile fetch timeout) shouldn't
-                    // abort the whole area; it will be re-fetched on demand later.
-                }
-                finally
-                {
-                    _gate.Release();
-                }
+                ReportTileDone();
+                continue;
             }
 
-            done++;
-            progress?.Report(new TilePrefetchProgress(done, total));
+            tasks.Add(FetchTileAsync(t));
         }
 
+        await Task.WhenAll(tasks).ConfigureAwait(false);
         return plan;
+
+        async Task FetchTileAsync(TileCoordinate t)
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var bytes = await DownloadAsync(t.Zoom, t.X, t.Y, cancellationToken).ConfigureAwait(false);
+                if (bytes is not null)
+                {
+                    await _disk.SaveAsync(t.Zoom, t.X, t.Y, bytes, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // A real cancellation of the prefetch aborts the whole run.
+                throw;
+            }
+            catch
+            {
+                // A single failed tile (including a per-tile fetch timeout) shouldn't
+                // abort the whole area; it will be re-fetched on demand later.
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            ReportTileDone();
+        }
+
+        void ReportTileDone()
+        {
+            // Tiles complete on pooled threads, so the running count must be advanced
+            // atomically; IProgress<T>.Report is itself safe to call concurrently.
+            var completed = Interlocked.Increment(ref done);
+            progress?.Report(new TilePrefetchProgress(completed, total));
+        }
     }
 
     /// <inheritdoc />
