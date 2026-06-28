@@ -143,7 +143,7 @@ public static class FulcrumImporter
                     continue;
                 }
 
-                record.Values[prop.Name] = ConvertJsonValue(prop.Value);
+                record.Values[prop.Name] = JsonValueConverter.ToClrValue(prop.Value, includeArrays: true);
             }
 
             records.Add(record);
@@ -414,22 +414,6 @@ public static class FulcrumImporter
             && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
-
-    private static object? ConvertJsonValue(JsonElement value) => value.ValueKind switch
-    {
-        JsonValueKind.String => value.GetString(),
-        JsonValueKind.True => true,
-        JsonValueKind.False => false,
-        JsonValueKind.Null or JsonValueKind.Undefined => null,
-        // Box each numeric branch separately so an integer doesn't widen to double
-        // through the ternary's common type (keeps 62 a long, not 62.0).
-        JsonValueKind.Number => value.TryGetInt64(out var l) ? l : (object)value.GetDouble(),
-        JsonValueKind.Array => value.EnumerateArray()
-            .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : e.GetRawText())
-            .Where(s => s is not null)
-            .ToArray(),
-        _ => value.GetRawText(),
-    };
 
     private static IEnumerable<JsonElement> Single(JsonElement element)
     {
