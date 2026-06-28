@@ -285,10 +285,8 @@ public sealed class GeoServicesFeatureSync
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("error", out var error))
+            if (TryReadServerError(root, out var msg, out var code))
             {
-                var msg = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
-                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
                 return FailEach(expectedCount, msg, code);
             }
 
@@ -305,24 +303,10 @@ public sealed class GeoServicesFeatureSync
                     continue;
                 }
 
-                var item = addResults[i];
-                var success = item.TryGetProperty("success", out var s) && s.GetBoolean();
-                long? oid = item.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
-                if (success)
-                {
-                    results[i] = FeatureSyncResult.Ok(oid);
-                    continue;
-                }
-
-                string detail = "Edit was not applied.";
-                int? errCode = null;
-                if (item.TryGetProperty("error", out var e))
-                {
-                    detail = (e.TryGetProperty("description", out var d) ? d.GetString() : detail) ?? detail;
-                    errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
-                }
-
-                results[i] = FeatureSyncResult.Fail(detail, errCode);
+                var outcome = ReadEditOutcome(addResults[i], "Edit was not applied.");
+                results[i] = outcome.Success
+                    ? FeatureSyncResult.Ok(outcome.ObjectId)
+                    : FeatureSyncResult.Fail(outcome.Detail ?? "Edit was not applied.", outcome.Code);
             }
 
             return results;
@@ -627,10 +611,8 @@ public sealed class GeoServicesFeatureSync
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
 
-        if (root.TryGetProperty("error", out var error))
+        if (TryReadServerError(root, out var msg, out var code))
         {
-            var msg = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
-            int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
             return new FeaturePage([], 0, false, new QueryError(msg, code));
         }
 
@@ -677,7 +659,7 @@ public sealed class GeoServicesFeatureSync
                 continue; // the object id is transport metadata, not a captured value
             }
 
-            values[attribute.Name] = ConvertJsonValue(attribute.Value);
+            values[attribute.Name] = JsonValueConverter.ToClrValue(attribute.Value);
         }
 
         if (objectId is null)
@@ -709,17 +691,67 @@ public sealed class GeoServicesFeatureSync
         return new PulledRecord(objectId.Value, record);
     }
 
-    private static object? ConvertJsonValue(JsonElement value) => value.ValueKind switch
+    /// <summary>The outcome of a single per-edit result item from a GeoServices response.</summary>
+    /// <param name="Success">Whether this edit was applied.</param>
+    /// <param name="ObjectId">The server-assigned object id, when present.</param>
+    /// <param name="Detail">The failure detail when not successful; otherwise the supplied default.</param>
+    /// <param name="Code">The per-edit error code, when present.</param>
+    private readonly record struct EditOutcome(bool Success, long? ObjectId, string? Detail, int? Code);
+
+    /// <summary>
+    /// Reads the top-level GeoServices <c>{"error":{message,code}}</c> envelope.
+    /// This is the wire contract for a failed applyEdits/query/attachment call;
+    /// keeping it in one place stops the four response parsers from drifting in
+    /// how they decode (and default) the server error.
+    /// </summary>
+    /// <param name="root">The response root element.</param>
+    /// <param name="message">The error message, defaulting to <c>"Server error"</c>.</param>
+    /// <param name="code">The error code, when present.</param>
+    /// <returns><see langword="true"/> when the response carries a server error.</returns>
+    private static bool TryReadServerError(JsonElement root, out string message, out int? code)
     {
-        JsonValueKind.String => value.GetString(),
-        JsonValueKind.True => true,
-        JsonValueKind.False => false,
-        JsonValueKind.Null or JsonValueKind.Undefined => null,
-        // Box each numeric branch separately: a unified ternary would widen the
-        // integer branch to double, losing the integral type the submit encoding round-trips.
-        JsonValueKind.Number => value.TryGetInt64(out var l) ? l : (object)value.GetDouble(),
-        _ => value.GetRawText(),
-    };
+        if (root.TryGetProperty("error", out var error))
+        {
+            message = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
+            code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+            return true;
+        }
+
+        message = "Server error";
+        code = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Reads a single GeoServices per-edit result item
+    /// (<c>{success, objectId, error:{description,code}}</c>) shared by the
+    /// add/update/delete and addAttachment result shapes.
+    /// </summary>
+    /// <param name="item">The per-edit result element.</param>
+    /// <param name="defaultDetail">
+    /// The failure detail to use when the item omits an error description
+    /// (context-specific, e.g. "Edit was not applied." vs "Attachment was not added.").
+    /// </param>
+    /// <returns>The decoded outcome.</returns>
+    private static EditOutcome ReadEditOutcome(JsonElement item, string defaultDetail)
+    {
+        var success = item.TryGetProperty("success", out var s) && s.GetBoolean();
+        long? oid = item.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
+        if (success)
+        {
+            return new EditOutcome(true, oid, null, null);
+        }
+
+        var detail = defaultDetail;
+        int? errCode = null;
+        if (item.TryGetProperty("error", out var e))
+        {
+            detail = (e.TryGetProperty("description", out var d) ? d.GetString() : detail) ?? detail;
+            errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
+        }
+
+        return new EditOutcome(false, oid, detail, errCode);
+    }
 
     private async Task<FeatureSyncResult> PostEditsAsync(
         GeoServicesTarget target,
@@ -938,33 +970,17 @@ public sealed class GeoServicesFeatureSync
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("error", out var error))
+            if (TryReadServerError(root, out var msg, out var code))
             {
-                var msg = error.TryGetProperty("message", out var m) ? m.GetString() : "Server error";
-                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
                 return new FeatureSyncResult(false, null, msg, code);
             }
 
             if (root.TryGetProperty(resultKey, out var results) && results.GetArrayLength() > 0)
             {
-                var first = results[0];
-                var success = first.TryGetProperty("success", out var s) && s.GetBoolean();
-                long? oid = first.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
-                if (success)
-                {
-                    return new FeatureSyncResult(true, oid, null);
-                }
-
-                // Per-edit failure: surface the server's error message + code.
-                string? detail = "Edit was not applied.";
-                int? errCode = null;
-                if (first.TryGetProperty("error", out var e))
-                {
-                    detail = e.TryGetProperty("description", out var d) ? d.GetString() : detail;
-                    errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
-                }
-
-                return new FeatureSyncResult(false, oid, detail, errCode);
+                var outcome = ReadEditOutcome(results[0], "Edit was not applied.");
+                return outcome.Success
+                    ? new FeatureSyncResult(true, outcome.ObjectId, null)
+                    : new FeatureSyncResult(false, outcome.ObjectId, outcome.Detail, outcome.Code);
             }
 
             return new FeatureSyncResult(false, null, $"Unexpected response: no {resultKey}.");
@@ -982,32 +998,17 @@ public sealed class GeoServicesFeatureSync
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("error", out var error))
+            if (TryReadServerError(root, out var msg, out var code))
             {
-                var msg = error.TryGetProperty("message", out var m) ? m.GetString() : "Server error";
-                int? code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
                 return new FeatureSyncResult(false, null, msg, code);
             }
 
             if (root.TryGetProperty("addAttachmentResult", out var result))
             {
-                var success = result.TryGetProperty("success", out var s) && s.GetBoolean();
-                long? oid = result.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
-                if (success)
-                {
-                    return new FeatureSyncResult(true, oid, null);
-                }
-
-                // Attachment failure: surface the server's error message + code.
-                string? detail = "Attachment was not added.";
-                int? errCode = null;
-                if (result.TryGetProperty("error", out var e))
-                {
-                    detail = e.TryGetProperty("description", out var d) ? d.GetString() : detail;
-                    errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
-                }
-
-                return new FeatureSyncResult(false, oid, detail, errCode);
+                var outcome = ReadEditOutcome(result, "Attachment was not added.");
+                return outcome.Success
+                    ? new FeatureSyncResult(true, outcome.ObjectId, null)
+                    : new FeatureSyncResult(false, outcome.ObjectId, outcome.Detail, outcome.Code);
             }
 
             return new FeatureSyncResult(false, null, "Unexpected response: no addAttachmentResult.");
