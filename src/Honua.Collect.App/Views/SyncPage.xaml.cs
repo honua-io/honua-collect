@@ -38,11 +38,29 @@ public partial class SyncPage : ContentPage
     {
         var sync = ServiceHelper.Get<GeoServicesFeatureSync>();
 
-        // Route by the record's transport state. A re-edited, already-synced record
-        // (PendingUpdate carrying its RemoteId) must upload as an UPDATE against the
-        // existing object id — sending it as an add would duplicate the server
-        // feature. A brand-new record uploads as an add. The result flows straight to
-        // the sync center, which surfaces the server's error message/code verbatim.
+        // Route by the record's transport state and review status:
+        //  - a locally deleted record -> applyEdits DELETE against its server object
+        //    id (idempotent: a feature already gone is a successful no-op, never a
+        //    duplicate or error). A delete of a never-synced record is a pure local
+        //    drop — there is nothing on the server, so report success.
+        //  - a re-edited, already-synced record (PendingUpdate carrying its RemoteId)
+        //    -> applyEdits UPDATE against the existing object id (an add would
+        //    duplicate the server feature).
+        //  - a brand-new record -> applyEdits ADD (carrying its stable client
+        //    GlobalID so a retried/lost-response add cannot duplicate).
+        // The result flows straight to the sync center, which surfaces the server's
+        // error message/code verbatim.
+        if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted)
+        {
+            if (entry.RemoteId is { } remoteId
+                && long.TryParse(remoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var deleteId))
+            {
+                return await sync.DeleteAsync(deleteId, _settings.Target, cancellationToken);
+            }
+
+            return FeatureSyncResult.Ok(null);
+        }
+
         if (entry.IsServerUpdate
             && long.TryParse(entry.RemoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
         {
@@ -83,9 +101,13 @@ public partial class SyncPage : ContentPage
         ResultLabel.Text =
             $"Pulled: {result.NewRecords.Count} new · {result.Conflicts.Count} conflict(s) · {result.Unchanged.Count} unchanged.";
 
-        if (result.Conflicts.Count > 0)
+        if (vm.Conflicts.Count > 0)
         {
-            await Navigation.PushAsync(new ConflictReviewPage(result.Conflicts[0]));
+            // Hand the review screen the entry-bound conflict view-models (the whole
+            // list, not just the first) plus the record store so each resolution is
+            // applied to its entry AND durably persisted/re-queued — not discarded
+            // (#98). vm.Conflicts is built by PullAsync, bound to the local entries.
+            await Navigation.PushAsync(new ConflictReviewPage(vm.Conflicts.ToList(), _book.SaveAsync));
         }
     }
 }

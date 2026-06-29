@@ -124,6 +124,36 @@ public class SyncCenterPullTests
     }
 
     [Fact]
+    public async Task Resolving_a_conflict_persists_the_merge_and_requeues_for_upload()
+    {
+        // Regression for #98: the review screen must APPLY and PERSIST the user's
+        // resolution, not silently discard it. ApplyResolutionAsync is the call the
+        // ConflictReviewPage now makes; it must mutate the entry AND hand it to the
+        // durable persister so the merge survives a restart and re-uploads.
+        var entries = new[] { SyncedEntry("rec-1", "11", "Mine") };
+        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult(FeatureSyncResult.Fail("unused")),
+            Puller(Server(11, "Theirs")), Form());
+
+        await vm.PullAsync();
+        var review = Assert.Single(vm.Conflicts);
+        review.Conflicts[0].Resolution = ConflictResolution.KeepLocal;
+
+        var persisted = new List<CollectRecordEntry>();
+        await review.ApplyResolutionAsync(entry => { persisted.Add(entry); return Task.CompletedTask; });
+
+        // The chosen merge is applied to the local entry...
+        Assert.Equal("Mine", entries[0].Record.Values["name"]);
+        Assert.False(entries[0].IsConflicted);
+        Assert.Null(entries[0].Conflict);
+        // ...re-queued as an UPDATE (it already exists on the server)...
+        Assert.Equal(RecordSyncState.PendingUpdate, entries[0].SyncState);
+        Assert.Equal(RecordBox.Outbox, entries[0].Box);
+        // ...and durably persisted exactly once (no silent discard).
+        Assert.Same(entries[0], Assert.Single(persisted));
+        Assert.True(review.IsResolved);
+    }
+
+    [Fact]
     public void Pull_path_is_disabled_when_not_configured()
     {
         var vm = new SyncCenterViewModel(
