@@ -134,6 +134,26 @@ public sealed class GeoServicesFeatureSync
     private const string DefaultObjectIdField = "objectid";
 
     /// <summary>
+    /// The attribute name a feature's client-generated GlobalID is written under on
+    /// an <c>add</c>. This is the at-most-once idempotency key: a stable id the
+    /// client derives once (from the record's <see cref="FieldRecord.RecordId"/>)
+    /// and re-sends on every (re)attempt, so a lost-response add that actually
+    /// committed is recognised by the server on the retry instead of inserting a
+    /// second feature. Paired with <c>useGlobalIds=true</c> on the request, this is
+    /// the Esri/GeoServices shape a server dedupes on (server-side dedupe on this
+    /// key is the matching honua-server follow-up; see the PR notes).
+    /// </summary>
+    private const string DefaultGlobalIdField = "globalid";
+
+    /// <summary>
+    /// Namespace for the deterministic (RFC 4122 v5) GlobalID derived from a
+    /// record id. Fixed so the same <see cref="FieldRecord.RecordId"/> always maps
+    /// to the same GlobalID — across retries, app restarts, and re-edits — without
+    /// having to persist a separate key (the record id is already durably stored).
+    /// </summary>
+    private static readonly Guid IdempotencyNamespace = new("9f1d2c3b-4a5e-46f7-8a9b-0c1d2e3f4a5b");
+
+    /// <summary>
     /// Minimum upload throughput (bytes/second) assumed when sizing the
     /// attachment-upload deadline. A slow field uplink is the worst case this must
     /// tolerate; 8 KB/s (~64 kbit/s) is well below even a poor cellular link, so a
@@ -189,8 +209,19 @@ public sealed class GeoServicesFeatureSync
     /// caller to reconcile (re-queue once) instead of silently duplicating. Adds are
     /// still retried on a server-acknowledged transient per-edit failure
     /// (HTTP 200 with <c>success:false</c> under <c>rollbackOnFailure</c>), which is
-    /// provably non-committed. Add submission therefore carries at-least-once
-    /// semantics; full at-most-once requires server-side dedupe on a client key.
+    /// provably non-committed.
+    /// <para>
+    /// To make the add idempotent across a re-attempt the caller <em>does</em> make
+    /// (a next sync pass, a restart, or a re-queue after a lost response), the add
+    /// carries a stable client-generated GlobalID derived from
+    /// <see cref="FieldRecord.RecordId"/> (see <see cref="GlobalIdFor(FieldRecord)"/>),
+    /// sent under the <c>globalid</c> attribute with <c>useGlobalIds=true</c>. The
+    /// same record always sends the same key, so a server that dedupes on GlobalID
+    /// turns a duplicate add into a no-op — the at-most-once guarantee. The
+    /// matching server-side dedupe is a honua-server follow-up; until then the
+    /// client key is inert but harmless and the suppress-on-ambiguity behaviour
+    /// above still prevents auto-retry duplicates.
+    /// </para>
     /// </remarks>
     public Task<FeatureSyncResult> SubmitAsync(
         FieldRecord record,
@@ -199,7 +230,36 @@ public sealed class GeoServicesFeatureSync
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
-        return PostEditsAsync(target, "adds", BuildFeaturesJson(record, null), "addResults", idempotent: false, cancellationToken);
+        return PostEditsAsync(
+            target, "adds", BuildFeaturesJson(record, null, includeGlobalId: true), "addResults",
+            idempotent: false, useGlobalIds: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// The stable, client-generated GlobalID used as the at-most-once idempotency
+    /// key for adding this record. It is a deterministic function of the record's
+    /// <see cref="FieldRecord.RecordId"/>, so it is identical on every (re)attempt,
+    /// after a restart, and after the entry is rehydrated from storage — no extra
+    /// persistence is needed beyond the record id itself. Returned in Esri registry
+    /// format (<c>{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}</c>).
+    /// </summary>
+    /// <param name="record">The record whose stable GlobalID is wanted.</param>
+    /// <returns>The deterministic GlobalID for the record.</returns>
+    public static string GlobalIdFor(FieldRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        return GlobalIdFor(record.RecordId);
+    }
+
+    /// <summary>
+    /// The stable client GlobalID for a record id. See <see cref="GlobalIdFor(FieldRecord)"/>.
+    /// </summary>
+    /// <param name="recordId">The stable record id to derive the GlobalID from.</param>
+    /// <returns>The deterministic GlobalID for the record id.</returns>
+    public static string GlobalIdFor(string recordId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
+        return DeterministicGuid(IdempotencyNamespace, recordId).ToString("B").ToUpperInvariant();
     }
 
     /// <summary>
@@ -243,6 +303,9 @@ public sealed class GeoServicesFeatureSync
         {
             ["f"] = "json",
             ["adds"] = addsJson,
+            // Each batched add carries its stable client GlobalID (see SubmitAsync);
+            // useGlobalIds lets a dedupe-aware server treat a re-sent add as a no-op.
+            ["useGlobalIds"] = "true",
             // No rollbackOnFailure: report each record's outcome independently rather
             // than failing the whole batch on one bad record.
             ["rollbackOnFailure"] = "false",
@@ -340,7 +403,9 @@ public sealed class GeoServicesFeatureSync
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrWhiteSpace(objectIdField);
-        return PostEditsAsync(target, "updates", BuildFeaturesJson(record, objectId, objectIdField), "updateResults", idempotent: true, cancellationToken);
+        return PostEditsAsync(
+            target, "updates", BuildFeaturesJson(record, objectId, objectIdField), "updateResults",
+            idempotent: true, useGlobalIds: false, cancellationToken);
     }
 
     /// <summary>Deletes a feature by its object id.</summary>
@@ -348,15 +413,50 @@ public sealed class GeoServicesFeatureSync
     /// <param name="target">Target service/layer.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result for the delete.</returns>
-    public Task<FeatureSyncResult> DeleteAsync(
+    /// <remarks>
+    /// Delete is idempotent: deleting a feature the server has already removed is
+    /// the desired end state, not an error. A "feature not found"/"does not exist"
+    /// rejection is therefore coerced to success so a retried delete, or a delete of
+    /// a record another client already removed, does not surface a spurious failure
+    /// (the delete→delete path the audit flagged). Combined with the non-retry of an
+    /// ambiguous transport failure, a delete never duplicates work.
+    /// </remarks>
+    public async Task<FeatureSyncResult> DeleteAsync(
         long objectId,
         GeoServicesTarget target,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(target);
         var deletes = $"[{objectId.ToString(CultureInfo.InvariantCulture)}]";
-        return PostEditsAsync(target, "deletes", deletes, "deleteResults", idempotent: true, cancellationToken);
+        var result = await PostEditsAsync(
+            target, "deletes", deletes, "deleteResults", idempotent: true, useGlobalIds: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!result.Success && IsAlreadyAbsent(result))
+        {
+            // The feature is already gone: report the deletion as achieved.
+            return FeatureSyncResult.Ok(objectId) with { Attempts = result.Attempts };
+        }
+
+        return result;
     }
+
+    /// <summary>
+    /// Whether a failed result indicates the target feature is already absent — the
+    /// signal a delete should treat as an idempotent no-op rather than a failure.
+    /// </summary>
+    private static bool IsAlreadyAbsent(FeatureSyncResult result)
+    {
+        var message = result.Error ?? string.Empty;
+        return AbsentFeaturePatterns.Any(p => message.Contains(p, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Substrings (case-insensitive) in a server error message that mean the feature
+    /// being deleted no longer exists, so a delete of it is a successful no-op.
+    /// </summary>
+    private static readonly string[] AbsentFeaturePatterns =
+        ["not found", "does not exist", "unknown object", "cannot find", "no feature"];
 
     /// <summary>
     /// Uploads a media file to a feature's <c>addAttachment</c> endpoint as a
@@ -759,6 +859,7 @@ public sealed class GeoServicesFeatureSync
         string editJson,
         string resultKey,
         bool idempotent,
+        bool useGlobalIds,
         CancellationToken cancellationToken)
     {
         FeatureSyncResult result = new(false, null, "No attempt was made.");
@@ -768,7 +869,7 @@ public sealed class GeoServicesFeatureSync
             var isLast = attempt >= _retry.MaxAttempts;
             try
             {
-                result = (await AttemptAsync(target, editKey, editJson, resultKey, cancellationToken).ConfigureAwait(false))
+                result = (await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds, cancellationToken).ConfigureAwait(false))
                     with { Attempts = attempt };
 
                 if (result.Success || isLast || !IsRetryable(result, idempotent))
@@ -806,14 +907,24 @@ public sealed class GeoServicesFeatureSync
         string editKey,
         string editJson,
         string resultKey,
+        bool useGlobalIds,
         CancellationToken cancellationToken)
     {
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        var fields = new Dictionary<string, string>
         {
             ["f"] = "json",
             [editKey] = editJson,
             ["rollbackOnFailure"] = "true",
-        });
+        };
+
+        if (useGlobalIds)
+        {
+            // The edit carries a stable client GlobalID; tell a dedupe-aware server
+            // to key on it so a re-sent add is a no-op rather than a duplicate.
+            fields["useGlobalIds"] = "true";
+        }
+
+        using var content = new FormUrlEncodedContent(fields);
 
         using var response = await _http.PostAsync(target.ApplyEditsUrl, content, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -864,6 +975,40 @@ public sealed class GeoServicesFeatureSync
         return TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * max);
     }
 
+    /// <summary>
+    /// Computes an RFC 4122 §4.3 name-based (version 5, SHA-1) UUID from a namespace
+    /// and a name. Deterministic, so it yields a stable GlobalID for a given record
+    /// id without storing one.
+    /// </summary>
+    private static Guid DeterministicGuid(Guid ns, string name)
+    {
+        var nsBytes = ns.ToByteArray();
+        SwapGuidByteOrder(nsBytes); // .NET's Guid byte layout -> RFC big-endian
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
+
+        var input = new byte[nsBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(nsBytes, 0, input, 0, nsBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, input, nsBytes.Length, nameBytes.Length);
+
+        var hash = System.Security.Cryptography.SHA1.HashData(input);
+
+        var guidBytes = new byte[16];
+        Array.Copy(hash, guidBytes, 16);
+        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x50); // version 5
+        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80); // RFC 4122 variant
+
+        SwapGuidByteOrder(guidBytes); // RFC big-endian -> .NET Guid byte layout
+        return new Guid(guidBytes);
+    }
+
+    private static void SwapGuidByteOrder(byte[] guid)
+    {
+        (guid[0], guid[3]) = (guid[3], guid[0]);
+        (guid[1], guid[2]) = (guid[2], guid[1]);
+        (guid[4], guid[5]) = (guid[5], guid[4]);
+        (guid[6], guid[7]) = (guid[7], guid[6]);
+    }
+
     /// <summary>Serializes a record to the GeoServices <c>adds</c> array JSON.</summary>
     /// <param name="record">Record to serialize.</param>
     /// <returns>A one-element JSON array string with geometry + attributes.</returns>
@@ -873,13 +1018,14 @@ public sealed class GeoServicesFeatureSync
         return BuildFeaturesJson(record, null);
     }
 
-    private static string BuildFeaturesJson(FieldRecord record, long? objectId, string objectIdField = DefaultObjectIdField)
+    private static string BuildFeaturesJson(
+        FieldRecord record, long? objectId, string objectIdField = DefaultObjectIdField, bool includeGlobalId = false)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartArray();
-            WriteFeature(writer, record, objectId, objectIdField);
+            WriteFeature(writer, record, objectId, objectIdField, includeGlobalId);
             writer.WriteEndArray();
         }
 
@@ -894,7 +1040,7 @@ public sealed class GeoServicesFeatureSync
             writer.WriteStartArray();
             foreach (var record in records)
             {
-                WriteFeature(writer, record, objectId: null, DefaultObjectIdField);
+                WriteFeature(writer, record, objectId: null, DefaultObjectIdField, includeGlobalId: true);
             }
 
             writer.WriteEndArray();
@@ -903,7 +1049,8 @@ public sealed class GeoServicesFeatureSync
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    private static void WriteFeature(Utf8JsonWriter writer, FieldRecord record, long? objectId, string objectIdField)
+    private static void WriteFeature(
+        Utf8JsonWriter writer, FieldRecord record, long? objectId, string objectIdField, bool includeGlobalId)
     {
         writer.WriteStartObject();
 
@@ -927,9 +1074,19 @@ public sealed class GeoServicesFeatureSync
             writer.WriteNumber(objectIdField, oid);
         }
 
+        if (includeGlobalId && !string.IsNullOrWhiteSpace(record.RecordId))
+        {
+            // Stable client GlobalID = the at-most-once idempotency key for this add.
+            // Deterministic in RecordId, so every (re)attempt of the same record
+            // sends the same value and a dedupe-aware server collapses the retry.
+            writer.WriteString(DefaultGlobalIdField, GlobalIdFor(record.RecordId));
+        }
+
         foreach (var (key, value) in record.Values)
         {
-            if (value is null || string.Equals(key, objectIdField, StringComparison.OrdinalIgnoreCase))
+            if (value is null
+                || string.Equals(key, objectIdField, StringComparison.OrdinalIgnoreCase)
+                || (includeGlobalId && string.Equals(key, DefaultGlobalIdField, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }

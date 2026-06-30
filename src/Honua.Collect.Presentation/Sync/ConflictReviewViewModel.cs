@@ -171,6 +171,29 @@ public sealed class ConflictReviewViewModel : ObservableObject
         return merged;
     }
 
+    /// <summary>
+    /// Applies the resolution to the bound entry (see <see cref="ApplyResolution"/>)
+    /// and then durably persists the entry so the merged result survives a restart
+    /// and is re-queued for upload through the normal sync path. This is the call the
+    /// review screen makes — applying without persisting would silently discard the
+    /// resolution on the next launch (the #98 data-loss bug).
+    /// </summary>
+    /// <param name="persist">
+    /// Sink that durably writes the entry's state (typically the record store's
+    /// <c>SaveAsync</c>); when null, the resolution is applied in memory only.
+    /// </param>
+    /// <returns>The merged record that was applied.</returns>
+    public async Task<FieldRecord> ApplyResolutionAsync(RecordStatePersister? persist)
+    {
+        var merged = ApplyResolution();
+        if (persist is not null && _entry is not null)
+        {
+            await persist(_entry).ConfigureAwait(false);
+        }
+
+        return merged;
+    }
+
     private void SetAll(ConflictResolution resolution)
     {
         foreach (var conflict in Conflicts)
