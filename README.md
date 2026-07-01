@@ -38,7 +38,7 @@ protected by ELv2's anti-circumvention terms).
 | Photo / signature capture | ✅ | ✅ | ✅ |
 | **Reports & exports** (per-record PDF/Word, bulk export) | — | ✅ | ✅ |
 | **AI-assisted capture** (voice/photo-to-fields, redaction) | — | ✅ | ✅ |
-| **Advanced sync & GIS** (conflict-review UI, selective sync, external GNSS) | — | ✅ | ✅ |
+| **Advanced sync & GIS** (selective sync, external GNSS) | — | ✅ | ✅ |
 | **Enterprise auth & admin** (SSO, roles, audit, MDM/white-label) | — | — | ✅ |
 
 _Tier assignments are provisional and subject to change before GA._
