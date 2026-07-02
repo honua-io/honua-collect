@@ -132,7 +132,7 @@ and the README table mirrors it:
 | Photo / signature capture | ✅ | ✅ | ✅ |
 | Reports & exports (`ReportsAndExports`) | — | ✅ | ✅ |
 | AI-assisted capture (`AiAssistedCapture`) | — | ✅ | ✅ |
-| Advanced sync & GIS — conflict-review UI, selective sync, external GNSS (`AdvancedSyncAndGis`) | — | ✅ | ✅ |
+| Advanced sync & GIS — selective sync, external GNSS (`AdvancedSyncAndGis`) | — | ✅ | ✅ |
 | Enterprise auth & admin — SSO, roles, audit, MDM (`EnterpriseAuthAndAdmin`) | — | — | ✅ |
 
 How entitlement is enforced for a self-host:
