@@ -3,6 +3,7 @@
 [![CI](https://github.com/honua-io/honua-collect/actions/workflows/ci.yml/badge.svg?branch=trunk)](https://github.com/honua-io/honua-collect/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/honua-io/honua-collect/actions/workflows/codeql.yml/badge.svg?branch=trunk)](https://github.com/honua-io/honua-collect/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/honua-io/honua-collect/badge)](https://scorecard.dev/viewer/?uri=github.com/honua-io/honua-collect)
+[![License](https://img.shields.io/badge/License-Elastic_License_2.0-blue.svg)](LICENSE)
 
 **Honua Collect** is an offline-first mobile field data collection app — a
 source-available alternative to Esri Survey123 / Field Maps and Fulcrum, built
