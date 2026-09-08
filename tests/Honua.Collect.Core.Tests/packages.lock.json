@@ -26,9 +26,9 @@
       },
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[3.119.0, )",
-        "resolved": "3.119.0",
-        "contentHash": "e92vdqf1VOETPjy1T67Fs1zPxfGMM1nbrpt69GM5foXSI/iIbq6L9avPz/bl/DbWtb81D0yF/NKjRmXuOZoLcg=="
+        "requested": "[4.151.2, )",
+        "resolved": "4.151.2",
+        "contentHash": "WrEmGx0ntYCIc+DzrXDfroE0/8spBs//pPc4nhgvRKOw+WedKF+ATJMv58XA9SxzxfgqjGqlCRWaK9gDPueIvw=="
       },
       "xunit": {
         "type": "Direct",

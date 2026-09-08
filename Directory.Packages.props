@@ -42,7 +42,7 @@
   -->
   <ItemGroup>
     <PackageVersion Include="SkiaSharp" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.2" />
   </ItemGroup>
 
   <!-- Storage / crypto. -->
