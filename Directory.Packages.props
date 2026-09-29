@@ -19,7 +19,7 @@
     in #31), then re-run restore to refresh the lockfiles.
   -->
   <PropertyGroup>
-    <HonuaSdkDotNetTrainVersion>1.7.0</HonuaSdkDotNetTrainVersion>
+    <HonuaSdkDotNetTrainVersion>1.10.1</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>10.0.110</MauiVersion>
   </PropertyGroup>
@@ -41,8 +41,8 @@
     The App layer keeps its MAUI-Graphics path for on-device capture.
   -->
   <ItemGroup>
-    <PackageVersion Include="SkiaSharp" Version="4.152.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.152.1" />
+    <PackageVersion Include="SkiaSharp" Version="4.153.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.0" />
   </ItemGroup>
 
   <!-- Storage / crypto. -->
@@ -63,8 +63,8 @@
 
   <!-- Test stack. -->
   <ItemGroup>
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="coverlet.msbuild" Version="10.0.1" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="coverlet.msbuild" Version="10.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
