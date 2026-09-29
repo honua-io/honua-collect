@@ -112,7 +112,7 @@ public sealed class SkiaImageResizer : IImageResizer
         var copy = new SKBitmap(source.Width, source.Height, source.ColorType, source.AlphaType);
         using var canvas = new SKCanvas(copy);
         using var image = SKImage.FromBitmap(source);
-        canvas.DrawImage(image, 0, 0);
+        canvas.DrawImage(image, 0, 0, SKSamplingOptions.Default, paint: null);
         return copy;
     }
 
