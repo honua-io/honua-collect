@@ -11,7 +11,7 @@ What is welcome:
 
 - **Bug reports and feature requests** as GitHub issues. Use the issue templates;
   include the capability key when you know it.
-- **Security findings** through the process in [SECURITY.md](SECURITY.md). Do not open
+- **Security findings** through the organization security policy at https://github.com/honua-io/.github/blob/main/SECURITY.md (security@honua.io). Do not open
   public issues for suspected vulnerabilities.
 - **Interoperability reports** from client tooling (QGIS, ArcGIS, GDAL, OWSLib and
   others) as issues, with the request and response that misbehaved.
