@@ -5,7 +5,7 @@ namespace Honua.Collect.Core.Licensing;
 /// license keys fully offline. The matching <em>private</em> key is held offline by
 /// the licensing authority and is never present in this repository or the binary —
 /// only signatures it produces can be trusted, which is the anti-circumvention
-/// property ELv2 backs.
+/// property the FCL backs.
 /// </summary>
 /// <remarks>
 /// Provision the production key per release. To rotate: generate a new key pair
