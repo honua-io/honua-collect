@@ -8,7 +8,7 @@ namespace Honua.Collect.Core.Editions;
 /// <remarks>
 /// This type only models <em>which</em> edition unlocks <em>what</em>. It does
 /// NOT verify entitlements — runtime enforcement (signed license keys, the
-/// entitlement check ELv2 protects from circumvention) is a later layer. See
+/// entitlement check the FCL protects from circumvention) is a later layer. See
 /// ROADMAP.md.
 /// </remarks>
 public static class CollectFeatures

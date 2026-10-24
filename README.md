@@ -91,7 +91,7 @@ evidence.
 
 A fully usable **Community** edition is free. Selected capabilities are gated to
 **Pro** / **Enterprise** via a signed license key, verified offline on device
-(enforcement protected by ELv2's anti-circumvention terms).
+(enforcement protected by the Fair Core License's anti-circumvention terms).
 
 | Capability | Community | Pro | Enterprise |
 | --- | :---: | :---: | :---: |
@@ -139,12 +139,15 @@ CI runs secret scanning over full git history (gitleaks), a locked-mode
 vulnerable-dependency gate, CodeQL, Trivy, and OpenSSF Scorecard. On-device
 records are encrypted at rest with SQLCipher.
 
-## License (open core)
+## License (fair core)
 
-Honua Collect is **source-available under the [Elastic License 2.0](LICENSE)
-(ELv2)**. In short: use it, modify it, redistribute it freely — but you may not
-offer it to third parties as a hosted/managed service, and you may not
-circumvent the license-key functionality that gates paid features.
+Honua Collect is **source-available under the [Fair Core License, Version 1.0,
+ALv2 Future License](LICENSE) (FCL-1.0-ALv2)**. In short: use it, modify it,
+redistribute it freely — but you may not make it available to others in a
+commercial product or service that substitutes for it (a Competing Use), and you
+may not circumvent the license-key functionality that gates paid features. Each
+version is additionally licensed under Apache-2.0 two years after release; see
+[NOTICE](NOTICE). Versions published before this change remain under ELv2.
 
 It is built **on top of** the Honua SDK packages, which remain **Apache-2.0**
 and are consumed as versioned NuGet packages — never vendored or relicensed:
@@ -153,4 +156,4 @@ and are consumed as versioned NuGet packages — never vendored or relicensed:
 | --- | --- | --- | --- |
 | `Honua.Sdk.*` | [honua-io/honua-sdk-dotnet](https://github.com/honua-io/honua-sdk-dotnet) | Apache-2.0 | platform-neutral SDK |
 | `Honua.Mobile.*` | [honua-io/honua-mobile](https://github.com/honua-io/honua-mobile) | Apache-2.0 | mobile SDK foundation |
-| **Honua Collect** | this repo | **ELv2** | the product |
+| **Honua Collect** | this repo | **FCL-1.0-ALv2** | the product |

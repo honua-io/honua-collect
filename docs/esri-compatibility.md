@@ -118,7 +118,7 @@ moat.
 
 | Capability | Honua Collect | Survey123 | Fulcrum | Evidence |
 | --- | :---: | :---: | :---: | --- |
-| Source-available | ✅ (ELv2) | — | — | [LICENSE](../LICENSE) |
+| Source-available | ✅ (FCL-1.0-ALv2) | — | — | [LICENSE](../LICENSE) |
 | Self-hostable / on-prem | ✅ | 🟡 (only via costly ArcGIS Enterprise) | — (cloud-only) | [self-hosting guide](./self-hosting.md) |
 | Air-gapped capable | ✅ | 🟡 | — | offline capture + offline licence verification |
 | No per-seat SaaS tax / user-type tax | ✅ | — (expensive ArcGIS user types) | — (per-seat, 5-user floor) | open-core editions |

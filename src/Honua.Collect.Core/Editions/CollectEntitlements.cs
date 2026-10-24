@@ -36,7 +36,7 @@ public sealed class FeatureNotEntitledException : InvalidOperationException
 /// <remarks>
 /// <para>
 /// This is intentionally separate from <em>how the edition is established</em>.
-/// Signed license-key verification — the anti-circumvention mechanism ELv2
+/// Signed license-key verification — the anti-circumvention mechanism the FCL
 /// protects — is the deferred upstream layer (see ROADMAP.md) and will be the
 /// trusted source of the <see cref="Edition"/> value. This type is the seam the
 /// rest of the product calls so that gating logic is centralised and testable

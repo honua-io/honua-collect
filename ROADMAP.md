@@ -12,8 +12,8 @@ collection product across `honua-mobile` and `honua-collect`.
   GeoPackage storage, device location, native bindings). Collect consumes these
   as packages (`Honua.Mobile.Sdk`, `Honua.Mobile.Offline`, `Honua.Mobile.Maui`).
 - **Mobile field-collection product layer** (today `Honua.Mobile.Field` /
-  `Honua.Mobile.FieldCollection`) — **consolidated into this repo (ELv2)**. We
-  own this code, so relicensing our own source under ELv2 is our call; third-
+  `Honua.Mobile.FieldCollection`) — **consolidated into this repo (FCL-1.0-ALv2)**. We
+  own this code, so relicensing our own source under the FCL is our call; third-
   party Apache portions retain their notices.
 
 ## Migration plan: port the field layer into Collect
@@ -29,11 +29,11 @@ collection product across `honua-mobile` and `honua-collect`.
 5. **Build the Community baseline UX** in `Honua.Collect.App` (forms, camera,
    geometry capture, offline sync status).
 
-## Editions (open core, ELv2)
+## Editions (fair core, FCL-1.0-ALv2)
 
 `Honua.Collect.Core/Editions` encodes the tier matrix. Free Community baseline;
 paid features gated to Pro/Enterprise. Runtime enforcement — signed license-key
-verification + the entitlement check ELv2 protects from circumvention — is a
+verification + the entitlement check the FCL protects from circumvention — is a
 later layer and is intentionally **not implemented yet**.
 
 | Capability | Min edition |
