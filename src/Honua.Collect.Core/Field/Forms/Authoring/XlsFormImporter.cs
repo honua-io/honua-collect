@@ -5,7 +5,7 @@ namespace Honua.Collect.Core.Field.Forms.Authoring;
 
 /// <summary>
 /// Imports an XLSForm definition (the de-facto authoring format shared by
-/// Survey123, KoboToolbox, and ODK) into the SDK <see cref="FormDefinition"/>
+/// external form app, KoboToolbox, and ODK) into the SDK <see cref="FormDefinition"/>
 /// contract (BACKLOG F1). The host parses the spreadsheet into rows; this maps
 /// types, groups/repeats, choice lists, <c>required</c>, <c>relevant</c>
 /// visibility, and <c>calculate</c> expressions.

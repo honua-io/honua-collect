@@ -7,7 +7,7 @@ namespace Honua.Collect.Core.Maps;
 /// <summary>
 /// A pure, device-free on-disk cache for XYZ slippy-map raster tiles, so a
 /// viewed or pre-downloaded area keeps working fully offline (a core
-/// Survey123/Fulcrum field capability). Tiles are stored under a cache root as
+/// external form app/external field app field capability). Tiles are stored under a cache root as
 /// <c>{root}/{z}/{x}/{y}.png</c>, giving a deterministic key per
 /// <c>(z, x, y)</c>. All filesystem-key and tile-enumeration logic lives here
 /// (built on <see cref="WebMercator"/>) so it can be unit-tested without a

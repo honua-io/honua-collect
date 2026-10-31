@@ -13,7 +13,7 @@ namespace Honua.Collect.Core.Sync;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The grammar is intentionally a Survey123/ArcGIS-style subset:
+/// The grammar is intentionally a external form app/GeoServices REST-style subset:
 /// <c>field op value [AND|OR field op value ...]</c> where <c>op</c> is one of
 /// <c>= != &lt;&gt; &lt; &lt;= &gt; &gt;=</c>, <c>LIKE</c> (with <c>%</c>
 /// wildcards), <c>IN (v1, v2, ...)</c>, or <c>IS NULL</c> / <c>IS NOT NULL</c>.

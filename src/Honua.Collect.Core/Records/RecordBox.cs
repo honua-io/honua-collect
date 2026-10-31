@@ -2,7 +2,7 @@ namespace Honua.Collect.Core.Records;
 
 /// <summary>
 /// The mailbox a record appears in, mirroring the Drafts / Outbox / Sent boxes
-/// users of Survey123 and Fulcrum expect (BACKLOG S4). The box is <em>derived</em>
+/// users of external form app and external field app expect (BACKLOG S4). The box is <em>derived</em>
 /// from the record's review status and transport <see cref="RecordSyncState"/>;
 /// it is never stored independently.
 /// </summary>

@@ -1,7 +1,7 @@
 namespace Honua.Collect.Core.Automation;
 
 /// <summary>
-/// When an automation rule fires (BACKLOG, #44 — Fulcrum-style offline Data
+/// When an automation rule fires (BACKLOG, #44 — external field app-style offline Data
 /// Events). Triggers correspond to points in the record lifecycle.
 /// </summary>
 public enum AutomationTrigger

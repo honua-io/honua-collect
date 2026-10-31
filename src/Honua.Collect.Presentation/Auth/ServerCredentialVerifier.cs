@@ -5,7 +5,7 @@ namespace Honua.Collect.Presentation.Auth;
 
 /// <summary>
 /// Exchanges sign-in credentials for a short-lived bearer token at the server's
-/// ArcGIS-style token endpoint (<c>/sharing/rest/generateToken</c>). On success it
+/// GeoServices REST-style token endpoint (<c>/sharing/rest/generateToken</c>). On success it
 /// returns an <see cref="AuthSession"/> whose <see cref="AuthSession.AccessToken"/>
 /// is the server-issued token (NOT the user's password) and whose expiry is the
 /// server's — so the transport never carries the raw password and stale tokens are
@@ -13,7 +13,7 @@ namespace Honua.Collect.Presentation.Auth;
 /// </summary>
 public sealed class ServerCredentialVerifier
 {
-    /// <summary>Default ArcGIS token endpoint path.</summary>
+    /// <summary>Default GeoServices REST token endpoint path.</summary>
     public const string DefaultTokenEndpoint = "/sharing/rest/generateToken";
 
     private readonly HttpClient _http;
@@ -50,7 +50,7 @@ public sealed class ServerCredentialVerifier
     }
 
     /// <summary>
-    /// Parses an ArcGIS <c>generateToken</c> response into a session, or null for an
+    /// Parses an GeoServices REST <c>generateToken</c> response into a session, or null for an
     /// error/invalid-credentials body (which has no <c>token</c>). Testable without HTTP.
     /// </summary>
     public static AuthSession? ParseTokenResponse(string username, string json)

@@ -4,14 +4,14 @@ using Honua.Sdk.Field.Forms;
 namespace Honua.Collect.Core.Tests.Migration;
 
 /// <summary>
-/// Verifies the Survey123 / ArcGIS feature-layer schema → Collect form mapping
+/// Verifies the external form app / GeoServices REST feature-layer schema → Collect form mapping
 /// (epic #37 migration guide) against sample layer-schema fixtures.
 /// </summary>
 public sealed class Survey123LayerImporterTests
 {
     // A representative published feature-layer schema: a point layer with a
     // coded-value domain, an alias, a non-nullable (required) field, an unsupported
-    // type, and Esri system/editor-tracking columns that must be dropped.
+    // type, and third-party system/editor-tracking columns that must be dropped.
     private const string LayerSchema = """
     {
       "name": "Damage Assessment",

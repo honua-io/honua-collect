@@ -6,7 +6,7 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Presentation.Forms;
 
 /// <summary>
-/// View-model for the dynamic form-capture screen — the central Survey123/Fulcrum
+/// View-model for the dynamic form-capture screen — the central external form app/external field app
 /// experience. It wraps a <see cref="FormSession"/> and exposes the scalar fields
 /// and repeat groups the XAML renders, a live validation summary, and the
 /// save-draft / submit commands. All field edits flow back through the runtime,

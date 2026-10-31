@@ -8,7 +8,7 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Core.Export;
 
 /// <summary>
-/// Exports captured records to an ESRI Shapefile (BACKLOG R2), bundled as a zip of
+/// Exports captured records to an Shapefile (BACKLOG R2), bundled as a zip of
 /// the <c>.shp</c> (point geometry), <c>.shx</c> (index) and <c>.dbf</c>
 /// (attributes) members. Shapefile is still the lingua franca of government and
 /// utility GIS, so first-class export lowers switching cost. Records without a

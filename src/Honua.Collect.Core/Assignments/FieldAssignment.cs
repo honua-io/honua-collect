@@ -45,7 +45,7 @@ public enum AssignmentStatus
 /// <summary>
 /// A task dispatched to a field worker (BACKLOG E5): "go capture a record with
 /// this form, here, by then." Assignments are the inbox half of the
-/// dispatch → capture → submit loop that Survey123 ("Inbox") and Fulcrum
+/// dispatch → capture → submit loop that external form app ("Inbox") and external field app
 /// ("assignments") both provide; the captured <see cref="FieldRecord"/> is the
 /// outbox half, linked back via <see cref="RecordId"/>.
 /// </summary>

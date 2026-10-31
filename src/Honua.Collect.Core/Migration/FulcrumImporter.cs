@@ -6,10 +6,10 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Core.Migration;
 
 /// <summary>
-/// Imports a Fulcrum export into Collect (epic #37 migration guide). Fulcrum is
+/// Imports an external app export into Collect (epic #37 migration guide). the source application is
 /// cloud-only with no true on-prem story, so the switching motion is "lift my app
-/// and its records out of Fulcrum into a self-hosted Collect". Two inputs are
-/// handled, mirroring Fulcrum's own export surface:
+/// and its records out of the source application into a self-hosted Collect". Two inputs are
+/// handled, following the source export formats:
 /// <list type="bullet">
 ///   <item>the <em>app schema</em> JSON (the app's <c>elements</c> definition) →
 ///     a <see cref="FormDefinition"/>; and</item>
@@ -22,15 +22,15 @@ namespace Honua.Collect.Core.Migration;
 public static class FulcrumImporter
 {
     /// <summary>
-    /// Maps a Fulcrum app-schema JSON document into a form definition. Accepts a
+    /// Maps an app-schema JSON document into a form definition. Accepts a
     /// bare app object (<c>{ "name": …, "elements": [...] }</c>) or a wrapper with a
     /// top-level <c>form</c>/<c>app</c> property.
     /// </summary>
-    /// <param name="appSchemaJson">The Fulcrum app schema JSON.</param>
+    /// <param name="appSchemaJson">The app schema JSON.</param>
     /// <param name="formId">Form id; defaults to the app name (slugified).</param>
     /// <returns>The mapped form plus a report of any skipped elements.</returns>
     /// <exception cref="ArgumentException"><paramref name="appSchemaJson"/> is blank.</exception>
-    /// <exception cref="MigrationImportException">The JSON is not a recognizable Fulcrum app.</exception>
+    /// <exception cref="MigrationImportException">The JSON is not a recognizable app-schema.</exception>
     public static MigratedForm ImportForm(string appSchemaJson, string? formId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appSchemaJson);
@@ -59,7 +59,7 @@ public static class FulcrumImporter
         var skipped = new List<string>();
         var fields = new List<FormField>
         {
-            // Every Fulcrum record carries a position; surface it as a capture field.
+            // Each imported record carries a position; surface it as a capture field.
             new() { FieldId = "location", Label = "Location", Type = FormFieldType.Location },
         };
 
@@ -81,7 +81,7 @@ public static class FulcrumImporter
     }
 
     /// <summary>
-    /// Maps a Fulcrum GeoJSON record export into records keyed to the given form.
+    /// Maps an external GeoJSON record export into records keyed to the given form.
     /// Each feature's <c>geometry</c> (a point) becomes the record location and its
     /// <c>properties</c> become record values (filtered to the form's fields).
     /// </summary>
@@ -153,13 +153,13 @@ public static class FulcrumImporter
     }
 
     /// <summary>
-    /// Maps a Fulcrum CSV record export into records keyed to the given form. The
-    /// first row is the header; <c>latitude</c>/<c>longitude</c> columns (Fulcrum's
+    /// Maps an external CSV record export into records keyed to the given form. The
+    /// first row is the header; <c>latitude</c>/<c>longitude</c> columns (external field app's
     /// position export) become the record location; remaining columns matching form
     /// fields become values.
     /// </summary>
     /// <param name="form">The form the records belong to.</param>
-    /// <param name="csv">The Fulcrum CSV export text.</param>
+    /// <param name="csv">The external field app CSV export text.</param>
     /// <returns>The recovered records and any skipped rows.</returns>
     public static MigratedForm ImportCsvRecords(FormDefinition form, string csv)
     {
@@ -322,7 +322,7 @@ public static class FulcrumImporter
             "AddressField" => FormFieldType.Address,
             "HyperlinkField" => FormFieldType.Hyperlink,
             "RecordLinkField" => FormFieldType.RecordLink,
-            // Fulcrum has no dedicated numeric type; numbers are TextField with a
+            // the source format has no dedicated numeric type; numbers are TextField with a
             // numeric format. Map an explicit IntegerField/DecimalField if present.
             "IntegerField" or "DecimalField" or "NumericField" => FormFieldType.Numeric,
             _ => (FormFieldType)(-1),

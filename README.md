@@ -6,16 +6,16 @@
 [![License](https://img.shields.io/badge/License-Elastic_License_2.0-blue.svg)](LICENSE)
 
 **Honua Collect** is an offline-first mobile field data collection app — a
-source-available alternative to Esri Survey123 / Field Maps and Fulcrum, built
+source-available field-collection app, built
 on the [Honua](https://github.com/honua-io) geospatial platform. Dynamic smart
 forms (conditional visibility, calculations, validation, repeatable sections),
 encrypted offline storage (SQLCipher), connectivity-aware bidirectional sync
 with field-level conflict review, GPS/geometry capture, photo/signature/barcode
 capture, bulk export (CSV, GeoJSON, KML, Excel, GeoPackage, Shapefile), and
-optional AI-assisted capture. Collect speaks the **Esri GeoServices protocol**
+optional AI-assisted capture. Collect speaks the **GeoServices REST protocol**
 natively (FeatureServer `query`/`applyEdits`, `generateToken`), so it syncs to a
 self-hosted [Honua server](https://github.com/honua-io/honua-server) — or an
-existing ArcGIS FeatureServer — with **no Esri license and no vendor cloud** in
+existing GeoServices REST feature service — with **no third-party license and no vendor cloud** in
 between.
 
 ## Status
@@ -114,9 +114,9 @@ Repo docs:
 | Doc | What it covers |
 | --- | --- |
 | [Self-hosting guide](docs/self-hosting.md) | Point Collect at a self-hosted Honua server (config surface, auth, the open-core boundary, quickstart). |
-| [Esri compatibility matrix](docs/esri-compatibility.md) | What Collect supports vs Survey123 / Field Maps / Fulcrum, marked honestly with evidence links. |
+| [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
-| [Migrating from Survey123 and Fulcrum](docs/migration-from-survey123-and-fulcrum.md) | Lowering the switching cost (XLSForm import, protocol reuse). |
+| [Migrating external forms](docs/migration-from-external-forms.md) | Lowering switching costs through XLSForm import and protocol reuse. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
 | [Competitive strategy](docs/COMPETITIVE-STRATEGY.md) | The three-horizon positioning frame over [BACKLOG.md](BACKLOG.md). |
 | [Mutation testing](docs/mutation-testing.md) | Stryker.NET setup and how the Core mutation score is measured. |

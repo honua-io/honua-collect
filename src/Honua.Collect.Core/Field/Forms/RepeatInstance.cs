@@ -3,7 +3,7 @@ using Honua.Sdk.Field.Forms;
 namespace Honua.Collect.Core.Field.Forms;
 
 /// <summary>
-/// One filled-in row of a repeatable section (a Survey123 "repeat" / Fulcrum
+/// One filled-in row of a repeatable section (a external form app "repeat" / external field app
 /// "repeatable section" instance). Each instance is a self-contained capture
 /// scope: it reuses the full <see cref="FormSession"/> runtime — visibility,
 /// calculated fields, validation, media — over a synthesized single-section

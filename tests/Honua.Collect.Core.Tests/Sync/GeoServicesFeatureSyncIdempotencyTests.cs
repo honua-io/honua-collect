@@ -106,7 +106,7 @@ public class GeoServicesFeatureSyncIdempotencyTests
         Assert.Equal(GeoServicesFeatureSync.GlobalIdFor("rec-1"), GeoServicesFeatureSync.GlobalIdFor(Site("rec-1")));
         Assert.NotEqual(GeoServicesFeatureSync.GlobalIdFor("rec-1"), GeoServicesFeatureSync.GlobalIdFor("rec-2"));
 
-        // Esri registry format: braces + 36-char canonical GUID inside.
+        // third-party registry format: braces + 36-char canonical GUID inside.
         var key = GeoServicesFeatureSync.GlobalIdFor("rec-1");
         Assert.StartsWith("{", key);
         Assert.EndsWith("}", key);
