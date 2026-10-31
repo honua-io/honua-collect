@@ -1,48 +1,41 @@
 # Honua Collect — competitive strategy & backlog map
 
-How Honua Collect rivals **Esri ArcGIS Survey123** and **Fulcrum** (Spatial
-Networks) today, and the three-horizon plan to win. This is the strategic frame
+A three-horizon plan for Honua Collect, grounded in current capabilities and the remaining product work. This is the strategic frame
 over the tactical gap list in [`BACKLOG.md`](../BACKLOG.md); each bet below is a
 tracked GitHub **epic**.
-
-> Factual note: Fulcrum is Spatial Networks' product (PE-recapitalized 2024). It
-> is **not** owned by SafetyCulture — SafetyCulture is a competitor in the
-> inspection space, not a parent.
 
 ## Where we stand (honest verdict)
 
 **On logic we are ~70–80% of the way to parity and ahead in a few Pro features.
 As a *shipping field app* we are not at parity yet** — the unfinished 20–30% is
 the device/sensor "last mile" (real camera/GPS/map, background sync, push,
-external GNSS) that the incumbents have spent a decade polishing. The
+external GNSS) that require additional implementation and polish. The
 `Honua.Collect.Core`/`Presentation` layers are real and tested; much of the App
 layer is "logic done, hardware binding pending." Closing that gap is Horizon 1.
 
 **Already rivaling:** smart forms (relevance/calc/validation/repeats),
 point/line/polygon + GeoJSON, offline-first store **with SQLCipher at-rest
 encryption**, bidirectional sync with retry/backoff and **field-level conflict
-review**, Drafts/Outbox/Sent, and — distinctively — we **speak the Esri
-GeoServices protocol** (FeatureServer query/applyEdits, generateToken).
+review**, Drafts/Outbox/Sent, and support the **GeoServices REST protocol** (FeatureServer query/applyEdits, generateToken).
 
 **Already ahead (Pro):** photo annotation that never mutates the original, an AI
 photo/voice-to-fields framework, per-field conflict resolution, selective sync,
 RBAC + tamper-evident audit log.
 
-**Honestly behind:** high-accuracy GNSS/RTK (Survey123's field moat), the device
-layer generally, on-prem maturity/ecosystem, and finished PDF/Word reporting.
+**Remaining work:** high-accuracy GNSS/RTK, device integration, self-hosting
+maturity, and finished PDF/Word reporting.
 
-## The openings (incumbent weaknesses → our roadmap)
+## Product opportunities
 
-| Incumbent | Weakness we exploit | Our answer |
+| Area | Opportunity | Planned work |
 |---|---|---|
-| Survey123 | Fragmentation across Survey123 + Field Maps + Workforce + Dashboards + Power Automate; expensive ArcGIS user types | One unified app ([#40](https://github.com/honua-io/honua-collect/issues/40)) |
-| Survey123 | Inbox breaks at scale (2k→10k refresh failures) | Resilient large-dataset editing ([#38](https://github.com/honua-io/honua-collect/issues/38)) |
-| Survey123 | On-prem only via costly ArcGIS Enterprise | Open self-host, no Esri license ([#37](https://github.com/honua-io/honua-collect/issues/37)) |
-| Fulcrum | **No true on-prem**; per-seat (5-user floor); separate data silo | Open self-host, Esri-compatible ([#37](https://github.com/honua-io/honua-collect/issues/37)) |
-| Fulcrum | **Post-sync edit lockout** (top complaint) | Never lose an edit ([#38](https://github.com/honua-io/honua-collect/issues/38)) |
-| Fulcrum | Clunky reporting/export | Bulk + AI-drafted reporting ([#39](https://github.com/honua-io/honua-collect/issues/39)) |
-| Both | AI is **cloud-bound** | Offline on-device AI ([#41](https://github.com/honua-io/honua-collect/issues/41)) |
-| Both | No cryptographic capture provenance | C2PA content credentials ([#41](https://github.com/honua-io/honua-collect/issues/41)) |
+| Field workflow | Bring dispatch and field capture into one workflow | Unified field operations ([#40](https://github.com/honua-io/honua-collect/issues/40)) |
+| Large datasets | Improve refresh and editing at scale | Resilient large-dataset editing ([#38](https://github.com/honua-io/honua-collect/issues/38)) |
+| Deployment | Improve self-hosted deployment and protocol interoperability | Open self-hosting ([#37](https://github.com/honua-io/honua-collect/issues/37)) |
+| Record editing | Preserve edits after synchronization | Never lose an edit ([#38](https://github.com/honua-io/honua-collect/issues/38)) |
+| Reporting | Complete bulk export and reporting workflows | Reporting improvements ([#39](https://github.com/honua-io/honua-collect/issues/39)) |
+| AI | Support offline processing | Offline AI ([#41](https://github.com/honua-io/honua-collect/issues/41)) |
+| Provenance | Add cryptographic capture provenance | C2PA content credentials ([#41](https://github.com/honua-io/honua-collect/issues/41)) |
 
 ## Three horizons
 
@@ -50,19 +43,19 @@ layer generally, on-prem maturity/ecosystem, and finished PDF/Word reporting.
 Mandatory, not innovative. Without these we aren't in the race.
 
 - **[#35](https://github.com/honua-io/honua-collect/issues/35) Device last-mile** — wire capture widgets to real camera/GPS/map, background sync (WorkManager), push (FCM).
-- **[#36](https://github.com/honua-io/honua-collect/issues/36) High-accuracy positioning** — external GNSS / RTK receivers (Survey123's moat; price of admission to survey/utility verticals).
+- **[#36](https://github.com/honua-io/honua-collect/issues/36) High-accuracy positioning** — external GNSS / RTK receivers (a planned capability; useful for to survey/utility verticals).
 - Plus existing area-epics: [#1](https://github.com/honua-io/honua-collect/issues/1) capture, [#2](https://github.com/honua-io/honua-collect/issues/2) gis, [#3](https://github.com/honua-io/honua-collect/issues/3) forms, [#4](https://github.com/honua-io/honua-collect/issues/4) sync, [#7](https://github.com/honua-io/honua-collect/issues/7) enterprise auth, [#8](https://github.com/honua-io/honua-collect/issues/8) sensors, [#9](https://github.com/honua-io/honua-collect/issues/9) licensing.
 
-### Horizon 2 — be what incumbents structurally can't
-Exploit the openings above.
+### Horizon 2 — strengthen deployment and field workflows
+Deliver the planned deployment, editing, reporting, and workflow improvements.
 
-- **[#37](https://github.com/honua-io/honua-collect/issues/37) Open & self-hostable, Esri-compatible** — the positioning moat.
+- **[#37](https://github.com/honua-io/honua-collect/issues/37) Open & self-hostable, protocol-compatible** — the positioning moat.
 - **[#38](https://github.com/honua-io/honua-collect/issues/38) Never lose an edit** — post-sync editability + offline edit history.
 - **[#39](https://github.com/honua-io/honua-collect/issues/39) Reporting that doesn't suck** — bulk + AI-drafted reports/exports.
 - **[#40](https://github.com/honua-io/honua-collect/issues/40) Unified field ops** — native dispatch + one-app workflow.
 - Plus existing [#5](https://github.com/honua-io/honua-collect/issues/5) reporting.
 
-### Horizon 3 — leapfrog with moats no incumbent has
+### Horizon 3 — build differentiated capabilities
 
 - **[#41](https://github.com/honua-io/honua-collect/issues/41) Verifiable provenance** — C2PA content credentials + signed chain-of-custody. **Strongest moat candidate.**
 - **[#42](https://github.com/honua-io/honua-collect/issues/42) Offline on-device AI capture** — voice & photo to fields with no signal.
@@ -72,9 +65,7 @@ Exploit the openings above.
 
 ## Recommended wedge
 
-Don't out-Esri Esri on GIS depth or out-feature Fulcrum across the board. **Pick
-the buyer neither serves well: regulated / government / critical-infrastructure
-orgs that need self-hosting, verifiable provenance, and offline AI.**
+**Focus on regulated, government, and critical-infrastructure organizations** that need self-hosting, verifiable provenance, and offline AI.
 
 Sequence:
 1. **Finish Horizon 1** (device layer + GNSS) to be credible.
@@ -88,7 +79,7 @@ Sequence:
 |---|---|---|
 | [#35](https://github.com/honua-io/honua-collect/issues/35) | Device last-mile — real hardware bindings | 1 |
 | [#36](https://github.com/honua-io/honua-collect/issues/36) | High-accuracy positioning — GNSS / RTK | 1 |
-| [#37](https://github.com/honua-io/honua-collect/issues/37) | Open & self-hostable, Esri-compatible | 2 |
+| [#37](https://github.com/honua-io/honua-collect/issues/37) | Open & self-hostable, protocol-compatible | 2 |
 | [#38](https://github.com/honua-io/honua-collect/issues/38) | Never lose an edit | 2 |
 | [#39](https://github.com/honua-io/honua-collect/issues/39) | Reporting that doesn't suck | 2 |
 | [#40](https://github.com/honua-io/honua-collect/issues/40) | Unified field ops — native dispatch | 2 |

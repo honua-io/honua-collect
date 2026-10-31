@@ -2,10 +2,10 @@
 
 Honua Collect is **source-available under the [Fair Core License](../LICENSE)
 (FCL-1.0-ALv2)** and has no SaaS dependency: it talks to a server you choose by speaking
-the **Esri GeoServices** protocol (FeatureServer `query` / `applyEdits`,
+the **GeoServices REST protocol** protocol (FeatureServer `query` / `applyEdits`,
 `generateToken`). This guide shows how to point Collect at a self-hosted Honua
-server (or any GeoServices-compatible FeatureServer, including on-prem ArcGIS
-Enterprise) **without an Esri licence and without routing data through any
+server (or any GeoServices-compatible FeatureServer, including on-prem GeoServices REST
+Enterprise) **without a vendor-specific licence and without routing data through any
 Honua-operated cloud**.
 
 It is grounded in the app's real configuration surface — every key named here is
@@ -27,7 +27,7 @@ Any endpoint that answers the GeoServices FeatureServer contract works as the
 target:
 
 - a **self-hosted Honua server** in your own datacenter or VPC, or
-- an existing **on-prem ArcGIS Enterprise** FeatureServer, or
+- an existing **on-prem self-hosted enterprise GIS server** FeatureServer, or
 - a local **PostGIS-backed** stack for development (see
   [`scripts/e2e/up.sh`](../scripts/e2e/up.sh)).
 
@@ -79,11 +79,11 @@ authentication below for the real sign-in path.
 ## Authentication
 
 Collect authenticates against **your server's own token endpoint** — there is no
-dependency on an Esri or Honua account, so a self-host deployment uses its own
+dependency on a vendor-specific or Honua account, so a self-host deployment uses its own
 identity.
 
 1. The user signs in on the Account tab. Credentials are POSTed to the server's
-   ArcGIS-style token endpoint
+   GeoServices REST-style token endpoint
    ([`ServerCredentialVerifier`](../src/Honua.Collect.Presentation/Auth/ServerCredentialVerifier.cs),
    default path `/sharing/rest/generateToken`), which returns a short-lived
    bearer token. **The password is never stored** — only the issued token and its
@@ -163,7 +163,7 @@ How entitlement is enforced for a self-host:
 
    This serves a GeoServices FeatureServer the emulator reaches at
    `10.0.2.2:18080` (see [`docs/verification/e2e/`](./verification/e2e/)). For a
-   real deployment, point at your own server / ArcGIS Enterprise instead.
+   real deployment, point at your own server / self-hosted enterprise GIS server instead.
 
 2. **Configure Collect.** Edit
    [`appsettings.json`](../src/Honua.Collect.App/Resources/Raw/appsettings.json)
@@ -176,18 +176,18 @@ How entitlement is enforced for a self-host:
 4. **Sign in** on the Account tab against your server's token endpoint. Capture a
    record and sync it — it round-trips to your FeatureServer via
    [`GeoServicesFeatureSync`](../src/Honua.Collect.Core/Sync/GeoServicesFeatureSync.cs),
-   with no Esri licence and no data leaving your perimeter.
+   with no third-party licence and no data leaving your perimeter.
 
 5. **(Optional) Activate a licence key** to unlock Pro/Enterprise features. The
    app runs the Community baseline until one is applied.
 
 ## See also
 
-- [Esri compatibility matrix](./esri-compatibility.md) — what Collect supports
-  vs Survey123 / Fulcrum / ArcGIS, marked honestly.
+- [third-party compatibility matrix](./geoservices-compatibility.md) — what Collect supports
+  vs other form app / other field app / GeoServices REST, marked honestly.
 - [Data residency & self-host posture](./data-residency-and-self-host.md) — where
   records live and how the connection is secured.
-- [Migrating from Survey123 and Fulcrum](./migration-from-survey123-and-fulcrum.md)
+- [Importing forms and field data](./migration-from-external-forms.md)
   — lowering the switching cost.
 - [Competitive strategy](./COMPETITIVE-STRATEGY.md) — the positioning frame.
 </content>

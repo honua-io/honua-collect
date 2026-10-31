@@ -7,7 +7,7 @@ using IImage = Microsoft.Maui.Graphics.IImage;
 namespace Honua.Collect.App.Capture;
 
 /// <summary>
-/// Pro photo markup pad (BACKLOG C7 — Fulcrum parity). Draws a captured photo as
+/// Pro photo markup pad (BACKLOG C7 — external field app parity). Draws a captured photo as
 /// the background of a <see cref="GraphicsView"/> and lets a field worker draw
 /// freehand strokes over it in one of a few markup colors. On save the photo and
 /// the strokes are flattened to a new PNG (the evidence image); the structured

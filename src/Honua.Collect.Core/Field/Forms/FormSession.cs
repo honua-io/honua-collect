@@ -15,7 +15,7 @@ namespace Honua.Collect.Core.Field.Forms;
 /// evolving state of a form being filled in.
 /// </summary>
 /// <remarks>
-/// <para>Responsibilities, mapped to the Survey123/Fulcrum parity backlog:</para>
+/// <para>Responsibilities, mapped to the external form app/external field app parity backlog:</para>
 /// <list type="bullet">
 ///   <item>Live field visibility, including cascading dependencies (BACKLOG F3).</item>
 ///   <item>Live calculated fields and live, per-field validation.</item>
@@ -24,7 +24,7 @@ namespace Honua.Collect.Core.Field.Forms;
 ///   <item>Default-from-previous / "favorites" seeding (BACKLOG F5).</item>
 /// </list>
 /// <para>
-/// Repeatable sections (Survey123 "repeats" / Fulcrum "repeatable sections")
+/// Repeatable sections (external form app "repeats" / external field app "repeatable sections")
 /// are materialised as <see cref="RepeatGroup"/>s of <see cref="RepeatInstance"/>
 /// rows, each a self-contained capture scope. Scalar (non-repeating) fields are
 /// the flat <see cref="Fields"/>; repeatable sections are <see cref="RepeatGroups"/>.

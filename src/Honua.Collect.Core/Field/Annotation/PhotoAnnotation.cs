@@ -1,6 +1,6 @@
 namespace Honua.Collect.Core.Field.Annotation;
 
-/// <summary>The kind of markup drawn on a photo (BACKLOG C7 — Fulcrum parity).</summary>
+/// <summary>The kind of markup drawn on a photo (BACKLOG C7 — external field app parity).</summary>
 public enum AnnotationShape
 {
     /// <summary>An arrow from the first point to the last.</summary>

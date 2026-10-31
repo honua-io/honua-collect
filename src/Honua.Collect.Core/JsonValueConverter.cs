@@ -8,7 +8,7 @@ namespace Honua.Collect.Core;
 /// </summary>
 /// <remarks>
 /// This is the single canonical wire-value decoder shared by every JSON ingest
-/// path (GeoServices query pulls and the Fulcrum/GeoJSON importer). Both paths
+/// path (GeoServices query pulls and the external field app/GeoJSON importer). Both paths
 /// populate the same <c>FieldRecord.Values</c> bag, which then flows into the
 /// shared conflict/diff/export code, so they must decode the same wire value to
 /// the same CLR type — otherwise the same field would compare unequal depending

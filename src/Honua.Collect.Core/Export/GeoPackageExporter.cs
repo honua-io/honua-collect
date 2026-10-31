@@ -8,7 +8,7 @@ namespace Honua.Collect.Core.Export;
 
 /// <summary>
 /// Exports captured records to an OGC GeoPackage (BACKLOG R2) — a single-file,
-/// SQLite-based GIS format that QGIS, ArcGIS, and most tooling read natively. A
+/// SQLite-based GIS format that QGIS, GeoServices REST, and most tooling read natively. A
 /// point feature table holds each record's location as GeoPackageBinary geometry
 /// with its field values as attribute columns; records without a location are
 /// written with null geometry so none are dropped.

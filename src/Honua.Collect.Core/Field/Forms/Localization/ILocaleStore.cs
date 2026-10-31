@@ -3,7 +3,7 @@ namespace Honua.Collect.Core.Field.Forms.Localization;
 /// <summary>
 /// Persists the user's active form language (BACKLOG F2 — multi-language /
 /// localized forms) so the choice survives an app restart. The active locale is
-/// stored per form id, mirroring Survey123/Fulcrum where a respondent's language
+/// stored per form id, mirroring external form app/external field app where a respondent's language
 /// is remembered for the survey they last opened.
 /// </summary>
 public interface ILocaleStore

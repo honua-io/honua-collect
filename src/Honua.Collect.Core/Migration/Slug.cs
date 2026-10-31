@@ -3,8 +3,8 @@ using System.Text;
 namespace Honua.Collect.Core.Migration;
 
 /// <summary>
-/// Derives a stable, identifier-safe form id from a free-text source name (an Esri
-/// layer name, a Fulcrum app name) when the caller doesn't supply one. Lower-cases,
+/// Derives a stable, identifier-safe form id from a free-text source name (an third-party
+/// layer name, a external field app app name) when the caller doesn't supply one. Lower-cases,
 /// replaces runs of non-alphanumeric characters with a single underscore, and trims
 /// leading/trailing underscores so the result is a valid, predictable form id.
 /// </summary>

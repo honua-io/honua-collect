@@ -2,7 +2,7 @@
 
 Proof that a form filled in the Honua Collect app on an Android emulator is
 submitted over HTTP to a running Honua server and persisted as a row in
-PostgreSQL — the full Survey123/Fulcrum-style capture → sync → store loop.
+PostgreSQL — the full other form app/other field app-style capture → sync → store loop.
 
 ## Topology
 

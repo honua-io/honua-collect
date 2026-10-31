@@ -5,7 +5,7 @@ namespace Honua.Collect.Presentation.Field;
 /// <summary>
 /// Pure, device-free mapping between freehand strokes captured at a display size
 /// and the normalized <see cref="PhotoAnnotation"/>/<see cref="PhotoAnnotationOverlay"/>
-/// model (BACKLOG C7 — Fulcrum parity). Strokes are drawn over a photo shown in a
+/// model (BACKLOG C7 — external field app parity). Strokes are drawn over a photo shown in a
 /// <c>GraphicsView</c> at some pixel size; this maps those display points into
 /// 0..1 image coordinates (and back) so the markup renders correctly at any size
 /// and survives downscaling. The page keeps only the platform rasterization; all

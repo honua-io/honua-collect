@@ -4,7 +4,7 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Core.Field.Forms;
 
 /// <summary>
-/// Optional row-count bounds for a repeatable section (Survey123 / Fulcrum
+/// Optional row-count bounds for a repeatable section (external form app / external field app
 /// min/max repeats — BACKLOG F-depth). The SDK <see cref="FormSection"/> in
 /// package 1.1.0 does not carry these, so they are supplied product-side (the
 /// form package wire format already declares <c>minInstances</c>/<c>maxInstances</c>)
@@ -15,8 +15,8 @@ namespace Honua.Collect.Core.Field.Forms;
 public sealed record RepeatBounds(int? Min = null, int? Max = null);
 
 /// <summary>
-/// A repeatable section and the rows captured against it (Survey123 "repeat" /
-/// Fulcrum "repeatable section"). The group owns the list of
+/// A repeatable section and the rows captured against it (external form app "repeat" /
+/// external field app "repeatable section"). The group owns the list of
 /// <see cref="RepeatInstance"/> rows, lets the UI add and remove them, and
 /// persists them back into the parent record so they travel with it through
 /// validation, export, and sync.

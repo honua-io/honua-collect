@@ -3,7 +3,7 @@ namespace Honua.Collect.Core.Field.Forms.Defaults;
 /// <summary>
 /// A named, reusable set of answers for a form — a "favorite" the field worker
 /// can apply to pre-fill a new record (BACKLOG F5). The canonical example is
-/// Fulcrum/Survey123 "favorites": save a typical answer set ("Routine pole
+/// external field app/external form app "favorites": save a typical answer set ("Routine pole
 /// inspection", "Standard hydrant") and start future records from it.
 /// </summary>
 /// <param name="Name">Human-readable favorite name, unique per form.</param>

@@ -4,11 +4,11 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Core.Tests.Migration;
 
 /// <summary>
-/// Proves ArcGIS FeatureServer round-trip interop (epic #37) by exercising the real
+/// Proves GeoServices REST feature service round-trip interop (epic #37) by exercising the real
 /// <see cref="GeoServicesFeatureSync"/> client against an in-memory reference
-/// FeatureServer (<see cref="FakeGeoServicesServer"/>) that mirrors Esri's
+/// FeatureServer (<see cref="FakeGeoServicesServer"/>) that mirrors third-party's
 /// <c>generateToken</c> / <c>query</c> / <c>applyEdits</c> / <c>addAttachment</c>
-/// JSON contracts — no live ArcGIS server required. This complements
+/// JSON contracts — no live GeoServices REST server required. This complements
 /// <c>FeatureSyncE2ETests</c> (opt-in, real server) with an always-on interop proof.
 /// </summary>
 public sealed class GeoServicesRoundTripTests

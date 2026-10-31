@@ -2,7 +2,7 @@ namespace Honua.Collect.Core.Field.Forms;
 
 /// <summary>
 /// A single language's translations for a form (BACKLOG F2 — multi-language /
-/// localized forms). Survey123 sources these from XLSForm <c>label::lang</c>
+/// localized forms). external form app sources these from XLSForm <c>label::lang</c>
 /// columns; here they are a structured set the app loads alongside the form and
 /// hands to <see cref="FormLocalizer"/>. Any text without a translation falls
 /// back to the form's authored text.

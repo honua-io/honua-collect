@@ -1,7 +1,7 @@
 namespace Honua.Collect.Core.Migration;
 
 /// <summary>
-/// A minimal RFC-4180 CSV reader for migration imports (Fulcrum CSV export): it
+/// A minimal RFC-4180 CSV reader for migration imports (external field app CSV export): it
 /// honors double-quoted fields, escaped <c>""</c> quotes, and embedded
 /// commas/newlines inside quotes, and tolerates both <c>\n</c> and <c>\r\n</c> line
 /// endings. Kept internal and dependency-free so the importers stay portable.

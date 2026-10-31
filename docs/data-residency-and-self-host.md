@@ -15,7 +15,7 @@ Collect syncs to, and its deployment is out of scope here.
   app install.
 - **On the server, when synced:** records sync to the FeatureServer you
   configure (`ServerBaseUrl` / `ServiceId` / `LayerId` in `AppSettings`) over the
-  Esri **GeoServices** protocol (`GeoServicesFeatureSync`). That server is the
+  **GeoServices REST** protocol (`GeoServicesFeatureSync`). That server is the
   system of record; Collect does not route data through any Honua-operated SaaS,
   and there is no separate vendor data silo.
 
@@ -36,7 +36,7 @@ Collect syncs to, and its deployment is out of scope here.
 
 Collect authenticates against the configured server's token endpoint, so a
 self-host deployment uses **its own** identity — there is no dependency on an
-Esri or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
+third-party or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
 
 ## Tenancy & entitlements
 
@@ -50,19 +50,19 @@ Esri or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
 Collect is offline-first: capture, validation, visibility, calculated fields,
 repeats, conflict detection, and entitlement enforcement all run with no network.
 In an air-gapped environment, Collect syncs to a FeatureServer reachable on the
-local network (the self-hosted Honua server or an on-prem ArcGIS Enterprise),
+local network (the self-hosted Honua server or an on-prem self-hosted enterprise GIS server),
 with optional certificate pinning to that host. No outbound internet connection is
 required for the core capture-and-sync loop.
 
 ## What is not yet in this repository
 
 Documented here for honesty: the **server-side** air-gapped deployment runbook
-and a **round-trip interop test against a reference ArcGIS layer** are tracked in
+and a **round-trip interop test against a reference GeoServices REST layer** are tracked in
 #37 and live with the server component; they are not part of the Collect client.
 
 ## See also
 
 - [Self-hosting guide](./self-hosting.md) — the configuration surface, auth, and
   open-core boundary for pointing Collect at a self-hosted server.
-- [Esri compatibility matrix](./esri-compatibility.md) — what Collect supports vs
+- [third-party compatibility matrix](./geoservices-compatibility.md) — what Collect supports vs
   the incumbents, marked honestly.

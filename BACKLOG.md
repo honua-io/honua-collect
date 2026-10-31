@@ -1,11 +1,11 @@
-# Honua Collect — feature backlog (parity with Survey123 & Fulcrum)
+# Honua Collect — feature backlog (parity with other form app & other field app)
 
 > **Strategy:** for the competitive frame over this gap list — the rivalry
 > verdict, the incumbent weaknesses we exploit, and the three-horizon plan
 > (parity → differentiate → leapfrog) with its tracked epics — see
 > [`docs/COMPETITIVE-STRATEGY.md`](docs/COMPETITIVE-STRATEGY.md).
 
-Gaps relative to Esri **Survey123** and **Fulcrum**, from the capability
+Gaps relative to third-party **other form app** and **other field app**, from the capability
 assessment of the Honua mobile stack. Each item is tagged with:
 
 - **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending · ✅ (suffix) verified working on a device/emulator
@@ -148,7 +148,7 @@ proven; these are device-sensor integrations.
 | C4 | Signature capture pad | 🧱✅ | Community | collect |
 | C5 | Sketch / freehand drawing widget | 🧱✅ | Community | collect |
 | C6 | Barcode / QR scanner (decode from image) | 🧱✅ | Community | collect |
-| C7 | Photo annotation / markup (Fulcrum parity) | 🧱✅ | Pro | collect |
+| C7 | Photo annotation / markup (other field app parity) | 🧱✅ | Pro | collect |
 | C8 | Image auto-resize/compression before upload | ✅ | Community | collect |
 | C9 | Chunked/resumable large-media upload | 🧱 | Community | mobile |
 
@@ -182,7 +182,7 @@ proven; these are device-sensor integrations.
 | S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | Pro | collect |
 | S2 | Selective / partial sync (per-layer; spatial extent in layer CRS, attribute where, date/age, explicit selection) | 🧱✅ | Pro | collect |
 | S3 | Sync status center / per-record sync state UX | 🧱 | Community | collect |
-| S4 | Outbox / Sent / Drafts boxes (Survey123 parity) | 🧱 | Community | collect |
+| S4 | Outbox / Sent / Drafts boxes (other form app parity) | 🧱 | Community | collect |
 
 ## 5. Reporting & exports (Pro)
 
@@ -222,7 +222,7 @@ proven; these are device-sensor integrations.
 
 ## Sequencing (proposed)
 
-1. **Community baseline parity** — C1–C6, G1–G4, S3–S4 (makes Collect a usable Survey123/Fulcrum alternative out of the box).
+1. **Community baseline parity** — C1–C6, G1–G4, S3–S4 (makes Collect a usable other form app/other field app alternative out of the box).
 2. **Licensing layer** — signed-key entitlement enforcement (gates everything below).
 3. **Pro wave 1** — R1–R2 (reports/export), S1–S2 (advanced sync), A1–A3 (AI capture).
 4. **Enterprise wave** — E1–E4 (auth/admin), E5–E6 (assignments/push).

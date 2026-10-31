@@ -2,7 +2,7 @@ namespace Honua.Collect.Core.Reports;
 
 /// <summary>
 /// Defines a per-record feature report (BACKLOG R1): the templated, human-
-/// readable document Survey123 and Fulcrum generate for a single submission.
+/// readable document external form app and external field app generate for a single submission.
 /// The renderer produces portable Markdown from this; converting Markdown to
 /// PDF/Word is the downstream/host step.
 /// </summary>

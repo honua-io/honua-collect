@@ -1,7 +1,7 @@
 # Follow-up feature verification — Honua Collect (Android)
 
-Four functional-gap features were added to close the distance to Survey123 /
-Fulcrum parity, then wired into the MAUI app and run on the emulator (Google APIs
+Four functional-gap features were added to close the distance to other form app /
+other field app parity, then wired into the MAUI app and run on the emulator (Google APIs
 x86_64, API 35, KVM-accelerated). The build/run toolchain is the one documented
 in [`../README.md`](../README.md).
 
@@ -88,7 +88,7 @@ Manifest gains `CAMERA`, `RECORD_AUDIO`, and the scoped media-read permissions.
 
 ## Parity gap-fills: expression engine, bidirectional sync, offline basemaps, geo-depth
 
-A round of agent-built, integrated work closing the Survey123/Fulcrum baseline gaps from the parity audit. Cross-repo: the forms expression engine landed in `Honua.Sdk.Field 1.2.0` (honua-sdk-dotnet) and is consumed here.
+A round of agent-built, integrated work closing the other form app/other field app baseline gaps from the parity audit. Cross-repo: the forms expression engine landed in `Honua.Sdk.Field 1.2.0` (honua-sdk-dotnet) and is consumed here.
 
 ### Expression engine (SDK 1.2.0) — **device-verified**
 

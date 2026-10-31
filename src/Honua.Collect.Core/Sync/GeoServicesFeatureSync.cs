@@ -55,7 +55,7 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
 /// <summary>
 /// A single feature pulled back from the server, decoded into a portable
 /// <see cref="FieldRecord"/> plus the layer object id that identifies it remotely.
-/// This inverts the submit encoding (Esri attributes -> Values, point geometry ->
+/// This inverts the submit encoding (service attributes -> Values, point geometry ->
 /// Location) so a pulled feature can flow into the same conflict/merge model as a
 /// locally captured record.
 /// </summary>
@@ -116,9 +116,8 @@ public sealed record FeatureSyncRetryPolicy(int MaxAttempts = 4, TimeSpan BaseDe
 }
 
 /// <summary>
-/// Submits a captured <see cref="FieldRecord"/> to a Honua/ArcGIS GeoServices
-/// Feature Server via <c>applyEdits</c> — the same wire protocol Survey123 and
-/// Fulcrum use to push submissions to a feature service. Record values become
+/// Submits a captured <see cref="FieldRecord"/> to a Honua or GeoServices REST
+/// Feature Server via <c>applyEdits</c> — the same wire protocol external clients use to push submissions to a feature service. Record values become
 /// feature attributes and <see cref="FieldRecord.Location"/> becomes the point
 /// geometry. The <see cref="HttpClient"/> is injected (the host configures the
 /// base address, the <c>X-API-Key</c>/token auth header, and the platform
@@ -128,7 +127,7 @@ public sealed record FeatureSyncRetryPolicy(int MaxAttempts = 4, TimeSpan BaseDe
 public sealed class GeoServicesFeatureSync
 {
     /// <summary>
-    /// This product's default object-id field name. Esri field references are
+    /// This product's default object-id field name. service field references are
     /// case-insensitive, so this is stable against <c>OBJECTID</c> too.
     /// </summary>
     private const string DefaultObjectIdField = "objectid";
@@ -140,7 +139,7 @@ public sealed class GeoServicesFeatureSync
     /// and re-sends on every (re)attempt, so a lost-response add that actually
     /// committed is recognised by the server on the retry instead of inserting a
     /// second feature. Paired with <c>useGlobalIds=true</c> on the request, this is
-    /// the Esri/GeoServices shape a server dedupes on (server-side dedupe on this
+    /// the GeoServices REST shape a server dedupes on (server-side dedupe on this
     /// key is the matching honua-server follow-up; see the PR notes).
     /// </summary>
     private const string DefaultGlobalIdField = "globalid";
@@ -240,7 +239,7 @@ public sealed class GeoServicesFeatureSync
     /// key for adding this record. It is a deterministic function of the record's
     /// <see cref="FieldRecord.RecordId"/>, so it is identical on every (re)attempt,
     /// after a restart, and after the entry is rehydrated from storage — no extra
-    /// persistence is needed beyond the record id itself. Returned in Esri registry
+    /// persistence is needed beyond the record id itself. Returned in the service registry
     /// format (<c>{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}</c>).
     /// </summary>
     /// <param name="record">The record whose stable GlobalID is wanted.</param>
@@ -623,11 +622,11 @@ public sealed class GeoServicesFeatureSync
                 ["outFields"] = "*",
                 ["returnGeometry"] = "true",
                 // resultOffset paging is only well-defined under a stable sort: the
-                // ArcGIS REST spec requires orderByFields, otherwise the server may
+                // GeoServices REST spec requires orderByFields, otherwise the server may
                 // return rows in an arbitrary/changing order across pages and a
                 // layer larger than the page size can silently skip or double-count
                 // features. Order by the object-id field (this product's layers key
-                // on "objectid"; Esri field references are case-insensitive in the
+                // on "objectid"; service field references are case-insensitive in the
                 // SQL order-by, so this is stable against OBJECTID too).
                 ["orderByFields"] = ObjectIdOrderField,
                 ["resultOffset"] = offset.ToString(CultureInfo.InvariantCulture),
