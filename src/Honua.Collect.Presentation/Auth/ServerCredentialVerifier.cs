@@ -50,7 +50,7 @@ public sealed class ServerCredentialVerifier
     }
 
     /// <summary>
-    /// Parses an GeoServices REST <c>generateToken</c> response into a session, or null for an
+    /// Parses a GeoServices REST <c>generateToken</c> response into a session, or null for an
     /// error/invalid-credentials body (which has no <c>token</c>). Testable without HTTP.
     /// </summary>
     public static AuthSession? ParseTokenResponse(string username, string json)

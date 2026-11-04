@@ -1,8 +1,8 @@
 namespace Honua.Collect.Core.Reports;
 
 /// <summary>
-/// Defines a per-record feature report (BACKLOG R1): the templated, human-
-/// readable document external form app and external field app generate for a single submission.
+/// Defines a per-record feature report (BACKLOG R1): a templated, human-
+/// readable document for a single submission.
 /// The renderer produces portable Markdown from this; converting Markdown to
 /// PDF/Word is the downstream/host step.
 /// </summary>

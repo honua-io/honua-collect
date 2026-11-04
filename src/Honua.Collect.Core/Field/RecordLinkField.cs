@@ -5,9 +5,8 @@ namespace Honua.Collect.Core.Field;
 
 /// <summary>
 /// Manages the set of links stored on a parent record's <c>RecordLink</c> field
-/// (BACKLOG F4 — related tables / record-link UX). external form app and external field app both
-/// let a record reference child records (a pole and its attached transformers,
-/// an inspection and its deficiencies); the SDK models a single link with
+/// (BACKLOG F4 — related tables / record-link UX). A record can reference child records
+/// (a pole and its attached transformers, an inspection and its deficiencies). The SDK models a single link with
 /// <see cref="FieldRecordLinkValue"/>, and this manages the collection of them
 /// the related-records screen binds to.
 /// </summary>

@@ -11,7 +11,7 @@ namespace Honua.Collect.Core.Tests.Migration;
 /// <see cref="Core.Sync.GeoServicesFeatureSync"/> client speaks —
 /// <c>generateToken</c>, layer <c>query</c>, <c>applyEdits</c>
 /// (adds/updates/deletes), and <c>addAttachment</c> — over an in-memory feature
-/// table. It is deliberately models service behavior: object ids are
+/// table. It deliberately models service behavior: object ids are
 /// server-assigned and monotonic, <c>query</c> pages via
 /// <c>resultOffset</c>/<c>resultRecordCount</c> and reports
 /// <c>exceededTransferLimit</c>, geometry is <c>{x,y}</c> with a

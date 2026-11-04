@@ -1,7 +1,7 @@
 # Importing forms and field data
 
 This guide describes how to import common form and field-data formats into Honua Collect. Everything described
-here is implemented and unit-tested in `Honua.Collect.Core`; nothing requires an
+here is implemented and unit-tested in `Honua.Collect.Core`; nothing requires a
 vendor-specific license or subscription.
 
 > Scope: this covers the data and form layers that Collect implements today. The
@@ -13,8 +13,8 @@ vendor-specific license or subscription.
 
 ### Importing XLSForm
 
-XLSForm uses the **XLSForm** format — the same `survey` / `choices`
-sheet model the OpenDataKit ecosystem uses. Collect imports it directly:
+XLSForm definitions use `survey` and `choices` sheets, the same sheet model the
+OpenDataKit ecosystem uses. Collect imports them directly:
 
 - `Honua.Collect.Core.Field.Forms.Authoring.XlsFormImporter.Import(formId, name, survey, choices)`
   turns the `survey` and `choices` rows into a `FormDefinition`.
@@ -28,7 +28,7 @@ sheet model the OpenDataKit ecosystem uses. Collect imports it directly:
 Practical path: export the form as XLSForm, read the two sheets into
 `XlsFormSurveyRow` / `XlsFormChoiceRow` sequences (any spreadsheet reader), and
 call `Import`. Calculated fields and cascading selects are evaluated at runtime by
-`FormSession`, so they behave the as defined by the imported form.
+`FormSession`, so they behave as defined by the imported form.
 
 #### Importing a published GeoServices REST feature layer
 
@@ -66,8 +66,7 @@ The conditional-visibility and required rules carry over to `FormSession`.
 
 Bring historical records in as `FieldRecord`s:
 
-- CSV and GeoJSON exports records as **CSV** and **GeoJSON**, imported directly against
-  the form produced above:
+- Import CSV and GeoJSON record exports against the form produced above:
   - `FulcrumImporter.ImportGeoJsonRecords(form, geoJson)` maps each feature's point
     `geometry` to the record `Location` and its `properties` to `Values` (filtered
     to the form's fields; system columns like `fulcrum_id`/`_status` are
@@ -94,7 +93,7 @@ are never locked in (`Honua.Collect.Core.Export`):
 | CSV | `RecordExporter.ToCsv` | one row per record, form-driven columns |
 | GeoJSON | `RecordExporter.ToGeoJson` | RFC 7946 `FeatureCollection` |
 | KML | `RecordExporter.ToKml` | OGC KML 2.2, opens in Google Earth |
-| GeoPackage | `GeoPackageExporter.Export` | single-file OGC SQLite, reads in QGIS/GeoServices REST |
+| GeoPackage | `GeoPackageExporter.Export` | single-file OGC SQLite format supported by compatible GIS software |
 | Shapefile | `ShapefileExporter.Export` | zipped `.shp`/`.shx`/`.dbf` |
 
 Bulk export and the per-record templated report (`RecordReportRenderer`) are Pro

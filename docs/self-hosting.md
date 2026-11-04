@@ -2,10 +2,11 @@
 
 Honua Collect is **source-available under the [Fair Core License](../LICENSE)
 (FCL-1.0-ALv2)** and has no SaaS dependency: it talks to a server you choose by speaking
-the **GeoServices REST protocol** protocol (FeatureServer `query` / `applyEdits`,
+the **GeoServices REST** protocol (FeatureServer `query` / `applyEdits`,
 `generateToken`). This guide shows how to point Collect at a self-hosted Honua
-server (or any GeoServices-compatible FeatureServer, including on-prem GeoServices REST
-Enterprise) **without a vendor-specific licence and without routing data through any
+server (or any GeoServices-compatible FeatureServer, including self-hosted
+enterprise GIS servers that implement the required GeoServices REST endpoints)
+**without a vendor-specific licence and without routing data through any
 Honua-operated cloud**.
 
 It is grounded in the app's real configuration surface — every key named here is
@@ -183,8 +184,8 @@ How entitlement is enforced for a self-host:
 
 ## See also
 
-- [third-party compatibility matrix](./geoservices-compatibility.md) — what Collect supports
-  vs other form app / other field app / GeoServices REST, marked honestly.
+- [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Collect supports
+  on GeoServices REST, marked honestly.
 - [Data residency & self-host posture](./data-residency-and-self-host.md) — where
   records live and how the connection is secured.
 - [Importing forms and field data](./migration-from-external-forms.md)

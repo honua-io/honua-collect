@@ -35,8 +35,8 @@ Collect syncs to, and its deployment is out of scope here.
 ## Identity provider
 
 Collect authenticates against the configured server's token endpoint, so a
-self-host deployment uses **its own** identity — there is no dependency on an
-third-party or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
+self-host deployment uses **its own** identity — there is no dependency on
+a third-party or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
 
 ## Tenancy & entitlements
 
@@ -64,5 +64,5 @@ and a **round-trip interop test against a reference GeoServices REST layer** are
 
 - [Self-hosting guide](./self-hosting.md) — the configuration surface, auth, and
   open-core boundary for pointing Collect at a self-hosted server.
-- [third-party compatibility matrix](./geoservices-compatibility.md) — what Collect supports vs
-  the incumbents, marked honestly.
+- [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Collect supports,
+  marked honestly.

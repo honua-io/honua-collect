@@ -135,8 +135,7 @@ public sealed class InboxPullResult
 }
 
 /// <summary>
-/// Robust, large-dataset paged pull of existing records into the editing inbox
-/// (#38) — built to beat external form app's failure to even load 2k→10k records for edit.
+/// Robust, large-dataset paged pull of existing records into the editing inbox.
 /// It pages through the server with a durable cursor and three hard guarantees:
 ///
 /// <list type="number">

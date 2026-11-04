@@ -6,10 +6,7 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Collect.Core.Migration;
 
 /// <summary>
-/// Imports an external app export into Collect (epic #37 migration guide). the source application is
-/// cloud-only with no true on-prem story, so the switching motion is "lift my app
-/// and its records out of the source application into a self-hosted Collect". Two inputs are
-/// handled, following the source export formats:
+/// Imports an app-schema export into Collect. Two inputs are handled:
 /// <list type="bullet">
 ///   <item>the <em>app schema</em> JSON (the app's <c>elements</c> definition) →
 ///     a <see cref="FormDefinition"/>; and</item>
@@ -154,12 +151,12 @@ public static class FulcrumImporter
 
     /// <summary>
     /// Maps an external CSV record export into records keyed to the given form. The
-    /// first row is the header; <c>latitude</c>/<c>longitude</c> columns (external field app's
-    /// position export) become the record location; remaining columns matching form
+    /// first row is the header; <c>latitude</c>/<c>longitude</c> columns become the record
+    /// location; remaining columns matching form
     /// fields become values.
     /// </summary>
     /// <param name="form">The form the records belong to.</param>
-    /// <param name="csv">The external field app CSV export text.</param>
+    /// <param name="csv">The CSV export text.</param>
     /// <returns>The recovered records and any skipped rows.</returns>
     public static MigratedForm ImportCsvRecords(FormDefinition form, string csv)
     {

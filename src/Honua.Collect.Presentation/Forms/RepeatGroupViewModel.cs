@@ -34,8 +34,7 @@ public sealed class RepeatInstanceViewModel : ObservableObject
 
 /// <summary>
 /// View-model for a repeatable section on a capture screen: the list of captured
-/// rows plus add/remove commands (external form app "repeat" / external field app "repeatable
-/// section").
+/// rows plus add/remove commands.
 /// </summary>
 public sealed class RepeatGroupViewModel : ObservableObject
 {

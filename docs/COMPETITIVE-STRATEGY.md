@@ -43,7 +43,7 @@ maturity, and finished PDF/Word reporting.
 Mandatory, not innovative. Without these we aren't in the race.
 
 - **[#35](https://github.com/honua-io/honua-collect/issues/35) Device last-mile** — wire capture widgets to real camera/GPS/map, background sync (WorkManager), push (FCM).
-- **[#36](https://github.com/honua-io/honua-collect/issues/36) High-accuracy positioning** — external GNSS / RTK receivers (a planned capability; useful for to survey/utility verticals).
+- **[#36](https://github.com/honua-io/honua-collect/issues/36) High-accuracy positioning** — external GNSS / RTK receivers (a planned capability; useful for survey/utility verticals).
 - Plus existing area-epics: [#1](https://github.com/honua-io/honua-collect/issues/1) capture, [#2](https://github.com/honua-io/honua-collect/issues/2) gis, [#3](https://github.com/honua-io/honua-collect/issues/3) forms, [#4](https://github.com/honua-io/honua-collect/issues/4) sync, [#7](https://github.com/honua-io/honua-collect/issues/7) enterprise auth, [#8](https://github.com/honua-io/honua-collect/issues/8) sensors, [#9](https://github.com/honua-io/honua-collect/issues/9) licensing.
 
 ### Horizon 2 — strengthen deployment and field workflows

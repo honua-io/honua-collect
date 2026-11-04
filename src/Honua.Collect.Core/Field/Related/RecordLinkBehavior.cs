@@ -2,8 +2,8 @@ namespace Honua.Collect.Core.Field.Related;
 
 /// <summary>
 /// Referential-integrity policy for a related-records relationship (BACKLOG F4 —
-/// related tables / record links) when the parent record is deleted. Mirrors the
-/// <c>ON DELETE</c> semantics external form app/external field app apply to their child tables.
+/// related tables / record links) when the parent record is deleted. Names the
+/// <c>ON DELETE</c> policy applied to linked child records.
 /// </summary>
 public enum RecordLinkBehavior
 {

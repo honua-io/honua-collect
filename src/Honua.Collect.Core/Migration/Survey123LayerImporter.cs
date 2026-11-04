@@ -4,19 +4,16 @@ using Honua.Sdk.Field.Forms;
 namespace Honua.Collect.Core.Migration;
 
 /// <summary>
-/// Imports an external form / GeoServices REST <em>feature-layer schema</em> (the JSON returned by
+/// Imports a GeoServices REST feature-layer schema (the JSON returned by
 /// a FeatureServer layer's metadata endpoint, or an item's <c>layers[].fields</c>
-/// block) into the SDK <see cref="FormDefinition"/> contract (epic #37 migration
-/// guide). This is the lower-bound switching-cost reducer: an org already running
-/// external form app against a GeoServices REST feature layer can lift its field schema — names,
-/// types, aliases, coded-value domains, nullability — into a Collect form without
-/// re-authoring it.
+/// block) into the SDK <see cref="FormDefinition"/> contract. Field names,
+/// types, aliases, coded-value domains, and nullability become a Collect form
+/// without re-authoring.
 /// </summary>
 /// <remarks>
-/// external form app's authoring artifact is XLSForm (already handled by
-/// <see cref="Field.Forms.Authoring.XlsFormImporter"/>); this importer targets the
-/// <em>published feature layer</em> instead, which is what you have when the
-/// original survey isn't on hand. GeoServices REST field types
+/// When the original XLSForm is unavailable (that path is
+/// <see cref="Field.Forms.Authoring.XlsFormImporter"/>), this importer reads the
+/// published feature layer. GeoServices REST field types
 /// (<c>esriFieldTypeString</c>, <c>…Integer</c>, <c>…Date</c>, …) map to
 /// <see cref="FormFieldType"/>; a field carrying a coded-value
 /// <c>domain</c> becomes a single-choice field whose <see cref="FieldChoice"/>s are
@@ -228,7 +225,7 @@ public static class Survey123LayerImporter
             return true;
         }
 
-        // third-party editor-tracking / shape bookkeeping columns.
+        // Editor-tracking and shape bookkeeping columns.
         return name.ToLowerInvariant() switch
         {
             "objectid" or "fid" or "globalid" or "shape" or "shape_length" or "shape_area"

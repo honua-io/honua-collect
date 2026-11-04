@@ -32,8 +32,8 @@ public sealed class RecordRowViewModel(CollectRecordEntry entry) : ObservableObj
 }
 
 /// <summary>
-/// View-model for the records screen — the external form app-style Drafts / Outbox /
-/// Sent mailboxes (BACKLOG S4). Groups the tracked records by box and exposes a
+/// View-model for the records screen: Drafts, Outbox, and Sent mailboxes (BACKLOG S4).
+/// Groups the tracked records by box and exposes a
 /// summary header; the list screen binds tabs to each box.
 /// </summary>
 public sealed class RecordBoxViewModel : ObservableObject

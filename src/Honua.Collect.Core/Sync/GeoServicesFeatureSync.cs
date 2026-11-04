@@ -117,7 +117,7 @@ public sealed record FeatureSyncRetryPolicy(int MaxAttempts = 4, TimeSpan BaseDe
 
 /// <summary>
 /// Submits a captured <see cref="FieldRecord"/> to a Honua or GeoServices REST
-/// Feature Server via <c>applyEdits</c> — the same wire protocol external clients use to push submissions to a feature service. Record values become
+/// Feature Server via <c>applyEdits</c>. Record values become
 /// feature attributes and <see cref="FieldRecord.Location"/> becomes the point
 /// geometry. The <see cref="HttpClient"/> is injected (the host configures the
 /// base address, the <c>X-API-Key</c>/token auth header, and the platform
@@ -127,7 +127,7 @@ public sealed record FeatureSyncRetryPolicy(int MaxAttempts = 4, TimeSpan BaseDe
 public sealed class GeoServicesFeatureSync
 {
     /// <summary>
-    /// This product's default object-id field name. service field references are
+    /// This product's default object-id field name. Service field references are
     /// case-insensitive, so this is stable against <c>OBJECTID</c> too.
     /// </summary>
     private const string DefaultObjectIdField = "objectid";
@@ -239,7 +239,7 @@ public sealed class GeoServicesFeatureSync
     /// key for adding this record. It is a deterministic function of the record's
     /// <see cref="FieldRecord.RecordId"/>, so it is identical on every (re)attempt,
     /// after a restart, and after the entry is rehydrated from storage — no extra
-    /// persistence is needed beyond the record id itself. Returned in the service registry
+    /// persistence is needed beyond the record id itself. Returned in brace-delimited GUID
     /// format (<c>{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}</c>).
     /// </summary>
     /// <param name="record">The record whose stable GlobalID is wanted.</param>

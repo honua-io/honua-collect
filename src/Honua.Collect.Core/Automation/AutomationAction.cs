@@ -108,9 +108,8 @@ public sealed record EnqueueNotificationAction(string Title, string Body) : Auto
 public sealed record ScheduleFollowUpAction(string Description, int DueInDays) : AutomationAction;
 
 /// <summary>
-/// Invokes an on-device AI action as an automation step (BACKLOG #44 — the
-/// differentiator external field app lacks; e.g. "if the photo shows corrosion, set
-/// condition=Poor"). The runtime resolves the named action through the
+/// Invokes an on-device AI action as an automation step (BACKLOG #44). For example,
+/// "if the photo shows corrosion, set condition=Poor". The runtime resolves the named action through the
 /// <see cref="IAiActionProvider"/> seam and folds the field writes it returns back
 /// into the record. With no provider wired (the default), this is a no-op stub:
 /// the seam is exercised but nothing runs, and a live provider
