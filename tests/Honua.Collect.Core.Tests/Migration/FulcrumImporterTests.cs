@@ -4,13 +4,12 @@ using Honua.Sdk.Field.Forms;
 namespace Honua.Collect.Core.Tests.Migration;
 
 /// <summary>
-/// Verifies the Fulcrum app-schema → form mapping and Fulcrum record-export
-/// (GeoJSON + CSV) → records mapping (epic #37 migration guide) against sample
-/// export fixtures.
+/// Verifies app-schema → form mapping and GeoJSON/CSV record-export → records mapping
+/// against sample export fixtures.
 /// </summary>
 public sealed class FulcrumImporterTests
 {
-    // A representative Fulcrum app schema: text, choice (with choices), yes/no,
+    // A representative app schema: text, choice (with choices), yes/no,
     // photo, an explicit numeric field, a nested Section that must be flattened,
     // and an unknown element type that must be skipped.
     private const string AppSchema = """
