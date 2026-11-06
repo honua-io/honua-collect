@@ -1,0 +1,25 @@
+{
+  "roots": [
+    ".github/",
+    ".gitignore",
+    ".gitleaks.toml",
+    "AGENTS.md",
+    "BACKLOG.md",
+    "CONTRIBUTING.md",
+    "Directory.Build.props",
+    "Directory.Build.targets",
+    "Directory.Packages.props",
+    "Honua.Collect.slnx",
+    "LICENSE",
+    "NOTICE",
+    "NuGet.config",
+    "README.md",
+    "ROADMAP.md",
+    "docs/",
+    "release/",
+    "scripts/",
+    "src/",
+    "tests/"
+  ],
+  "gate_inputs": {}
+}
