@@ -3,11 +3,10 @@
 [![CI](https://github.com/honua-io/honua-collect/actions/workflows/ci.yml/badge.svg?branch=trunk)](https://github.com/honua-io/honua-collect/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/honua-io/honua-collect/actions/workflows/codeql.yml/badge.svg?branch=trunk)](https://github.com/honua-io/honua-collect/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/honua-io/honua-collect/badge)](https://scorecard.dev/viewer/?uri=github.com/honua-io/honua-collect)
-[![License](https://img.shields.io/badge/License-Elastic_License_2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-**Honua Collect** is an offline-first mobile field data collection app — a
-source-available field-collection app, built
-on the [Honua](https://github.com/honua-io) geospatial platform. Dynamic smart
+**Honua Collect** is an open-source (Apache 2.0), offline-first mobile field
+data collection app, built on the [Honua](https://github.com/honua-io) geospatial platform. Dynamic smart
 forms (conditional visibility, calculations, validation, repeatable sections),
 encrypted offline storage (SQLCipher), connectivity-aware bidirectional sync
 with field-level conflict review, GPS/geometry capture, photo/signature/barcode
@@ -87,11 +86,10 @@ PostGIS with an editable feature layer; the emulator reaches the host at
 [`docs/verification/followups/`](docs/verification/followups/) for captured
 evidence.
 
-## Editions (open core)
+## Editions
 
 A fully usable **Community** edition is free. Selected capabilities are gated to
-**Pro** / **Enterprise** via a signed license key, verified offline on device
-(enforcement protected by the Fair Core License's anti-circumvention terms).
+**Pro** / **Enterprise** via a signed license key, verified offline on device.
 
 | Capability | Community | Pro | Enterprise |
 | --- | :---: | :---: | :---: |
@@ -113,7 +111,7 @@ Repo docs:
 
 | Doc | What it covers |
 | --- | --- |
-| [Self-hosting guide](docs/self-hosting.md) | Point Collect at a self-hosted Honua server (config surface, auth, the open-core boundary, quickstart). |
+| [Self-hosting guide](docs/self-hosting.md) | Point Collect at a self-hosted Honua server (config surface, auth, quickstart). |
 | [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | Lowering switching costs through XLSForm import and protocol reuse. |
@@ -139,21 +137,18 @@ CI runs secret scanning over full git history (gitleaks), a locked-mode
 vulnerable-dependency gate, CodeQL, Trivy, and OpenSSF Scorecard. On-device
 records are encrypted at rest with SQLCipher.
 
-## License (fair core)
+## License
 
-Honua Collect is **source-available under the [Fair Core License, Version 1.0,
-ALv2 Future License](LICENSE) (FCL-1.0-ALv2)**. In short: use it, modify it,
-redistribute it freely — but you may not make it available to others in a
-commercial product or service that substitutes for it (a Competing Use), and you
-may not circumvent the license-key functionality that gates paid features. Each
-version is additionally licensed under Apache-2.0 two years after release; see
-[NOTICE](NOTICE). Versions published before this change remain under ELv2.
+Honua Collect is licensed under the [Apache License, Version 2.0](LICENSE). You
+can use, modify, fork and redistribute it, including commercially, provided you
+keep the license and [NOTICE](NOTICE). Versions published before this change
+remain under the license they were published with.
 
-It is built **on top of** the Honua SDK packages, which remain **Apache-2.0**
-and are consumed as versioned NuGet packages — never vendored or relicensed:
+It is built **on top of** the Honua SDK packages, which are also Apache-2.0 and
+are consumed as versioned NuGet packages, never vendored:
 
 | Layer | Repo | License | Role |
 | --- | --- | --- | --- |
 | `Honua.Sdk.*` | [honua-io/honua-sdk-dotnet](https://github.com/honua-io/honua-sdk-dotnet) | Apache-2.0 | platform-neutral SDK |
 | `Honua.Mobile.*` | [honua-io/honua-mobile](https://github.com/honua-io/honua-mobile) | Apache-2.0 | mobile SDK foundation |
-| **Honua Collect** | this repo | **FCL-1.0-ALv2** | the product |
+| **Honua Collect** | this repo | Apache-2.0 | the field app |

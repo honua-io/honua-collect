@@ -1,7 +1,6 @@
 # Self-hosting Honua Collect
 
-Honua Collect is **source-available under the [Fair Core License](../LICENSE)
-(FCL-1.0-ALv2)** and has no SaaS dependency: it talks to a server you choose by speaking
+Honua Collect is **open source under the [Apache License 2.0](../LICENSE)** and has no SaaS dependency: it talks to a server you choose by speaking
 the **GeoServices REST** protocol (FeatureServer `query` / `applyEdits`,
 `generateToken`). This guide shows how to point Collect at a self-hosted Honua
 server (or any GeoServices-compatible FeatureServer, including self-hosted
@@ -117,7 +116,7 @@ Cleartext HTTP to a non-loopback host is rejected at startup by
 [`EndpointSecurity`](../src/Honua.Collect.Core/Sync/EndpointSecurity.cs); use
 HTTPS for any real deployment (loopback `http://` is allowed only for local dev).
 
-## The fair-core boundary (FCL-1.0-ALv2)
+## Editions
 
 A fully usable **Community** edition is free. Selected capabilities are gated to
 **Pro** / **Enterprise** by a signed licence key. The boundary is the single

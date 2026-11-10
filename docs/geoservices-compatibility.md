@@ -111,7 +111,7 @@ moat.
 
 | Capability | Honua Collect | Evidence |
 | --- | :---: | --- |
-| Source-available | ✅ (FCL-1.0-ALv2) | [LICENSE](../LICENSE) |
+| Open source | ✅ (Apache-2.0) | [LICENSE](../LICENSE) |
 | Self-hostable / on-prem | ✅ | [self-hosting guide](./self-hosting.md) |
 | Air-gapped capable | ✅ | offline capture + offline licence verification |
 | No per-seat SaaS tax / user-type tax | ✅ | open-core editions |

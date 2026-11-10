@@ -9,8 +9,8 @@ Capability gaps in the Honua mobile stack. Each item is tagged with:
 
 - **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending · ✅ (suffix) verified working on a device/emulator
 - **Tier** — Community (free) · Pro · Enterprise
-- **Owner** — where it's built, which sets the license:
-  - `collect` = this repo (FCL-1.0-ALv2)
+- **Owner** — where it's built:
+  - `collect` = this repo (Apache)
   - `mobile` = honua-mobile primitives (Apache, consumed)
   - `sdk` = honua-sdk-dotnet (Apache, consumed)
 
