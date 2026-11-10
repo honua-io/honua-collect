@@ -24,7 +24,7 @@ picture, kept current in [ROADMAP.md](ROADMAP.md), [BACKLOG.md](BACKLOG.md), and
 [docs/COMPETITIVE-STRATEGY.md](docs/COMPETITIVE-STRATEGY.md):
 
 - **Solid today:** the platform-neutral `Honua.Collect.Core` logic layer (form
-  runtime, records, sync, conflicts, export, licensing, provenance, …) and the
+  runtime, records, sync, conflicts, export, provenance, …) and the
   `Honua.Collect.Presentation` MVVM layer are implemented and unit-tested, with
   coverage gates and mutation testing in CI.
 - **Verified on device (Android emulator):** login, form-package download,
@@ -32,7 +32,7 @@ picture, kept current in [ROADMAP.md](ROADMAP.md), [BACKLOG.md](BACKLOG.md), and
   GeoServices feature sync, and attachment upload — with captured evidence in
   [`docs/verification/`](docs/verification/).
 - **Still in progress:** several device "last-mile" bindings (camera/GNSS/map
-  polish, background sync, push, external GNSS) and Pro/Enterprise UX. Android
+  polish, background sync, push, external GNSS) and enterprise auth/admin UX. Android
   is the verified target; the iOS/Windows/Mac Catalyst targets exist in the MAUI
   project but are unverified.
 
@@ -86,23 +86,12 @@ PostGIS with an editable feature layer; the emulator reaches the host at
 [`docs/verification/followups/`](docs/verification/followups/) for captured
 evidence.
 
-## Editions
+## Every feature is free
 
-A fully usable **Community** edition is free. Selected capabilities are gated to
-**Pro** / **Enterprise** via a signed license key, verified offline on device.
-
-| Capability | Community | Pro | Enterprise |
-| --- | :---: | :---: | :---: |
-| Dynamic forms, validation, repeats, calculations | ✅ | ✅ | ✅ |
-| Offline GeoPackage storage + sync | ✅ | ✅ | ✅ |
-| GPS / geometry capture, offline basemaps | ✅ | ✅ | ✅ |
-| Photo / signature capture | ✅ | ✅ | ✅ |
-| **Reports & exports** (per-record PDF/Word, bulk export) | — | ✅ | ✅ |
-| **AI-assisted capture** (voice/photo-to-fields, redaction) | — | ✅ | ✅ |
-| **Advanced sync & GIS** (selective sync, external GNSS) | — | ✅ | ✅ |
-| **Enterprise auth & admin** (SSO, roles, audit, MDM/white-label) | — | — | ✅ |
-
-_Tier assignments are provisional and subject to change before GA._
+Every capability in the app is available to everyone: there are no in-app
+editions, license keys, or feature gates. Paid value lives on
+[Honua Server](https://github.com/honua-io/honua-server), which is licensed
+server-side, and in support.
 
 ## Documentation
 

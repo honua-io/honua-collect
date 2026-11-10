@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Export;
 using Honua.Collect.Core.Reports;
 using Honua.Collect.Presentation.Export;
@@ -49,12 +48,11 @@ public class ExportViewModelTests
     }
 
     [Fact]
-    public void Exposes_record_count_and_entitled_header_when_pro()
+    public void Exposes_record_count_in_header()
     {
-        var vm = new ExportViewModel(Form(), TwoRecords(), CollectEdition.Pro);
+        var vm = new ExportViewModel(Form(), TwoRecords());
 
         Assert.Equal(2, vm.RecordCount);
-        Assert.True(vm.IsEntitled);
         Assert.True(vm.HasRecords);
         Assert.Contains("2 record", vm.Header);
     }
@@ -64,7 +62,7 @@ public class ExportViewModelTests
     {
         var form = Form();
         var records = TwoRecords();
-        var vm = new ExportViewModel(form, records, CollectEdition.Pro);
+        var vm = new ExportViewModel(form, records);
 
         var expected = RecordExporter.Export(form, records, ExportFormat.Csv);
 
@@ -81,7 +79,7 @@ public class ExportViewModelTests
     {
         var form = Form();
         var records = TwoRecords();
-        var vm = new ExportViewModel(form, records, CollectEdition.Pro);
+        var vm = new ExportViewModel(form, records);
 
         var expected = RecordExporter.Export(form, records, ExportFormat.GeoJson);
 
@@ -95,13 +93,13 @@ public class ExportViewModelTests
     {
         var form = Form();
         var records = TwoRecords();
-        var vm = new ExportViewModel(form, records, CollectEdition.Pro);
+        var vm = new ExportViewModel(form, records);
 
         // The latest record (r2 / "Beta") is the one created most recently.
         Assert.Equal("r2", vm.LatestRecord!.RecordId);
 
         var markdown = vm.RenderLatestReport();
-        var expected = new RecordReportRenderer(new CollectEntitlements(CollectEdition.Pro))
+        var expected = new RecordReportRenderer()
             .RenderMarkdown(form, records[1]);
 
         Assert.Equal(expected, markdown);
@@ -110,39 +108,9 @@ public class ExportViewModelTests
     }
 
     [Fact]
-    public void Not_entitled_when_community()
-    {
-        var vm = new ExportViewModel(Form(), TwoRecords(), CollectEdition.Community);
-
-        Assert.False(vm.IsEntitled);
-        Assert.Contains("Pro", vm.Header);
-    }
-
-    [Fact]
-    public void Csv_export_throws_when_not_pro()
-    {
-        var vm = new ExportViewModel(Form(), TwoRecords(), CollectEdition.Community);
-        Assert.Throws<FeatureNotEntitledException>(() => vm.ExportCsv());
-    }
-
-    [Fact]
-    public void GeoJson_export_throws_when_not_pro()
-    {
-        var vm = new ExportViewModel(Form(), TwoRecords(), CollectEdition.Community);
-        Assert.Throws<FeatureNotEntitledException>(() => vm.ExportGeoJson());
-    }
-
-    [Fact]
-    public void Report_throws_when_not_pro()
-    {
-        var vm = new ExportViewModel(Form(), TwoRecords(), CollectEdition.Community);
-        Assert.Throws<FeatureNotEntitledException>(() => vm.RenderLatestReport());
-    }
-
-    [Fact]
     public void Empty_set_has_no_records_and_no_latest()
     {
-        var vm = new ExportViewModel(Form(), [], CollectEdition.Pro);
+        var vm = new ExportViewModel(Form(), []);
 
         Assert.Equal(0, vm.RecordCount);
         Assert.False(vm.HasRecords);

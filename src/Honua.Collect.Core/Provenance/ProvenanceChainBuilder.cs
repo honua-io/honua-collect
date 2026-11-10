@@ -1,5 +1,4 @@
 using Honua.Collect.Core.Enterprise;
-using Honua.Collect.Core.Licensing;
 
 namespace Honua.Collect.Core.Provenance;
 

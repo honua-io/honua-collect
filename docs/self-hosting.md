@@ -116,41 +116,11 @@ Cleartext HTTP to a non-loopback host is rejected at startup by
 [`EndpointSecurity`](../src/Honua.Collect.Core/Sync/EndpointSecurity.cs); use
 HTTPS for any real deployment (loopback `http://` is allowed only for local dev).
 
-## Editions
+## Every feature is free
 
-A fully usable **Community** edition is free. Selected capabilities are gated to
-**Pro** / **Enterprise** by a signed licence key. The boundary is the single
-source of truth in code
-([`CollectFeatures.MinimumEdition`](../src/Honua.Collect.Core/Editions/CollectFeatures.cs)),
-and the README table mirrors it:
-
-| Capability | Community | Pro | Enterprise |
-| --- | :---: | :---: | :---: |
-| Forms (validation, repeats, calculations, cascades) | ✅ | ✅ | ✅ |
-| Offline store + GeoServices sync | ✅ | ✅ | ✅ |
-| GPS / geometry capture | ✅ | ✅ | ✅ |
-| Photo / signature capture | ✅ | ✅ | ✅ |
-| Reports & exports (`ReportsAndExports`) | — | ✅ | ✅ |
-| AI-assisted capture (`AiAssistedCapture`) | — | ✅ | ✅ |
-| Advanced sync & GIS — selective sync, external GNSS (`AdvancedSyncAndGis`) | — | ✅ | ✅ |
-| Enterprise auth & admin — SSO, roles, audit, MDM (`EnterpriseAuthAndAdmin`) | — | — | ✅ |
-
-How entitlement is enforced for a self-host:
-
-- The edition boundary is verified **offline, on-device** by
-  [`Honua.Collect.Core.Licensing`](../src/Honua.Collect.Core/Licensing/LicenseService.cs):
-  a signed licence key is checked against an embedded authority public key. **No
-  "phone home" is required** — entitlements work fully air-gapped.
-- With no key activated, the app runs the **Community baseline** (a genuinely
-  useful, fully self-hostable field-collection tool). A valid Pro/Enterprise key
-  (held in secure storage and activated at startup by
-  [`MauiProgram.ActivateStoredLicenseAsync`](../src/Honua.Collect.App/MauiProgram.cs))
-  unlocks the gated features above.
-- The matching private signing key is held by the licensing authority and is
-  **never** in the app or this repository.
-
-> Tier assignments are provisional and subject to change before GA. Licensing
-> integration is tracked in [#9](https://github.com/honua-io/honua-collect/issues/9).
+Every capability in the app is available with no license key, edition, or
+activation step, so a self-hosted, air-gapped deployment has the full feature set.
+Paid value lives on Honua Server, which is licensed server-side.
 
 ## Quickstart
 
@@ -177,9 +147,6 @@ How entitlement is enforced for a self-host:
    record and sync it — it round-trips to your FeatureServer via
    [`GeoServicesFeatureSync`](../src/Honua.Collect.Core/Sync/GeoServicesFeatureSync.cs),
    with no third-party licence and no data leaving your perimeter.
-
-5. **(Optional) Activate a licence key** to unlock Pro/Enterprise features. The
-   app runs the Community baseline until one is applied.
 
 ## See also
 

@@ -17,26 +17,17 @@ collection product across `honua-mobile` and `honua-collect`.
 
 ## Migration plan: port the field layer into Collect
 
-1. **Scaffold (this commit)** — repo foundation, `Honua.Collect.Core`, editions
-   tier model, tests, MAUI app shell.
+1. **Scaffold** — repo foundation, `Honua.Collect.Core`, tests, MAUI app shell.
 2. **Port `Honua.Mobile.Field` adapters** → `Honua.Collect.Core` (forms runtime,
    capture workflow, validation glue, media attachment model), consuming the
    SDK's field contracts directly instead of the mobile package.
 3. **Port `Honua.Mobile.FieldCollection.Core`** app services (assignments,
    exports, drafts) → Collect.
 4. **Slim `honua-mobile`** — drop the migrated surface; keep primitives only.
-5. **Build the Community baseline UX** in `Honua.Collect.App` (forms, camera,
+5. **Build the baseline UX** in `Honua.Collect.App` (forms, camera,
    geometry capture, offline sync status).
 
-## Editions
+## Every feature is free
 
-`Honua.Collect.Core/Editions` encodes the tier matrix. Free Community baseline;
-paid features gated to Pro/Enterprise. Runtime enforcement is a signed license-key
-verification.
-
-| Capability | Min edition |
-| --- | --- |
-| Reports & exports | Pro |
-| AI-assisted capture | Pro |
-| Advanced sync & GIS | Pro |
-| Enterprise auth & admin | Enterprise |
+There are no in-app editions or license checks: every capability ships to every
+user. Paid value lives on Honua Server (licensed server-side) and in support.

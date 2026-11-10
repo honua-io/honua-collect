@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Editions;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -45,23 +44,16 @@ public sealed record ReportManifest(ReportOutputFormat Format, IReadOnlyList<Rep
 /// single-record <see cref="RecordReportRenderer"/> across a whole form's submissions
 /// or a filtered selection, applying one <see cref="ReportTemplate"/> to every record,
 /// and returns a <see cref="ReportManifest"/> of named outputs. Deterministic and
-/// offline; the entitlement check rides through the wrapped renderer.
+/// offline.
 /// </summary>
 public sealed class BulkReportGenerator
 {
     private readonly RecordReportRenderer _renderer;
 
     /// <summary>Creates a bulk generator over a single-record renderer.</summary>
-    /// <param name="renderer">The renderer used for each record; carries the entitlement gate.</param>
+    /// <param name="renderer">The renderer used for each record.</param>
     public BulkReportGenerator(RecordReportRenderer renderer)
         => _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
-
-    /// <summary>Convenience: builds the generator from entitlements.</summary>
-    /// <param name="entitlements">Edition entitlements; reports require Pro.</param>
-    public BulkReportGenerator(IEntitlements entitlements)
-        : this(new RecordReportRenderer(entitlements))
-    {
-    }
 
     /// <summary>Renders a report for every record into a manifest.</summary>
     /// <param name="form">Form definition shared by the records.</param>

@@ -1,5 +1,4 @@
 using Honua.Collect.App.Services;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Presentation.Export;
 using Microsoft.Maui.ApplicationModel.DataTransfer;
@@ -8,7 +7,7 @@ using Microsoft.Maui.Storage;
 namespace Honua.Collect.App.Views;
 
 /// <summary>
-/// The Pro reporting + bulk-export screen (BACKLOG R1/R2). Shows the captured
+/// The reporting + bulk-export screen (BACKLOG R1/R2). Shows the captured
 /// record count and offers CSV / GeoJSON export and a per-record report for the
 /// latest record. Export text is produced by the tested
 /// <see cref="ExportViewModel"/> over the Core exporter/renderer; this page keeps
@@ -29,8 +28,7 @@ public partial class ExportPage : ContentPage
         await _book.InitializeAsync();
         BindingContext = new ExportViewModel(
             SampleForms.FieldSite(),
-            _book.All.Select(e => e.Record),
-            ServiceHelper.Get<IEntitlements>());
+            _book.All.Select(e => e.Record));
     }
 
     private async void OnExportCsv(object? sender, EventArgs e) =>
@@ -68,10 +66,6 @@ public partial class ExportPage : ContentPage
             });
 
             StatusLabel.Text = $"{title} ready — {text.Length} characters shared.";
-        }
-        catch (FeatureNotEntitledException)
-        {
-            StatusLabel.Text = "Reporting and bulk export require the Pro edition.";
         }
         catch (Exception ex)
         {

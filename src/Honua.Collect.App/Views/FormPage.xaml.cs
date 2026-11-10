@@ -1,7 +1,6 @@
 using Honua.Collect.App.Capture;
 using Honua.Collect.App.Services;
 using Honua.Collect.Core.Ai;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Presentation.Forms;
 using Microsoft.Extensions.DependencyInjection;
@@ -144,7 +143,7 @@ public partial class FormPage : ContentPage
             var result = await provider.ExtractAsync(path, vm.Session.Form);
             TryDelete(path);
 
-            var outcome = new AiCaptureService(ServiceHelper.Get<IEntitlements>()).Apply(vm.Session, result);
+            var outcome = new AiCaptureService().Apply(vm.Session, result);
             vm.RefreshFields();
             await DisplayAlert("AI fill",
                 outcome.Applied.Count > 0

@@ -1,7 +1,7 @@
 using System.Text;
-using Honua.Collect.Core.Licensing;
+using Honua.Collect.Core.Provenance;
 
-namespace Honua.Collect.Core.Tests.Licensing;
+namespace Honua.Collect.Core.Tests.Provenance;
 
 public class Ed25519SigningTests
 {

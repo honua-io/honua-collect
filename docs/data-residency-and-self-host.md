@@ -38,17 +38,15 @@ Collect authenticates against the configured server's token endpoint, so a
 self-host deployment uses **its own** identity — there is no dependency on
 a third-party or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
 
-## Tenancy & entitlements
+## Licensing
 
-- The open-core edition boundary is enforced **offline** by a signed licence key
-  verified on-device against an embedded public key (`Honua.Collect.Core.Licensing`);
-  the matching private key is held by the licensing authority and is never in the
-  app or this repository. No "phone home" is required to enforce entitlements.
+- The app has no license key, edition check, or "phone home": every feature works
+  offline and air-gapped.
 
 ## Air-gapped use
 
 Collect is offline-first: capture, validation, visibility, calculated fields,
-repeats, conflict detection, and entitlement enforcement all run with no network.
+repeats, and conflict detection all run with no network.
 In an air-gapped environment, Collect syncs to a FeatureServer reachable on the
 local network (the self-hosted Honua server or an on-prem self-hosted enterprise GIS server),
 with optional certificate pinning to that host. No outbound internet connection is
@@ -62,7 +60,7 @@ and a **round-trip interop test against a reference GeoServices REST layer** are
 
 ## See also
 
-- [Self-hosting guide](./self-hosting.md) — the configuration surface, auth, and
-  open-core boundary for pointing Collect at a self-hosted server.
+- [Self-hosting guide](./self-hosting.md) — the configuration surface and auth
+  for pointing Collect at a self-hosted server.
 - [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Collect supports,
   marked honestly.

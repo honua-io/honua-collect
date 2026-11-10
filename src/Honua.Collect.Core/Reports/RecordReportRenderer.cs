@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Globalization;
 using System.Text;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -11,18 +10,10 @@ namespace Honua.Collect.Core.Reports;
 /// <summary>
 /// Renders a per-record feature report (BACKLOG R1) to Markdown from a form, a
 /// record, and a <see cref="ReportTemplate"/>. Repeatable sections render each
-/// captured row; media fields list attachment names. This is a Pro capability
-/// (<c>ReportsAndExports</c>), gated through <see cref="CollectEntitlements"/>.
+/// captured row; media fields list attachment names.
 /// </summary>
 public sealed class RecordReportRenderer
 {
-    private readonly IEntitlements _entitlements;
-
-    /// <summary>Creates a renderer for an entitlement context.</summary>
-    /// <param name="entitlements">Edition entitlements; reports require Pro.</param>
-    public RecordReportRenderer(IEntitlements entitlements)
-        => _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
-
     /// <summary>Renders a record to a Markdown report.</summary>
     /// <param name="form">Form definition.</param>
     /// <param name="record">Record to render.</param>
@@ -32,7 +23,6 @@ public sealed class RecordReportRenderer
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(record);
-        _entitlements.Require(CollectFeature.ReportsAndExports);
 
         var tpl = template ?? ReportTemplate.Default;
         var builder = new StringBuilder();

@@ -123,7 +123,7 @@ Four parallel agents added the Pro feature surface over existing Core; integrate
 | --- | --- | --- |
 | **Assignments inbox (E5)** | `14-assignments-inbox.png` | Inbox lists 4 demo assignments ("4 open · 1 overdue"); tapping "Open ›" starts a capture form with the assignment title prefilled into `site_name`. |
 | **Photo annotation (C7)** | `15-photo-annotation.png` | After a photo capture, "Add markup?" opens an editor (Red/Yellow/Black); Save flattens the photo + strokes to a 1600×1067 PNG attachment. |
-| **Reports + bulk export (R1/R2)** | — | The Export tab shows "2 record(s)"; "Export CSV" wrote `cache/field-site.csv` (header + 2 rows) and opened the native share sheet. GeoJSON + per-record Markdown report use the same path. Pro-gated via `CollectEntitlements`. |
+| **Reports + bulk export (R1/R2)** | — | The Export tab shows "2 record(s)"; "Export CSV" wrote `cache/field-site.csv` (header + 2 rows) and opened the native share sheet. GeoJSON + per-record Markdown report use the same path. |
 | **AI photo-to-fields (A2)** | — | The form's "✨ AI fill from photo" button is wired to a real Anthropic vision provider (forced tool-use → `{field_id, value, confidence}`); with no key set it prompts "Set an Anthropic API key". Live extraction is one API key away. |
 
 New tabs: **Inbox**, **Export** (under the More overflow). Test totals: Core 233 + Presentation 62 (collect). The AI provider has 7 Core tests against a stubbed Anthropic response.

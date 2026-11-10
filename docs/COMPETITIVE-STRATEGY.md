@@ -6,7 +6,7 @@ tracked GitHub **epic**.
 
 ## Where we stand (honest verdict)
 
-**On logic we are ~70–80% of the way to parity and ahead in a few Pro features.
+**On logic we are ~70–80% of the way to parity and ahead in a few features.
 As a *shipping field app* we are not at parity yet** — the unfinished 20–30% is
 the device/sensor "last mile" (real camera/GPS/map, background sync, push,
 external GNSS) that require additional implementation and polish. The
@@ -18,7 +18,7 @@ point/line/polygon + GeoJSON, offline-first store **with SQLCipher at-rest
 encryption**, bidirectional sync with retry/backoff and **field-level conflict
 review**, Drafts/Outbox/Sent, and support the **GeoServices REST protocol** (FeatureServer query/applyEdits, generateToken).
 
-**Already ahead (Pro):** photo annotation that never mutates the original, an AI
+**Already ahead:** photo annotation that never mutates the original, an AI
 photo/voice-to-fields framework, per-field conflict resolution, selective sync,
 RBAC + tamper-evident audit log.
 
@@ -44,7 +44,7 @@ Mandatory, not innovative. Without these we aren't in the race.
 
 - **[#35](https://github.com/honua-io/honua-collect/issues/35) Device last-mile** — wire capture widgets to real camera/GPS/map, background sync (WorkManager), push (FCM).
 - **[#36](https://github.com/honua-io/honua-collect/issues/36) High-accuracy positioning** — external GNSS / RTK receivers (a planned capability; useful for survey/utility verticals).
-- Plus existing area-epics: [#1](https://github.com/honua-io/honua-collect/issues/1) capture, [#2](https://github.com/honua-io/honua-collect/issues/2) gis, [#3](https://github.com/honua-io/honua-collect/issues/3) forms, [#4](https://github.com/honua-io/honua-collect/issues/4) sync, [#7](https://github.com/honua-io/honua-collect/issues/7) enterprise auth, [#8](https://github.com/honua-io/honua-collect/issues/8) sensors, [#9](https://github.com/honua-io/honua-collect/issues/9) licensing.
+- Plus existing area-epics: [#1](https://github.com/honua-io/honua-collect/issues/1) capture, [#2](https://github.com/honua-io/honua-collect/issues/2) gis, [#3](https://github.com/honua-io/honua-collect/issues/3) forms, [#4](https://github.com/honua-io/honua-collect/issues/4) sync, [#7](https://github.com/honua-io/honua-collect/issues/7) enterprise auth, [#8](https://github.com/honua-io/honua-collect/issues/8) sensors.
 
 ### Horizon 2 — strengthen deployment and field workflows
 Deliver the planned deployment, editing, reporting, and workflow improvements.

@@ -8,7 +8,6 @@
 Capability gaps in the Honua mobile stack. Each item is tagged with:
 
 - **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending · ✅ (suffix) verified working on a device/emulator
-- **Tier** — Community (free) · Pro · Enterprise
 - **Owner** — where it's built:
   - `collect` = this repo (Apache)
   - `mobile` = honua-mobile primitives (Apache, consumed)
@@ -60,7 +59,7 @@ testable without a device and unblocks every widget and screen above it:
 - **`Field/Annotation/*`** — `PhotoAnnotationOverlay` markup stored as evidence
   metadata without altering the image. Backs **C7**.
 - **`Ai/*`** — voice/photo-to-fields + redaction provider contracts and the
-  confidence/entitlement-gated `AiCaptureService`. Backs **A1–A3**.
+  confidence-gated `AiCaptureService`. Backs **A1–A3**.
 - **`Reports/RecordReportRenderer`** — templated per-record Markdown reports.
   Backs **R1**.
 - **`Sync/RecordConflictDetector` + `RecordConflict`**, **`Sync/SelectiveSyncPlan`**,
@@ -70,8 +69,6 @@ testable without a device and unblocks every widget and screen above it:
   `AuthSession` (SSO), `ManagedAppConfig` (MDM). Back **E1–E4**.
 - **`Notifications/*`** — push payloads + deterministic `PushNotificationRouter`.
   Backs **E6**.
-- **`Editions/CollectEntitlements`** — runtime feature gate the product calls to
-  enforce Pro/Enterprise capabilities (consumption side of the tier matrix).
 
 ### Presentation layer — `Honua.Collect.Presentation` (the screen logic, unit-tested)
 
@@ -139,90 +136,89 @@ proven; these are device-sensor integrations.
 
 ## 1. Data capture UX (biggest gap — SDK has field types + metadata, no widgets)
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| C1 | Camera/photo capture widget (capture, retake, gallery pick) | 🧱✅ | Community | collect |
-| C2 | Audio recording widget | 🧱✅ | Community | collect |
-| C3 | Video capture widget | 🧱✅ | Community | collect |
-| C4 | Signature capture pad | 🧱✅ | Community | collect |
-| C5 | Sketch / freehand drawing widget | 🧱✅ | Community | collect |
-| C6 | Barcode / QR scanner (decode from image) | 🧱✅ | Community | collect |
-| C7 | Photo annotation / markup | 🧱✅ | Pro | collect |
-| C8 | Image auto-resize/compression before upload | ✅ | Community | collect |
-| C9 | Chunked/resumable large-media upload | 🧱 | Community | mobile |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| C1 | Camera/photo capture widget (capture, retake, gallery pick) | 🧱✅ | collect |
+| C2 | Audio recording widget | 🧱✅ | collect |
+| C3 | Video capture widget | 🧱✅ | collect |
+| C4 | Signature capture pad | 🧱✅ | collect |
+| C5 | Sketch / freehand drawing widget | 🧱✅ | collect |
+| C6 | Barcode / QR scanner (decode from image) | 🧱✅ | collect |
+| C7 | Photo annotation / markup | 🧱✅ | collect |
+| C8 | Image auto-resize/compression before upload | ✅ | collect |
+| C9 | Chunked/resumable large-media upload | 🧱 | mobile |
 
 ## 2. Geometry / GIS capture
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| G1 | Point capture from map tap | 🧱✅ | Community | collect |
-| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱✅ | Community | collect |
-| G3 | GPS streaming/averaging for vertices | 🧱 | Community | mobile |
-| G4 | Embedded 2D map rendering surface (OSM tiles, no API key) | 🧱✅ | Community | collect |
-| G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | Pro | mobile |
-| G6 | On-device AR scene anchoring (physical device) | 🧩 | Pro | collect |
-| G7 | Snap-to-feature / topology assist | 🧱 | Pro | sdk |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| G1 | Point capture from map tap | 🧱✅ | collect |
+| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱✅ | collect |
+| G3 | GPS streaming/averaging for vertices | 🧱 | mobile |
+| G4 | Embedded 2D map rendering surface (OSM tiles, no API key) | 🧱✅ | collect |
+| G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | mobile |
+| G6 | On-device AR scene anchoring (physical device) | 🧩 | collect |
+| G7 | Snap-to-feature / topology assist | 🧱 | sdk |
 
 ## 3. Forms & authoring
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| F1 | Form/survey builder (drag-drop or XLSForm import) | 🧱 | Pro | sdk/server |
-| F2 | Multi-language / localized forms | 🧱 | Pro | sdk |
-| F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | Community | sdk |
-| F4 | Related tables / record links UX | 🧱 | Pro | collect |
-| F5 | Default-from-previous / "favorites" answer reuse | 🧱 | Community | collect |
-| F6 | Offline Data Events automation engine (rules → set/compute/tag/notify/follow-up/HTTP/AI actions; #44) | 🧱 | Pro | collect |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| F1 | Form/survey builder (drag-drop or XLSForm import) | 🧱 | sdk/server |
+| F2 | Multi-language / localized forms | 🧱 | sdk |
+| F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | sdk |
+| F4 | Related tables / record links UX | 🧱 | collect |
+| F5 | Default-from-previous / "favorites" answer reuse | 🧱 | collect |
+| F6 | Offline Data Events automation engine (rules → set/compute/tag/notify/follow-up/HTTP/AI actions; #44) | 🧱 | collect |
 
 ## 4. Sync & offline (advanced)
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | Pro | collect |
-| S2 | Selective / partial sync (per-layer; spatial extent in layer CRS, attribute where, date/age, explicit selection) | 🧱✅ | Pro | collect |
-| S3 | Sync status center / per-record sync state UX | 🧱 | Community | collect |
-| S4 | Outbox / Sent / Drafts boxes | 🧱 | Community | collect |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | collect |
+| S2 | Selective / partial sync (per-layer; spatial extent in layer CRS, attribute where, date/age, explicit selection) | 🧱✅ | collect |
+| S3 | Sync status center / per-record sync state UX | 🧱 | collect |
+| S4 | Outbox / Sent / Drafts boxes | 🧱 | collect |
 
-## 5. Reporting & exports (Pro)
+## 5. Reporting & exports
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| R1 | Per-record feature reports (templated Markdown/PDF/DOCX) | 🧱✅ | Pro | collect |
-| R2 | Bulk export (CSV/GeoJSON/KML/GeoPackage/Shapefile/Excel + field-mapped CSV) | 🧱✅ | Pro | collect |
-| R2b | Bulk report generation (N records → manifest of MD/PDF/DOCX, zip-bundled) | 🧱✅ | Pro | collect |
-| R3 | Report template designer (model + AI-narrative seam; UI deferred) | 🧱 | Pro | collect |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| R1 | Per-record feature reports (templated Markdown/PDF/DOCX) | 🧱✅ | collect |
+| R2 | Bulk export (CSV/GeoJSON/KML/GeoPackage/Shapefile/Excel + field-mapped CSV) | 🧱✅ | collect |
+| R2b | Bulk report generation (N records → manifest of MD/PDF/DOCX, zip-bundled) | 🧱✅ | collect |
+| R3 | Report template designer (model + AI-narrative seam; UI deferred) | 🧱 | collect |
 
-## 6. AI-assisted capture (Pro — differentiator; framework exists, provider stubbed)
+## 6. AI-assisted capture (differentiator; framework exists, provider stubbed)
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| A1 | Voice-to-fields | 🧱 | Pro | collect |
-| A2 | Photo-to-fields (Anthropic vision; needs API key) | 🧱 | Pro | collect |
-| A3 | Media redaction / face-blur execution | 🧱 | Pro | collect |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| A1 | Voice-to-fields | 🧱 | collect |
+| A2 | Photo-to-fields (Anthropic vision; needs API key) | 🧱 | collect |
+| A3 | Media redaction / face-blur execution | 🧱 | collect |
 
-## 7. Enterprise auth & admin (Enterprise)
+## 7. Enterprise auth & admin
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| E1 | SSO (OIDC/SAML) | 🧱 | Enterprise | collect |
-| E2 | Role enforcement on device | 🧱 | Enterprise | collect |
-| E3 | Audit logging | 🧱 | Enterprise | collect |
-| E4 | MDM / white-labeling / app config | 🧱 | Enterprise | collect |
-| E5 | Assignments / inbox & task dispatch | 🧱✅ | Pro | collect |
-| E6 | Push notifications (new assignment, sync done) | 🧱 | Pro | collect |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| E1 | SSO (OIDC/SAML) | 🧱 | collect |
+| E2 | Role enforcement on device | 🧱 | collect |
+| E3 | Audit logging | 🧱 | collect |
+| E4 | MDM / white-labeling / app config | 🧱 | collect |
+| E5 | Assignments / inbox & task dispatch | 🧱✅ | collect |
+| E6 | Push notifications (new assignment, sync done) | 🧱 | collect |
 
 ## 8. Sensors / IoT (honua-mobile IoT module is interface-only today)
 
-| # | Item | Status | Tier | Owner |
-|---|---|---|---|---|
-| I1 | Bluetooth sensor integration | ❌ | Pro | mobile |
-| I2 | NFC read/write | ❌ | Pro | mobile |
-| I3 | IoT sensor streaming into records | ❌ | Enterprise | mobile |
+| # | Item | Status | Owner |
+|---|---|---|---|
+| I1 | Bluetooth sensor integration | ❌ | mobile |
+| I2 | NFC read/write | ❌ | mobile |
+| I3 | IoT sensor streaming into records | ❌ | mobile |
 
 ## Sequencing (proposed)
 
-1. **Community baseline** — C1–C6, G1–G4, S3–S4 (capture, maps, and sync a field worker can use out of the box).
-2. **Licensing layer** — signed-key entitlement enforcement (gates everything below).
-3. **Pro wave 1** — R1–R2 (reports/export), S1–S2 (advanced sync), A1–A3 (AI capture).
-4. **Enterprise wave** — E1–E4 (auth/admin), E5–E6 (assignments/push).
-5. **Hardware/specialist** — G5 (external GNSS), I1–I3 (sensors), F1–F2 (authoring/i18n).
+1. **Baseline** — C1–C6, G1–G4, S3–S4 (capture, maps, and sync a field worker can use out of the box).
+2. **Wave 1** — R1–R2 (reports/export), S1–S2 (advanced sync), A1–A3 (AI capture).
+3. **Enterprise wave** — E1–E4 (auth/admin), E5–E6 (assignments/push).
+4. **Hardware/specialist** — G5 (external GNSS), I1–I3 (sensors), F1–F2 (authoring/i18n).

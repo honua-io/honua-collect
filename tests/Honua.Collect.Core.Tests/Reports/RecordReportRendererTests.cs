@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Reports;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -50,19 +49,10 @@ public class RecordReportRendererTests
         return r;
     }
 
-    private static RecordReportRenderer ProRenderer() => new(new CollectEntitlements(CollectEdition.Pro));
-
-    [Fact]
-    public void Reports_require_pro_entitlement()
-    {
-        var renderer = new RecordReportRenderer(CollectEntitlements.Community);
-        Assert.Throws<FeatureNotEntitledException>(() => renderer.RenderMarkdown(Form(), Record()));
-    }
-
     [Fact]
     public void Title_template_substitutes_field_placeholders()
     {
-        var md = ProRenderer().RenderMarkdown(Form(), Record(),
+        var md = new RecordReportRenderer().RenderMarkdown(Form(), Record(),
             new ReportTemplate { TitleTemplate = "Pole inspection {poleId}" });
 
         Assert.StartsWith("# Pole inspection P-7", md);
@@ -71,7 +61,7 @@ public class RecordReportRendererTests
     [Fact]
     public void Default_template_renders_fields_metadata_and_media()
     {
-        var md = ProRenderer().RenderMarkdown(Form(), Record());
+        var md = new RecordReportRenderer().RenderMarkdown(Form(), Record());
 
         Assert.Contains("# Pole inspection", md);          // falls back to form name
         Assert.Contains("**Record:** r1", md);
@@ -85,7 +75,7 @@ public class RecordReportRendererTests
     [Fact]
     public void Repeatable_section_renders_each_row()
     {
-        var md = ProRenderer().RenderMarkdown(Form(), Record());
+        var md = new RecordReportRenderer().RenderMarkdown(Form(), Record());
 
         Assert.Contains("### Attachment 1", md);
         Assert.Contains("### Attachment 2", md);
@@ -96,7 +86,7 @@ public class RecordReportRendererTests
     [Fact]
     public void IncludeEmptyFields_and_section_filter_are_respected()
     {
-        var md = ProRenderer().RenderMarkdown(Form(), Record(),
+        var md = new RecordReportRenderer().RenderMarkdown(Form(), Record(),
             new ReportTemplate { IncludeEmptyFields = true, SectionIds = ["header"] });
 
         Assert.Contains("**Notes:**", md);          // empty now shown

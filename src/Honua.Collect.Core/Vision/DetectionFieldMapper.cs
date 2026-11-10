@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Forms;
 
 namespace Honua.Collect.Core.Vision;
@@ -79,24 +78,13 @@ public sealed record DetectionMappingOutcome(
 /// Maps spatial-CV detections onto a live form (epic #43): label→category field,
 /// count→numeric field, under confidence-threshold gating and the same
 /// never-overwrite-a-user-value safety as <c>AiCaptureService</c>. The model
-/// assists; the operator confirms. Pro-gated like the rest of AI-assisted capture.
+/// assists; the operator confirms.
 /// </summary>
 public sealed class DetectionFieldMapper
 {
-    private readonly IEntitlements _entitlements;
-
-    /// <summary>Creates the mapper for an entitlement context.</summary>
-    /// <param name="entitlements">Edition entitlements; spatial CV requires Pro AI-assisted capture.</param>
-    public DetectionFieldMapper(IEntitlements entitlements)
-        => _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
-
-    /// <summary>Whether the current edition unlocks AI-assisted (spatial-CV) capture.</summary>
-    public bool IsAvailable => _entitlements.Allows(CollectFeature.AiAssistedCapture);
-
     /// <summary>
     /// Applies detection-to-field rules to a form session under confidence and
-    /// overwrite gating. Throws <see cref="FeatureNotEntitledException"/> when the
-    /// edition does not include AI-assisted capture.
+    /// overwrite gating.
     /// </summary>
     /// <param name="session">Form session to fill.</param>
     /// <param name="result">Detection result from a detector.</param>
@@ -112,7 +100,6 @@ public sealed class DetectionFieldMapper
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(rules);
-        _entitlements.Require(CollectFeature.AiAssistedCapture);
 
         var opts = options ?? new DetectionMappingOptions();
         var fieldIds = session.Fields.Select(f => f.FieldId).ToHashSet(StringComparer.OrdinalIgnoreCase);
