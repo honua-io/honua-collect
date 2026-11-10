@@ -12,33 +12,22 @@ collection product across `honua-mobile` and `honua-collect`.
   GeoPackage storage, device location, native bindings). Collect consumes these
   as packages (`Honua.Mobile.Sdk`, `Honua.Mobile.Offline`, `Honua.Mobile.Maui`).
 - **Mobile field-collection product layer** (today `Honua.Mobile.Field` /
-  `Honua.Mobile.FieldCollection`) — **consolidated into this repo (FCL-1.0-ALv2)**. We
-  own this code, so relicensing our own source under the FCL is our call; third-
+  `Honua.Mobile.FieldCollection`) — **consolidated into this repo (Apache-2.0)**. Third-
   party Apache portions retain their notices.
 
 ## Migration plan: port the field layer into Collect
 
-1. **Scaffold (this commit)** — repo foundation, `Honua.Collect.Core`, editions
-   tier model, tests, MAUI app shell.
+1. **Scaffold** — repo foundation, `Honua.Collect.Core`, tests, MAUI app shell.
 2. **Port `Honua.Mobile.Field` adapters** → `Honua.Collect.Core` (forms runtime,
    capture workflow, validation glue, media attachment model), consuming the
    SDK's field contracts directly instead of the mobile package.
 3. **Port `Honua.Mobile.FieldCollection.Core`** app services (assignments,
    exports, drafts) → Collect.
 4. **Slim `honua-mobile`** — drop the migrated surface; keep primitives only.
-5. **Build the Community baseline UX** in `Honua.Collect.App` (forms, camera,
+5. **Build the baseline UX** in `Honua.Collect.App` (forms, camera,
    geometry capture, offline sync status).
 
-## Editions (fair core, FCL-1.0-ALv2)
+## Every feature is free
 
-`Honua.Collect.Core/Editions` encodes the tier matrix. Free Community baseline;
-paid features gated to Pro/Enterprise. Runtime enforcement — signed license-key
-verification + the entitlement check the FCL protects from circumvention — is a
-later layer and is intentionally **not implemented yet**.
-
-| Capability | Min edition |
-| --- | --- |
-| Reports & exports | Pro |
-| AI-assisted capture | Pro |
-| Advanced sync & GIS | Pro |
-| Enterprise auth & admin | Enterprise |
+There are no in-app editions or license checks: every capability ships to every
+user. Paid value lives on Honua Server (licensed server-side) and in support.

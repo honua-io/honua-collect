@@ -1,5 +1,4 @@
 using Honua.Collect.Core.Ai;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
@@ -29,19 +28,6 @@ public class AiCaptureServiceTests
         ],
     };
 
-    private static AiCaptureService ProService() => new(new CollectEntitlements(CollectEdition.Pro));
-
-    [Fact]
-    public void Community_edition_is_not_entitled_to_ai_capture()
-    {
-        var service = new AiCaptureService(CollectEntitlements.Community);
-        Assert.False(service.IsAvailable);
-
-        var session = FormSession.CreateForNewRecord(Form(), "r1");
-        Assert.Throws<FeatureNotEntitledException>(
-            () => service.Apply(session, new FieldExtractionResult { Fields = [new ExtractedField("species", "Oak", 0.9)] }));
-    }
-
     [Fact]
     public void Applies_high_confidence_fields_and_skips_low_confidence()
     {
@@ -55,7 +41,7 @@ public class AiCaptureServiceTests
             ],
         };
 
-        var outcome = ProService().Apply(session, result);
+        var outcome = new AiCaptureService().Apply(session, result);
 
         Assert.Equal(["species"], outcome.Applied);
         Assert.Equal("Oak", session.GetValue("species"));
@@ -66,7 +52,7 @@ public class AiCaptureServiceTests
     public void Unknown_fields_are_skipped()
     {
         var session = FormSession.CreateForNewRecord(Form(), "r1");
-        var outcome = ProService().Apply(session,
+        var outcome = new AiCaptureService().Apply(session,
             new FieldExtractionResult { Fields = [new ExtractedField("ghost", "x", 0.99)] });
 
         Assert.Empty(outcome.Applied);
@@ -81,11 +67,11 @@ public class AiCaptureServiceTests
 
         var result = new FieldExtractionResult { Fields = [new ExtractedField("species", "Oak", 0.99)] };
 
-        var kept = ProService().Apply(session, result);
+        var kept = new AiCaptureService().Apply(session, result);
         Assert.Contains(kept.Skipped, s => s.FieldId == "species" && s.Reason == AiSkipReason.AlreadyFilled);
         Assert.Equal("Maple", session.GetValue("species"));
 
-        var overwritten = ProService().Apply(session, result, new AiApplyOptions { OverwriteExisting = true });
+        var overwritten = new AiCaptureService().Apply(session, result, new AiApplyOptions { OverwriteExisting = true });
         Assert.Equal(["species"], overwritten.Applied);
         Assert.Equal("Oak", session.GetValue("species"));
     }

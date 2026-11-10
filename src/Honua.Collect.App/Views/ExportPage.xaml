@@ -9,15 +9,12 @@
 
             <Label Text="{Binding Header}" FontAttributes="Bold" />
 
-            <Label Text="Bulk-export captured records or generate a per-record report. Pro edition."
+            <Label Text="Bulk-export captured records or generate a per-record report."
                    FontSize="13" TextColor="Gray" />
 
-            <Button Text="Export CSV" Clicked="OnExportCsv"
-                    IsEnabled="{Binding IsEntitled}" />
-            <Button Text="Export GeoJSON" Clicked="OnExportGeoJson"
-                    IsEnabled="{Binding IsEntitled}" />
-            <Button Text="Report (latest record)" Clicked="OnReportLatest"
-                    IsEnabled="{Binding IsEntitled}" />
+            <Button Text="Export CSV" Clicked="OnExportCsv" />
+            <Button Text="Export GeoJSON" Clicked="OnExportGeoJson" />
+            <Button Text="Report (latest record)" Clicked="OnReportLatest" />
 
             <Label x:Name="StatusLabel" FontSize="13" TextColor="Gray" />
 

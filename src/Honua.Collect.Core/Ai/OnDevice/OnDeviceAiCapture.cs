@@ -58,9 +58,9 @@ public sealed record AiFieldSuggestions
 /// <remarks>
 /// Implementations should be robust: extraction failures (bad audio, an unloadable
 /// model, a network error in a cloud impl) must degrade to an empty result rather
-/// than throw, so capture falls back to manual entry. Entitlement gating (Pro) is
-/// enforced when suggestions are <em>applied</em> by <see cref="AiCaptureService"/>;
-/// providers only produce candidates.
+/// than throw, so capture falls back to manual entry. Suggestions are
+/// <em>applied</em> by <see cref="AiCaptureService"/>; providers only produce
+/// candidates.
 /// </remarks>
 public interface IOnDeviceAiCapture
 {

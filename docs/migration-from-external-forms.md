@@ -96,9 +96,8 @@ are never locked in (`Honua.Collect.Core.Export`):
 | GeoPackage | `GeoPackageExporter.Export` | single-file OGC SQLite format supported by compatible GIS software |
 | Shapefile | `ShapefileExporter.Export` | zipped `.shp`/`.shx`/`.dbf` |
 
-Bulk export and the per-record templated report (`RecordReportRenderer`) are Pro
-capabilities, gated by the signed-licence entitlement layer
-(`CollectFeature.ReportsAndExports`).
+Bulk export and the per-record templated report (`RecordReportRenderer`) are
+available to every user.
 
 ## Round-trip to a GeoServices REST or self-hosted FeatureServer
 

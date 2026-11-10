@@ -35,9 +35,8 @@ public sealed record AnthropicPhotoToFieldsOptions
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is BACKLOG A2, the Pro capture differentiator. Entitlement gating is enforced
-/// by <see cref="AiCaptureService"/> when the result is applied; this provider only
-/// performs extraction.
+/// This is BACKLOG A2. The provider only performs extraction; confidence gating is
+/// applied by <see cref="AiCaptureService"/> when the result is applied.
 /// </para>
 /// <para>
 /// The provider is robust: a non-success HTTP status, a rate-limit, a malformed body,

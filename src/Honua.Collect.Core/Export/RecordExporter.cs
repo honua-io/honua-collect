@@ -15,11 +15,6 @@ namespace Honua.Collect.Core.Export;
 /// so every record exports a stable, complete column set even when individual
 /// records leave fields blank.
 /// </summary>
-/// <remarks>
-/// This is a Pro capability (<c>CollectFeature.ReportsAndExports</c>); the
-/// entitlement check is enforced at the app layer, not here, so the exporter
-/// stays a pure, testable function.
-/// </remarks>
 public static class RecordExporter
 {
     private static readonly string[] FixedColumns = ["record_id", "status", "latitude", "longitude"];

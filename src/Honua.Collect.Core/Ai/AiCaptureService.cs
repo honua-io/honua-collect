@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Forms;
 
 namespace Honua.Collect.Core.Ai;
@@ -37,29 +36,15 @@ public sealed record AiApplyOptions
 public sealed record AiApplyOutcome(IReadOnlyList<string> Applied, IReadOnlyList<AiSkippedField> Skipped);
 
 /// <summary>
-/// Applies AI-extracted field values to a live form (BACKLOG A1/A2). This is the
-/// Pro-gated capture differentiator: a voice or photo provider returns candidate
+/// Applies AI-extracted field values to a live form (BACKLOG A1/A2): a voice or
+/// photo provider returns candidate
 /// values and this writes the trustworthy ones into the form, leaving the user
 /// to confirm. Low-confidence and already-filled fields are skipped so the model
 /// assists rather than overwrites.
 /// </summary>
 public sealed class AiCaptureService
 {
-    private readonly IEntitlements _entitlements;
-
-    /// <summary>Creates the service for an entitlement context.</summary>
-    /// <param name="entitlements">Edition entitlements; AI capture requires Pro.</param>
-    public AiCaptureService(IEntitlements entitlements)
-        => _entitlements = entitlements ?? throw new ArgumentNullException(nameof(entitlements));
-
-    /// <summary>Whether the current edition unlocks AI-assisted capture.</summary>
-    public bool IsAvailable => _entitlements.Allows(CollectFeature.AiAssistedCapture);
-
-    /// <summary>
-    /// Applies an extraction result to a form session under confidence gating.
-    /// Throws <see cref="FeatureNotEntitledException"/> when the edition does not
-    /// include AI-assisted capture.
-    /// </summary>
+    /// <summary>Applies an extraction result to a form session under confidence gating.</summary>
     /// <param name="session">Form session to fill.</param>
     /// <param name="result">Extraction result from a provider.</param>
     /// <param name="options">Application options.</param>
@@ -68,7 +53,6 @@ public sealed class AiCaptureService
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(result);
-        _entitlements.Require(CollectFeature.AiAssistedCapture);
 
         var opts = options ?? new AiApplyOptions();
         var fieldIds = session.Fields.Select(f => f.FieldId).ToHashSet(StringComparer.OrdinalIgnoreCase);

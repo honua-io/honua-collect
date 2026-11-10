@@ -1,6 +1,5 @@
 using System.Text;
 using Honua.Collect.Core.Enterprise;
-using Honua.Collect.Core.Licensing;
 using Honua.Collect.Core.Provenance;
 
 namespace Honua.Collect.Core.Tests.Provenance;

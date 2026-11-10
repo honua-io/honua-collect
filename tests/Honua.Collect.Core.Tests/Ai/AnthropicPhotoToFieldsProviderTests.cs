@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Honua.Collect.Core.Ai;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 
@@ -253,9 +252,8 @@ public class AnthropicPhotoToFieldsProviderTests
     }
 
     [Fact]
-    public async Task Extraction_is_pro_gated_when_applied()
+    public async Task Extracted_values_apply_to_the_form()
     {
-        // The provider extracts; AiCaptureService enforces the Pro entitlement on apply.
         var ok = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(ToolUseResponse(("species", "Oak", 0.95)), Encoding.UTF8, "application/json"),
@@ -266,14 +264,7 @@ public class AnthropicPhotoToFieldsProviderTests
         {
             var result = await provider.ExtractAsync(path, Form());
             var session = FormSession.CreateForNewRecord(Form(), "r1");
-
-            // Community is denied.
-            var community = new AiCaptureService(CollectEntitlements.Community);
-            Assert.Throws<FeatureNotEntitledException>(() => community.Apply(session, result));
-
-            // Pro applies the extracted value.
-            var pro = new AiCaptureService(new CollectEntitlements(CollectEdition.Pro));
-            var outcome = pro.Apply(session, result);
+            var outcome = new AiCaptureService().Apply(session, result);
             Assert.Equal(["species"], outcome.Applied);
             Assert.Equal("Oak", session.GetValue("species"));
         }

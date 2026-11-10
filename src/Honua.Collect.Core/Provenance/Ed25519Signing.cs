@@ -4,14 +4,11 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Crypto.Signers;
 
-namespace Honua.Collect.Core.Licensing;
+namespace Honua.Collect.Core.Provenance;
 
 /// <summary>
 /// Minimal Ed25519 sign/verify over BouncyCastle — the primitive under signed
-/// license keys. Verification is the only operation the shipping app performs
-/// (against the embedded authority public key); signing and key generation exist
-/// for the offline licensing authority / issuing tooling and the test suite.
-/// Ed25519 keys are raw 32-byte values.
+/// capture manifests and provenance chains. Ed25519 keys are raw 32-byte values.
 /// </summary>
 public static class Ed25519Signing
 {
@@ -21,7 +18,7 @@ public static class Ed25519Signing
     /// <summary>The fixed length, in bytes, of an Ed25519 signature.</summary>
     public const int SignatureSize = 64;
 
-    /// <summary>Generates a fresh Ed25519 key pair (issuer tooling / tests).</summary>
+    /// <summary>Generates a fresh Ed25519 key pair.</summary>
     /// <returns>The raw 32-byte private and public keys.</returns>
     public static (byte[] PrivateKey, byte[] PublicKey) GenerateKeyPair()
     {

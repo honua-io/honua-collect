@@ -5,9 +5,9 @@
       - Honua.Sdk.*     platform-neutral SDK   (honua-io/honua-sdk-dotnet, Apache-2.0)
       - Honua.Mobile.*  mobile SDK foundation  (honua-io/honua-mobile,     Apache-2.0)
 
-    This repository (the Honua Collect product) is licensed under the Elastic
-    License 2.0 — see LICENSE. The Apache-licensed SDK layers are NOT relicensed;
-    they remain Apache-2.0 and are consumed, never vendored.
+    This repository (the Honua Collect app) is licensed under the Apache License
+    2.0 — see LICENSE. The SDK layers are separate Apache-2.0 projects, consumed
+    as packages and never vendored.
 
     All package versions — including the SDK-train pin — now live in
     Directory.Packages.props (Central Package Management), which is the

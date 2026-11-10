@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Text;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Reports;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -32,7 +31,7 @@ public class ReportArchiveTests
     }
 
     private static ReportManifest Manifest(params (string Id, string Pole)[] records)
-        => new BulkReportGenerator(new CollectEntitlements(CollectEdition.Pro))
+        => new BulkReportGenerator(new RecordReportRenderer())
             .Generate(Form(), records.Select(r => Record(r.Id, r.Pole)), fileNameTemplate: "pole-{poleId}");
 
     private static ZipArchive Open(byte[] zip)

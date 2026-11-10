@@ -15,8 +15,7 @@ public sealed record ExtractedField(string FieldId, object? Value, double Confid
 /// <summary>
 /// The result of an AI extraction pass over voice or a photo (BACKLOG A1/A2):
 /// a set of candidate field values the user can accept. Providers return this;
-/// <see cref="AiCaptureService"/> applies it to a form under confidence and
-/// entitlement gating.
+/// <see cref="AiCaptureService"/> applies it to a form under confidence gating.
 /// </summary>
 public sealed record FieldExtractionResult
 {

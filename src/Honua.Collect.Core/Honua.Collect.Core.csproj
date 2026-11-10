@@ -25,8 +25,8 @@
          be encrypted at rest via a connection-string Password (PRAGMA key). -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" />
-    <!-- Pure-managed Ed25519 (no native deps) for offline license-key verification
-         against the embedded authority public key. Already in the restore graph
+    <!-- Pure-managed Ed25519 (no native deps) for signing and verifying capture
+         provenance manifests. Already in the restore graph
          transitively; pinned here as a direct, audited dependency. -->
     <PackageReference Include="BouncyCastle.Cryptography" />
     <!-- Headless image codec for the C8 resize/compress execution on real bytes

@@ -69,7 +69,7 @@ Collect reads and writes GeoServices REST feature services, including services h
 | Field-level conflict **resolution** (merge) | ✅ | [`RecordConflict.Resolve`](../src/Honua.Collect.Core/Sync/RecordConflict.cs) (per-field keep-local/keep-server) |
 | Conflict-review **UI** | 🟡 | core logic done; review screen binding pending ([#38](https://github.com/honua-io/honua-collect/issues/38)) |
 | Post-sync editability (never lose an edit) | 🔭 | tracked in [#38](https://github.com/honua-io/honua-collect/issues/38) |
-| Selective / partial sync | 🟡 | Pro-gated (`AdvancedSyncAndGis`); query `where`-clause filtering exists in `QueryAsync` |
+| Selective / partial sync | 🟡 | query `where`-clause filtering exists in `QueryAsync` |
 | Background sync (WorkManager / push) | 🔭 | app-layer, planned ([#35](https://github.com/honua-io/honua-collect/issues/35)) |
 
 ## Attachments & media upload
@@ -89,8 +89,8 @@ Collect reads and writes GeoServices REST feature services, including services h
 | KML export (OGC 2.2) | ✅ | `RecordExporter.ToKml` |
 | GeoPackage export (OGC) | ✅ | [`GeoPackageExporter`](../src/Honua.Collect.Core/Export/GeoPackageExporter.cs) |
 | Shapefile export | ✅ | [`ShapefileExporter`](../src/Honua.Collect.Core/Export/ShapefileExporter.cs) |
-| Per-record templated PDF/Word report | 🟡 | [`RecordReportRenderer`](../src/Honua.Collect.Core/Reports/RecordReportRenderer.cs) — Pro-gated; finished templating tracked in [#39](https://github.com/honua-io/honua-collect/issues/39) |
-| Bulk export / reporting | 🟡 | Pro-gated (`ReportsAndExports`); bulk UX tracked in [#39](https://github.com/honua-io/honua-collect/issues/39) |
+| Per-record templated PDF/Word report | 🟡 | [`RecordReportRenderer`](../src/Honua.Collect.Core/Reports/RecordReportRenderer.cs); finished templating tracked in [#39](https://github.com/honua-io/honua-collect/issues/39) |
+| Bulk export / reporting | 🟡 | bulk UX tracked in [#39](https://github.com/honua-io/honua-collect/issues/39) |
 
 ## Authentication & enterprise
 
@@ -104,18 +104,17 @@ Collect reads and writes GeoServices REST feature services, including services h
 | SSO (OIDC / SAML) | 🔭 | `AuthSession` carries the model; interactive flow planned ([#7](https://github.com/honua-io/honua-collect/issues/7)) |
 | Certificate pinning (SPKI) | ✅ | [`CertificatePinning`](../src/Honua.Collect.Core/Sync/CertificatePinning.cs) — opt-in |
 
-## Deployment & licensing posture
+## Deployment posture
 
 This is where the matrix flips in Collect's favour — the [#37](https://github.com/honua-io/honua-collect/issues/37)
 moat.
 
 | Capability | Honua Collect | Evidence |
 | --- | :---: | --- |
-| Source-available | ✅ (FCL-1.0-ALv2) | [LICENSE](../LICENSE) |
+| Open source | ✅ (Apache-2.0) | [LICENSE](../LICENSE) |
 | Self-hostable / on-prem | ✅ | [self-hosting guide](./self-hosting.md) |
-| Air-gapped capable | ✅ | offline capture + offline licence verification |
-| No per-seat SaaS tax / user-type tax | ✅ | open-core editions |
-| Offline licence/entitlement enforcement (no phone-home) | ✅ | [`LicenseService`](../src/Honua.Collect.Core/Licensing/LicenseService.cs) (Ed25519, embedded public key) |
+| Air-gapped capable | ✅ | offline capture; no license activation |
+| No per-seat SaaS tax / user-type tax | ✅ | every app feature is free; no in-app license check |
 | Bring-your-own identity (no vendor account) | ✅ | authenticates against your server's token endpoint |
 
 ## Migration & data portability
@@ -153,7 +152,7 @@ To avoid overstating:
 - **SSO / OIDC / SAML (🔭):** the session model exists; the interactive sign-in
   flow is planned ([#7](https://github.com/honua-io/honua-collect/issues/7)).
 - **Bulk + templated PDF/Word reporting (🟡):** exporters and a per-record
-  renderer exist and are Pro-gated; the finished bulk/report UX is tracked in
+  renderer exist; the finished bulk/report UX is tracked in
   [#39](https://github.com/honua-io/honua-collect/issues/39).
 - **Background sync / push (🔭):** app-layer, planned ([#35](https://github.com/honua-io/honua-collect/issues/35)).
 

@@ -1,4 +1,3 @@
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Reports;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -29,9 +28,7 @@ public class ReportNarratorTests
         return r;
     }
 
-    private static RecordReportRenderer Pro() => new(new CollectEntitlements(CollectEdition.Pro));
-
-    private sealed class StubNarrator : IReportNarrator
+        private sealed class StubNarrator : IReportNarrator
     {
         public Task<ReportNarrative?> DraftAsync(FormDefinition form, FieldRecord record, CancellationToken ct = default)
             => Task.FromResult<ReportNarrative?>(new ReportNarrative(
@@ -45,8 +42,8 @@ public class ReportNarratorTests
     {
         var template = new ReportTemplate { IncludeNarrative = true };
 
-        var withNarrator = await Pro().RenderMarkdownAsync(Form(), Record(), NullReportNarrator.Instance, template);
-        var plain = Pro().RenderMarkdown(Form(), Record(), template);
+        var withNarrator = await new RecordReportRenderer().RenderMarkdownAsync(Form(), Record(), NullReportNarrator.Instance, template);
+        var plain = new RecordReportRenderer().RenderMarkdown(Form(), Record(), template);
 
         Assert.Equal(plain, withNarrator);
         Assert.DoesNotContain("## Summary", withNarrator);
@@ -57,7 +54,7 @@ public class ReportNarratorTests
     {
         var template = new ReportTemplate { IncludeNarrative = true };
 
-        var md = await Pro().RenderMarkdownAsync(Form(), Record(), new StubNarrator(), template);
+        var md = await new RecordReportRenderer().RenderMarkdownAsync(Form(), Record(), new StubNarrator(), template);
 
         Assert.Contains("## Summary", md);
         Assert.Contains("Pole P-7 is in service.", md);
@@ -74,7 +71,7 @@ public class ReportNarratorTests
     [Fact]
     public async Task Narrative_is_omitted_when_template_opts_out()
     {
-        var md = await Pro().RenderMarkdownAsync(Form(), Record(), new StubNarrator(), new ReportTemplate());
+        var md = await new RecordReportRenderer().RenderMarkdownAsync(Form(), Record(), new StubNarrator(), new ReportTemplate());
 
         Assert.DoesNotContain("## Summary", md);
     }

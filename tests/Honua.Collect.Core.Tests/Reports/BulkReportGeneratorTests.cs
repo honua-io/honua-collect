@@ -1,5 +1,4 @@
 using System.Text;
-using Honua.Collect.Core.Editions;
 using Honua.Collect.Core.Reports;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -35,14 +34,14 @@ public class BulkReportGeneratorTests
         return r;
     }
 
-    private static BulkReportGenerator Pro() => new(new CollectEntitlements(CollectEdition.Pro));
+    private static BulkReportGenerator Generator() => new(new RecordReportRenderer());
 
     [Fact]
     public void Bulk_render_produces_one_output_per_record_in_order()
     {
         var records = new[] { Record("r1", "P-1"), Record("r2", "P-2"), Record("r3", "P-3") };
 
-        var manifest = Pro().Generate(Form(), records);
+        var manifest = Generator().Generate(Form(), records);
 
         Assert.Equal(3, manifest.Count);
         Assert.Equal(new[] { "r1", "r2", "r3" }, manifest.Entries.Select(e => e.RecordId));
@@ -52,7 +51,7 @@ public class BulkReportGeneratorTests
     [Fact]
     public void Empty_set_yields_an_empty_manifest()
     {
-        var manifest = Pro().Generate(Form(), []);
+        var manifest = Generator().Generate(Form(), []);
 
         Assert.Equal(0, manifest.Count);
         Assert.Empty(manifest.Entries);
@@ -61,7 +60,7 @@ public class BulkReportGeneratorTests
     [Fact]
     public void Single_record_yields_one_entry()
     {
-        var manifest = Pro().Generate(Form(), [Record("solo", "P-9")]);
+        var manifest = Generator().Generate(Form(), [Record("solo", "P-9")]);
 
         Assert.Single(manifest.Entries);
         Assert.Equal("solo", manifest.Entries[0].RecordId);
@@ -73,7 +72,7 @@ public class BulkReportGeneratorTests
         var records = new[] { Record("r1", "P-1"), Record("r2", "P-2") };
         var template = new ReportTemplate { TitleTemplate = "Pole {poleId}" };
 
-        var manifest = Pro().Generate(Form(), records, template);
+        var manifest = Generator().Generate(Form(), records, template);
 
         Assert.Contains("# Pole P-1", Encoding.UTF8.GetString(manifest.Entries[0].Content));
         Assert.Contains("# Pole P-2", Encoding.UTF8.GetString(manifest.Entries[1].Content));
@@ -85,7 +84,7 @@ public class BulkReportGeneratorTests
         // Two records resolve to the same stem -> the second is de-duplicated.
         var records = new[] { Record("r1", "P/1"), Record("r2", "P/1") };
 
-        var manifest = Pro().Generate(Form(), records, fileNameTemplate: "pole-{poleId}", format: ReportOutputFormat.Markdown);
+        var manifest = Generator().Generate(Form(), records, fileNameTemplate: "pole-{poleId}", format: ReportOutputFormat.Markdown);
 
         Assert.Equal("pole-P-1.md", manifest.Entries[0].FileName);
         Assert.Equal("pole-P-1-2.md", manifest.Entries[1].FileName);
@@ -94,7 +93,7 @@ public class BulkReportGeneratorTests
     [Fact]
     public void File_name_falls_back_to_record_id()
     {
-        var manifest = Pro().Generate(Form(), [Record("rec-7", "P-7")]);
+        var manifest = Generator().Generate(Form(), [Record("rec-7", "P-7")]);
 
         Assert.Equal("rec-7.md", manifest.Entries[0].FileName);
     }
@@ -102,7 +101,7 @@ public class BulkReportGeneratorTests
     [Fact]
     public void Pdf_format_emits_pdf_bytes_with_pdf_extension()
     {
-        var manifest = Pro().Generate(Form(), [Record("r1", "P-1")], format: ReportOutputFormat.Pdf);
+        var manifest = Generator().Generate(Form(), [Record("r1", "P-1")], format: ReportOutputFormat.Pdf);
 
         var entry = manifest.Entries[0];
         Assert.Equal(ReportOutputFormat.Pdf, manifest.Format);
@@ -113,19 +112,11 @@ public class BulkReportGeneratorTests
     [Fact]
     public void Docx_format_emits_a_zip_with_docx_extension()
     {
-        var manifest = Pro().Generate(Form(), [Record("r1", "P-1")], format: ReportOutputFormat.Docx);
+        var manifest = Generator().Generate(Form(), [Record("r1", "P-1")], format: ReportOutputFormat.Docx);
 
         var entry = manifest.Entries[0];
         Assert.EndsWith(".docx", entry.FileName);
         Assert.Equal(0x50, entry.Content[0]); // 'P'
         Assert.Equal(0x4B, entry.Content[1]); // 'K' -> ZIP local file header
-    }
-
-    [Fact]
-    public void Bulk_render_requires_pro_entitlement()
-    {
-        var generator = new BulkReportGenerator(CollectEntitlements.Community);
-
-        Assert.Throws<FeatureNotEntitledException>(() => generator.Generate(Form(), [Record("r1", "P-1")]));
     }
 }
