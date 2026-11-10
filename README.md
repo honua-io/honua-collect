@@ -93,6 +93,91 @@ editions, license keys, or feature gates. Paid value lives on
 [Honua Server](https://github.com/honua-io/honua-server), which is licensed
 server-side, and in support.
 
+## Fork and customize
+
+You are welcome to fork Collect and make it your own. Apache 2.0 permits
+commercial use, modification and redistribution, including under your own brand,
+as long as you keep the [LICENSE](LICENSE) and [NOTICE](NOTICE) files. The
+"Honua" name and logo are trademarks, so a rebranded build should drop them.
+
+### Rebrand
+
+All branding lives in `src/Honua.Collect.App`:
+
+| What | Where |
+| --- | --- |
+| App name (launcher label) | `<ApplicationTitle>` in `Honua.Collect.App.csproj` |
+| In-app titles | `Title="Honua Collect"` in `AppShell.xaml`, and the title and heading in `MainPage.xaml` |
+| Application / bundle id | `<ApplicationId>` (currently `io.honua.collect`) in `Honua.Collect.App.csproj`; set your own reverse-DNS id before you publish, because stores and devices treat it as the app's identity |
+| Version | `<ApplicationDisplayVersion>` and `<ApplicationVersion>` in `Honua.Collect.App.csproj` |
+| App icon | `Resources/AppIcon/appicon.svg` (background) and `appiconfg.svg` (foreground); background colour is the `Color` on the `<MauiIcon>` item in the csproj |
+| Splash screen | `Resources/Splash/splash.svg` and the `Color` on the `<MauiSplashScreen>` item in the csproj |
+| UI colours | `Resources/Styles/Colors.xaml` (`Primary`, `Secondary`, `Tertiary`, …; used by `Styles.xaml` for light and dark themes) and, on Android, `Platforms/Android/Resources/values/colors.xml` |
+| Fonts | `Resources/Fonts/` plus the `ConfigureFonts` call in `MauiProgram.cs` |
+
+### Server connection
+
+The server is set in configuration, not code:
+[`Resources/Raw/appsettings.json`](src/Honua.Collect.App/Resources/Raw/appsettings.json)
+(`server.baseUrl`, `server.serviceId`, `server.layerId`, optional
+`server.pinnedCertificates`). It is embedded at build time, so change it before you
+build. Users sign in on the Account tab against that server's token endpoint. The
+[self-hosting guide](docs/self-hosting.md) documents every key.
+
+### Forms
+
+- **From the server:** "Download Latest Form" on the Capture screen fetches a form
+  package from the configured server's form-package API (served by Honua Server).
+- **Bundled:** the offline fallback and demo forms are C# definitions in
+  [`SampleForms.cs`](src/Honua.Collect.App/SampleForms.cs). Edit or replace them
+  to ship your own built-in forms; field ids must match the target layer's
+  attribute names so submissions apply cleanly.
+
+### Basemap
+
+The embedded map draws OpenStreetMap raster tiles. The tile URL template is
+`OsmTileUrl.Template` in
+[`src/Honua.Collect.Core/Maps/OsmTileUrl.cs`](src/Honua.Collect.Core/Maps/OsmTileUrl.cs)
+(any XYZ `{z}/{x}/{y}` PNG source works). Point a distributed build at a tile
+server you operate or license: the public OSM tile servers have a usage policy
+that does not allow heavy or bulk use. The tile request User-Agent is set in
+`MauiProgram.cs`.
+
+### Build and distribute your own build
+
+Follow [Quick start](#quick-start) for the toolchain and package feed, then build
+a signed, self-contained Android package:
+
+```bash
+dotnet publish src/Honua.Collect.App/Honua.Collect.App.csproj -f net10.0-android -c Release \
+  -p:AndroidPackageFormats=apk \
+  -p:AndroidKeyStore=true \
+  -p:AndroidSigningKeyStore=/path/to/your.keystore \
+  -p:AndroidSigningKeyAlias=your-alias \
+  -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASS \
+  -p:AndroidSigningStorePass=env:ANDROID_STORE_PASS
+```
+
+Sideload the resulting `*-Signed.apk` from `bin/Release/net10.0-android/publish/`
+with `adb install -r <file>`, distribute it through your MDM, or build an `.aab`
+(`-p:AndroidPackageFormats=aab`) for an app store. Without the signing properties
+the build signs with the local debug key, which is fine for testing only. Android
+is the verified target; the iOS, Mac Catalyst and Windows targets exist but are
+unverified.
+
+### Not yet configurable
+
+These need a source change today; there is no setting for them yet:
+
+- **Basemap source:** a compile-time constant (`OsmTileUrl.Template`), one source only.
+- **Downloaded form id:** the Capture screen requests the form id `field_site`
+  (`MainPage.xaml.cs`); the bundled forms are compiled in.
+- **One target layer:** the app syncs to the single service and layer in
+  `appsettings.json`.
+- **Runtime or MDM configuration:** `ManagedAppConfig` exists in Core but is not
+  wired into the app, so the server and branding cannot be changed after the build.
+- **Tile request User-Agent:** hard-coded in `MauiProgram.cs`.
+
 ## Documentation
 
 Hosted platform docs live at [honua.gitbook.io/honuaio](https://honua.gitbook.io/honuaio/).
