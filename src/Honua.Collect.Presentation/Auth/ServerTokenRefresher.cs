@@ -13,7 +13,7 @@ namespace Honua.Collect.Presentation.Auth;
 /// never re-sent.
 /// </summary>
 /// <remarks>
-/// The wire shape follows the ArcGIS token endpoint: a successful response carries a
+/// The wire shape follows the GeoServices REST token endpoint: a successful response carries a
 /// new <c>token</c> and <c>expires</c>, and — when the server supports rotation — a
 /// new <c>refreshToken</c>. When the server returns no fresh refresh token, the
 /// prior one is carried forward so the session can refresh again. A response with no
