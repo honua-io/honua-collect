@@ -49,7 +49,7 @@ jobs:
 
       - name: Vulnerable dependency scan
         # `dotnet list package --vulnerable` exits 0 even when it finds advisories,
-        # so we restore first (transitive graph) and fail if any severity row appears.
+        # so we restore first (transitive graph) and warn if any severity row appears.
         # --locked-mode fails the build if the committed packages.lock.json files
         # don't match the resolved graph (a drifted or poisoned transitive dependency).
         #
@@ -57,25 +57,27 @@ jobs:
         # Directory.Build.props): GHSA-2m69-gcr7-jv3q on SQLitePCLRaw.lib.e_sqlite3,
         # pulled transitively by the SQLCipher batteries bundle, with no patched
         # release available. `dotnet list --vulnerable` does NOT honour audit
-        # suppressions, so we drop that one advisory's rows here and still fail on
-        # any OTHER vulnerable package. Keep the two lists (this and the suppress in
+        # suppressions, so we drop that one advisory's rows here and warn on any
+        # OTHER vulnerable package. Advisories never fail the job: a newly published
+        # advisory is dependency work, not a broken build (NU1901-NU1904 are also
+        # warnings in Directory.Build.targets). Keep the two lists (this and the suppress in
         # Directory.Build.props) in lockstep; remove both when a fixed bundle ships.
         run: |
           dotnet restore Honua.Collect.slnx --locked-mode
           dotnet list Honua.Collect.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
           # Each vulnerable package is a row beginning with ">" carrying its advisory
-          # URL. Gate on any such row whose advisory is NOT the accepted one — so the
-          # accepted SQLitePCLRaw advisory passes while any other vulnerable package
-          # (or a second advisory on the same package) still fails. We materialise the
+          # URL. Report any such row whose advisory is NOT the accepted one — so the
+          # accepted SQLitePCLRaw advisory stays quiet while any other vulnerable
+          # package (or a second advisory on the same package) shows. We materialise the
           # filtered rows to a file rather than piping into `grep -q`, which can
           # SIGPIPE the upstream grep and yield a nondeterministic result.
           grep -E '^[[:space:]]*> ' vuln.txt | grep -v 'GHSA-2m69-gcr7-jv3q' > unaccepted.txt || true
           if [ -s unaccepted.txt ]; then
-            echo "::error::Unaccepted vulnerable NuGet packages detected — see the table above."
+            echo "::warning::Unaccepted vulnerable NuGet packages detected — see the table above."
             cat unaccepted.txt
-            exit 1
+          else
+            echo "No unaccepted vulnerable packages."
           fi
-          echo "No unaccepted vulnerable packages."
 
   build-test:
     runs-on: ubuntu-latest

@@ -32,7 +32,8 @@
        patched SQLitePCLRaw release ships a remediated native lib yet, and the
        record DB requires SQLCipher, so we cannot drop or float the package. We
        therefore suppress THIS ONE advisory by its URL (not NU1903 wholesale): the
-       NuGetAudit gate stays on, so any new/different advisory still fails restore.
+       NuGetAudit check stays on, so any new/different advisory still shows as a
+       restore warning (advisories never fail restore; see Directory.Build.targets).
        Revisit when SQLitePCLRaw publishes a fixed bundle (tracking: SDK train). -->
   <ItemGroup>
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
