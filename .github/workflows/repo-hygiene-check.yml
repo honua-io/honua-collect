@@ -7,9 +7,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group: this is a required check, and a cancelled run left as the
+# newest check run of that name blocks merging even when another run passed (a rerun
+# of an older run cancels the newer one). Runs take seconds, so every run completes.
 
 jobs:
   repo-hygiene:
