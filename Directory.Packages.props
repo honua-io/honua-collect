@@ -47,7 +47,7 @@
 
   <!-- Storage / crypto. -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="11.0.0" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
   </ItemGroup>
