@@ -4,3 +4,5 @@ const target = new URL('../../src/Honua.Collect.Spike.Shared/wwwroot/vendor/',im
 await mkdir(target,{recursive:true});
 for (const file of await readdir(source)) if (file.endsWith('.mjs') || file.endsWith('.css')) await copyFile(new URL(file,source),new URL(file,target));
 await copyFile(new URL('node_modules/maplibre-gl/LICENSE.txt',import.meta.url),new URL('LICENSE.txt',target));
+await copyFile(new URL('node_modules/pmtiles/dist/pmtiles.js',import.meta.url),new URL('pmtiles.js',target));
+await copyFile(new URL('licenses/PMTILES-LICENSE',import.meta.url),new URL('PMTILES-LICENSE',target));

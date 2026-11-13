@@ -42,9 +42,9 @@ unmeasured row is pending, never a pass or a fallback decision.
 | Gate | Pass mark | Current evidence |
 |---|---|---|
 | Android and iOS cold start | usable Today list under 3 s | Pending; measure process launch to usable list externally |
-| Local assets and panning | 50,000 stored points, at least 30 rendered frames/s | Pending; current geometry is synthetic in memory; callback probe is diagnostic only |
-| Offline archive | 2 GB archive, visible tiles under 300 ms, no network | Pending; archive integration not yet implemented |
-| Photo to outbox | under 2 s | Pending; native capture not yet implemented |
+| Local assets and panning | 50,000 stored points, at least 30 rendered frames/s | Pending; stored synthetic fixture implemented; device profiler run pending |
+| Offline archive | 2 GB archive, visible tiles under 300 ms, no network | Pending; local file-slice archive reader implemented; 2 GB fixture/device run pending |
+| Photo to outbox | under 2 s | Pending; native capture implemented; post-picker timer excludes shutter/picker delay |
 | Accessibility | every field labelled and reachable | Markup labels present; device screen reader audit pending |
 | Browser | automated inspection journey passes | Test authored; execution pending |
 | iOS build | hosted macOS build green | Pending |
@@ -61,6 +61,19 @@ unmeasured row is pending, never a pass or a fallback decision.
    measured gate fails, record the failure and evaluate the approved native
    fallback; an incomplete implementation does not establish a technology fail.
 
-This fixture intentionally does not persist photo metadata, run a new sync
-engine, or alter the shipping app. Complete archive, capture, encrypted native
-storage, stored-asset loading and startup instrumentation before founder gate.
+The native fixture encrypts its record databases with a key held in platform
+secure storage. It stores photo paths as fixture form values; it does not add
+attachment transport or a new sync engine. Photos remain app-private files.
+The browser fixture disables native capture.
+
+On Map, prepare the 50,000 stored assets (setup is excluded from panning), choose
+a local PMTiles archive, then run the pan probe. The archive uses file slices
+and rejects HTTP tile/style requests. Archive read/decode timings exclude
+visible-frame latency; use an external recording and platform frame profiler
+to establish the actual gate. Measure the full shutter-to-outbox interval
+externally too: the built-in photo timer begins after the native picker returns.
+No native startup instrumentation or device measurements have been completed.
+
+PMTiles distribution license is retained in scripts/shell-spike/licenses from
+https://github.com/protomaps/PMTiles/blob/main/LICENSE because its npm tarball
+does not include it. Asset preparation copies it beside the bundled runtime.

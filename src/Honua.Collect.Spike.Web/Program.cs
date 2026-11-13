@@ -5,6 +5,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 var directory = Environment.GetEnvironmentVariable("COLLECT_SPIKE_DATA") ?? Path.Combine(Path.GetTempPath(), "honua-collect-shell-spike");
 Directory.CreateDirectory(directory);
 builder.Services.AddScoped(_ => new SpikeStore(directory));
+builder.Services.AddScoped<ISpikeCapture, BrowserCapture>();
 var app = builder.Build();
 app.UseAntiforgery();
 app.MapStaticAssets();
