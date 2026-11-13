@@ -44,3 +44,6 @@ coverage*.xml
 cov-*.xml
 coverage*.json
 **/TestResults/
+
+# Generated shell-spike map distribution (npm lockfile is committed).
+src/Honua.Collect.Spike.Shared/wwwroot/vendor/

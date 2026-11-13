@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"assets":"node assets.mjs"},"dependencies":{"maplibre-gl":"6.18.0","pmtiles":"4.5.0"},"devDependencies":{"@playwright/test":"1.65.0"}}

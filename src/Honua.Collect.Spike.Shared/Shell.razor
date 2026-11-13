@@ -1,0 +1,127 @@
+@inject SpikeStore Store
+@inject IJSRuntime JS
+@inject ISpikeCapture Capture
+@implements IAsyncDisposable
+
+<main>
+    <h1>Collect shell spike</h1>
+    <p>Local inspection fixture. Pending records stay on this device.</p>
+    <nav aria-label="Work screens">
+        <button @onclick='() => Select("today")'>Today</button>
+        <button @onclick='() => Select("map")'>Map</button>
+        <button @onclick='() => Select("inspection")'>Inspection</button>
+    </nav>
+    <p role="status">@message</p>
+    @if (screen == "today")
+    {
+        <h2>Today</h2>
+        <p data-testid="pending">@records.Count(x => x.IsPendingUpload) pending inspections</p>
+        <ul>@foreach (var record in records) { <li>@record.Record.RecordId — @record.Box</li> }</ul>
+    }
+    else if (screen == "map")
+    {
+        <h2>Map</h2>
+        <p>Load the synthetic assets from the existing record store before measuring.</p>
+        <button @onclick="PrepareAssets" disabled="@preparing">Prepare and load 50,000 local assets</button>
+        <label for="archive">Offline PMTiles archive</label>
+        <input id="archive" type="file" accept=".pmtiles" />
+        <output id="map-status" aria-live="polite"></output>
+        <div id="spike-map" role="img" aria-label="Synthetic asset map"></div>
+        <button @onclick="MeasureMap">Measure ten seconds of panning</button>
+        <output aria-label="Map measurement">@mapResult</output>
+    }
+    else
+    {
+        <h2>Inspection</h2>
+        <form @onsubmit="Queue" @onsubmit:preventDefault>
+            <label for="asset-name">Asset name (required)</label>
+            <input id="asset-name" @bind="name" aria-required="true" />
+            <label for="notes">Notes</label>
+            <textarea id="notes" @bind="notes"></textarea>
+            <button type="submit">Queue inspection</button>
+            <button type="button" @onclick="CaptureAndQueue" disabled="@(!Capture.IsSupported || capturing)">Capture and queue photo</button>
+            <p>The photo probe stores a local file reference. Attachment transport is outside this spike.</p>
+        </form>
+    }
+</main>
+
+@code {
+    private string screen = "today", name = "", notes = "", message = "Loading local records", mapResult = "Not measured";
+    private IReadOnlyList<Honua.Collect.Core.Records.CollectRecordEntry> records = [];
+    private IJSObjectReference? module;
+    private bool mapPending, preparing, capturing;
+    protected override async Task OnInitializedAsync()
+    {
+        records = await Store.LoadAsync();
+        message = "Ready";
+    }
+    private void Select(string next) { screen = next; mapPending = next == "map"; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (mapPending)
+        {
+            mapPending = false;
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Honua.Collect.Spike.Shared/map.js");
+            await module.InvokeVoidAsync("show");
+        }
+        else if (screen != "map" && module is not null) await module.InvokeVoidAsync("clear");
+    }
+    private async Task PrepareAssets()
+    {
+        preparing = true;
+        message = "Preparing local assets; setup time is excluded";
+        try
+        {
+            var points = await Store.PrepareAssetsAsync(async count =>
+            {
+                message = $"Preparing local assets: {count}/50000; setup time is excluded";
+                await InvokeAsync(StateHasChanged);
+                await Task.Yield();
+            });
+            if (module is not null && screen == "map") await module.InvokeVoidAsync("assets", (object)points);
+            message = $"Loaded {points.Length} points from the local record store";
+        }
+        catch (Exception ex) { message = $"Asset setup failed: {ex.Message}"; }
+        finally { preparing = false; }
+    }
+    private async Task CaptureAndQueue()
+    {
+        if (string.IsNullOrWhiteSpace(name)) { message = "Asset name is required"; return; }
+        capturing = true;
+        try
+        {
+            var photo = await Capture.CaptureAsync();
+            if (!await Store.QueueAsync(name.Trim(), notes, photo.Path)) { message = "Inspection validation failed"; return; }
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(photo.Started).TotalMilliseconds;
+            records = await Store.LoadAsync();
+            message = $"Photo queued locally in {elapsed:F0} ms after native picker returned (not shutter latency)";
+            screen = "today";
+            name = notes = "";
+        }
+        catch (OperationCanceledException) { message = "Photo cancelled"; }
+        catch (Exception ex) { message = $"Photo failed: {ex.Message}"; }
+        finally { capturing = false; }
+    }
+    private async Task Queue()
+    {
+        try
+        {
+            if (!await Store.QueueAsync(name.Trim(), notes)) { message = "Asset name is required"; return; }
+            records = await Store.LoadAsync();
+            name = notes = "";
+            message = "Inspection queued locally";
+            screen = "today";
+        }
+        catch (Exception ex) { message = $"Queue failed: {ex.Message}"; }
+    }
+    private async Task MeasureMap()
+    {
+        if (module is not null) mapResult = await module.InvokeAsync<string>("measure");
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        try { await module.InvokeVoidAsync("clear"); await module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}
