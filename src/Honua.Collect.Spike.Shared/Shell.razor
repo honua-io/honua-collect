@@ -1,0 +1,80 @@
+@inject SpikeStore Store
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<main>
+    <h1>Collect shell spike</h1>
+    <p>Local inspection fixture. Pending records stay on this device.</p>
+    <nav aria-label="Work screens">
+        <button @onclick='() => Select("today")'>Today</button>
+        <button @onclick='() => Select("map")'>Map</button>
+        <button @onclick='() => Select("inspection")'>Inspection</button>
+    </nav>
+    <p role="status">@message</p>
+    @if (screen == "today")
+    {
+        <h2>Today</h2>
+        <p data-testid="pending">@records.Count(x => x.IsPendingUpload) pending inspections</p>
+        <ul>@foreach (var record in records) { <li>@record.Record.RecordId — @record.Box</li> }</ul>
+    }
+    else if (screen == "map")
+    {
+        <h2>Map</h2>
+        <p>Local synthetic 50,000 point rendering probe. Archive and device measurements pending.</p>
+        <div id="spike-map" role="img" aria-label="Synthetic asset map"></div>
+        <button @onclick="MeasureMap">Measure ten seconds of panning</button>
+        <output aria-label="Map measurement">@mapResult</output>
+    }
+    else
+    {
+        <h2>Inspection</h2>
+        <form @onsubmit="Queue" @onsubmit:preventDefault>
+            <label for="asset-name">Asset name (required)</label>
+            <input id="asset-name" @bind="name" aria-required="true" />
+            <label for="notes">Notes</label>
+            <textarea id="notes" @bind="notes"></textarea>
+            <button type="submit">Queue inspection</button>
+        </form>
+    }
+</main>
+
+@code {
+    private string screen = "today", name = "", notes = "", message = "Loading local records", mapResult = "Not measured";
+    private IReadOnlyList<Honua.Collect.Core.Records.CollectRecordEntry> records = [];
+    private IJSObjectReference? module;
+    private bool mapPending;
+    protected override async Task OnInitializedAsync()
+    {
+        records = await Store.LoadAsync();
+        message = "Ready";
+    }
+    private void Select(string next) { screen = next; mapPending = next == "map"; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (mapPending)
+        {
+            mapPending = false;
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Honua.Collect.Spike.Shared/map.js");
+            await module.InvokeVoidAsync("show");
+        }
+        else if (screen != "map" && module is not null) await module.InvokeVoidAsync("clear");
+    }
+    private async Task Queue()
+    {
+        if (!await Store.QueueAsync(name.Trim(), notes)) { message = "Asset name is required"; return; }
+        records = await Store.LoadAsync();
+        name = notes = "";
+        message = "Inspection queued locally";
+        screen = "today";
+    }
+    private async Task MeasureMap()
+    {
+        if (module is not null) mapResult = await module.InvokeAsync<string>("measure");
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        try { await module.InvokeVoidAsync("clear"); await module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}
