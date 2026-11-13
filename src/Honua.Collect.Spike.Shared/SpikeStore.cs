@@ -18,7 +18,7 @@ public sealed class SpikeStore(string directory, Func<Task<string?>>? getKey = n
         return (new(Path.Combine(directory, "inspections.db"), key), new(Path.Combine(directory, "assets.db"), key));
     }
     public async Task<IReadOnlyList<CollectRecordEntry>> LoadAsync() => await (await StoresAsync()).Inspections.LoadAllAsync();
-    public async Task<double[][]> PrepareAssetsAsync()
+    public async Task<double[][]> PrepareAssetsAsync(Func<int, Task>? progress = null)
     {
         var assets = (await StoresAsync()).Assets;
         var records = await assets.LoadAllAsync();
@@ -27,6 +27,7 @@ public sealed class SpikeStore(string directory, Func<Task<string?>>? getKey = n
         for (var i = 0; i < 50_000; i++)
         {
             var id = $"asset-{i}";
+            if (i % 250 == 0 && progress is not null) await progress(i);
             if (existing.Contains(id)) continue;
             await assets.SaveAsync(new CollectRecordEntry(new FieldRecord
             {

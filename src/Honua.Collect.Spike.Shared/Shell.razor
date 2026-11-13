@@ -72,7 +72,12 @@
         message = "Preparing local assets; setup time is excluded";
         try
         {
-            var points = await Store.PrepareAssetsAsync();
+            var points = await Store.PrepareAssetsAsync(async count =>
+            {
+                message = $"Preparing local assets: {count}/50000; setup time is excluded";
+                await InvokeAsync(StateHasChanged);
+                await Task.Yield();
+            });
             if (module is not null && screen == "map") await module.InvokeVoidAsync("assets", (object)points);
             message = $"Loaded {points.Length} points from the local record store";
         }

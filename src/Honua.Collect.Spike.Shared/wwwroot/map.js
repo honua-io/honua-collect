@@ -1,5 +1,5 @@
 import * as maplibregl from './vendor/maplibre-gl.mjs';
-let map, bindings, storedPoints = 0;
+let map, bindings, storedPoints = 0, archiveSelection = 0;
 const protocol = new globalThis.pmtiles.Protocol();
 const tileReads = [];
 maplibregl.addProtocol('pmtiles', async (request, controller) => {
@@ -37,6 +37,7 @@ async function waitForStyle(current, signal) {
   });
 }
 export function clear() {
+  archiveSelection++;
   bindings?.abort(); bindings = undefined;
   if (map) map.remove();
   map = undefined; storedPoints = 0; tileReads.length = 0;
@@ -56,6 +57,7 @@ export function show() {
   map.on('error',event=>report(`Map error: ${event.error.message}`));
   document.querySelector('#archive').addEventListener('change', async event=>{
     const current = map, signal = bindings.signal, file = event.target.files?.[0];
+    const selection = ++archiveSelection;
     if (!file) return;
     try {
       const source = new globalThis.pmtiles.FileSource(file);
@@ -63,8 +65,8 @@ export function show() {
       const archive = new globalThis.pmtiles.PMTiles(source);
       const header = await archive.getHeader();
       const metadata = await archive.getMetadata();
-      if (map !== current) return;
-      if (!await waitForStyle(current, signal)) return;
+      if (map !== current || selection !== archiveSelection) return;
+      if (!await waitForStyle(current, signal) || selection !== archiveSelection) return;
       for (const layer of current.getStyle().layers.filter(x=>x.source==='archive')) current.removeLayer(layer.id);
       if (current.getSource('archive')) current.removeSource('archive');
       protocol.tiles.clear(); protocol.add(archive); tileReads.length=0;
@@ -79,7 +81,7 @@ export function show() {
       } else throw new Error('Unsupported archive tile encoding');
       current.jumpTo({center:[header.centerLon,header.centerLat],zoom:header.centerZoom});
       report(`Local archive ${file.name}: ${file.size} bytes. File slices avoid loading the whole archive. Tile read timing excludes visible-frame latency.`);
-    } catch(error) { if (map === current) report(`Archive failed: ${error.message}`); }
+    } catch(error) { if (map === current && selection === archiveSelection) report(`Archive failed: ${error.message}`); }
   },{signal:bindings.signal});
 }
 export async function assets(points) {
@@ -92,10 +94,14 @@ export async function assets(points) {
     current.addSource('assets',{type:'geojson',data});
     current.addLayer({id:'assets',type:'circle',source:'assets',paint:{'circle-radius':3,'circle-color':'#006b5a'}});
   }
-  storedPoints=points.length;
+  if (await waitForStyle(current, signal)) storedPoints=points.length;
 }
 export async function measure() {
-  if (!map?.isStyleLoaded()) return 'Wait for the map to load';
+  if (!map) return 'Wait for the map to load';
+  const readyMap=map, signal=bindings.signal;
+  try {
+    if (!await waitForStyle(readyMap, signal)) return 'Map measurement cancelled';
+  } catch(error) { return `Map measurement failed: ${error.message}`; }
   if (storedPoints !== 50000) return 'Load 50,000 assets from the record store first';
   const current=map, start=performance.now(), center=current.getCenter();
   let last=start, renderedEvents=0;

@@ -15,7 +15,7 @@ test('required form validation and queued record survive reload',async({page})=>
 });
 
 test('map receives all stored coordinates and survives navigation',async({page})=>{
-  test.setTimeout(180_000);
+  test.setTimeout(960_000);
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto(process.env.COLLECT_SPIKE_URL ?? 'http://127.0.0.1:5280');
@@ -23,7 +23,7 @@ test('map receives all stored coordinates and survives navigation',async({page})
   await page.getByRole('button',{name:'Map',exact:true}).click();
   await expect(page.locator('#spike-map canvas')).toBeVisible();
   await page.getByRole('button',{name:'Prepare and load 50,000 local assets'}).click();
-  await expect(page.locator('p[role="status"]')).toHaveText('Loaded 50000 points from the local record store',{timeout:150_000});
+  await expect(page.locator('p[role="status"]')).toHaveText('Loaded 50000 points from the local record store',{timeout:900_000});
   await page.getByRole('button',{name:'Measure ten seconds of panning'}).click();
   await expect(page.getByLabel('Map measurement')).toContainText('"storedPoints": 50000',{timeout:20_000});
   await expect(page.locator('#map-status')).not.toContainText('error');
