@@ -5,7 +5,7 @@
 <OutputType>Exe</OutputType><UseMaui>true</UseMaui><SingleProject>true</SingleProject>
 <RootNamespace>Honua.Collect.Spike.Maui</RootNamespace><ApplicationTitle>Collect Spike</ApplicationTitle><ApplicationId>io.honua.collect.spike</ApplicationId><ApplicationDisplayVersion>0.1</ApplicationDisplayVersion><ApplicationVersion>1</ApplicationVersion>
 <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-<SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-android'))">23.0</SupportedOSPlatformVersion>
+<SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-android'))">24.0</SupportedOSPlatformVersion>
 <SupportedOSPlatformVersion Condition="$(TargetFramework.Contains('-ios'))">15.0</SupportedOSPlatformVersion>
 </PropertyGroup>
 <ItemGroup><PackageReference Include="Microsoft.Maui.Controls" /><PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" /><ProjectReference Include="../Honua.Collect.Spike.Shared/Honua.Collect.Spike.Shared.csproj" /></ItemGroup>

@@ -73,7 +73,7 @@
         try
         {
             var points = await Store.PrepareAssetsAsync();
-            if (module is not null && screen == "map") await module.InvokeVoidAsync("assets", points);
+            if (module is not null && screen == "map") await module.InvokeVoidAsync("assets", (object)points);
             message = $"Loaded {points.Length} points from the local record store";
         }
         catch (Exception ex) { message = $"Asset setup failed: {ex.Message}"; }
