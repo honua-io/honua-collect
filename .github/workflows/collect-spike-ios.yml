@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: '38997df8dc3eb108698f3b730f00eeb563ed9264'
           persist-credentials: false
@@ -26,7 +26,7 @@ jobs:
         with:
           dotnet-version: '10.0.404'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
@@ -77,6 +77,7 @@ jobs:
           dotnet build src/Honua.Collect.Spike.Maui/Honua.Collect.Spike.Maui.csproj \
             -c Debug -f net10.0-ios -r iossimulator-arm64 -m:4 \
             -p:UseSharedCompilation=false \
+            -p:EnableCodeSigning=false \
             -p:CodesignRequireProvisioningProfile=false \
             -o artifacts/ios-simulator
 
@@ -92,7 +93,7 @@ jobs:
           PACKAGE
           shasum -a 256 artifacts/collect-spike-ios-simulator.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: collect-spike-ios-simulator-38997df
           path: artifacts/collect-spike-ios-simulator.zip
