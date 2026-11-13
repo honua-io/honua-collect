@@ -12,6 +12,30 @@ function report(text) {
   const output = document.querySelector('#map-status');
   if (output) output.textContent = text;
 }
+async function waitForStyle(current, signal) {
+  if (signal.aborted || map !== current) return false;
+  if (current.isStyleLoaded()) return true;
+  return new Promise((resolve, reject) => {
+    const events = ['styledata', 'sourcedata', 'idle', 'render'];
+    const finish = (ready, error) => {
+      for (const event of events) current.off(event, check);
+      current.off('remove', cancelled);
+      signal.removeEventListener('abort', cancelled);
+      clearTimeout(timeout);
+      if (error) reject(error); else resolve(ready);
+    };
+    const cancelled = () => finish(false);
+    const check = () => {
+      if (signal.aborted || map !== current) finish(false);
+      else if (current.isStyleLoaded()) finish(true);
+    };
+    const timeout = setTimeout(() => finish(false, new Error('Map style readiness timed out')), 30000);
+    for (const event of events) current.on(event, check);
+    current.on('remove', cancelled);
+    signal.addEventListener('abort', cancelled, {once:true});
+    check();
+  });
+}
 export function clear() {
   bindings?.abort(); bindings = undefined;
   if (map) map.remove();
@@ -31,7 +55,7 @@ export function show() {
     style:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#e6eee9'}}]}});
   map.on('error',event=>report(`Map error: ${event.error.message}`));
   document.querySelector('#archive').addEventListener('change', async event=>{
-    const current = map, file = event.target.files?.[0];
+    const current = map, signal = bindings.signal, file = event.target.files?.[0];
     if (!file) return;
     try {
       const source = new globalThis.pmtiles.FileSource(file);
@@ -40,8 +64,7 @@ export function show() {
       const header = await archive.getHeader();
       const metadata = await archive.getMetadata();
       if (map !== current) return;
-      if (!current.isStyleLoaded()) await new Promise(resolve=>current.once('load',resolve));
-      if (map !== current) return;
+      if (!await waitForStyle(current, signal)) return;
       for (const layer of current.getStyle().layers.filter(x=>x.source==='archive')) current.removeLayer(layer.id);
       if (current.getSource('archive')) current.removeSource('archive');
       protocol.tiles.clear(); protocol.add(archive); tileReads.length=0;
@@ -56,14 +79,13 @@ export function show() {
       } else throw new Error('Unsupported archive tile encoding');
       current.jumpTo({center:[header.centerLon,header.centerLat],zoom:header.centerZoom});
       report(`Local archive ${file.name}: ${file.size} bytes. File slices avoid loading the whole archive. Tile read timing excludes visible-frame latency.`);
-    } catch(error) { report(`Archive failed: ${error.message}`); }
+    } catch(error) { if (map === current) report(`Archive failed: ${error.message}`); }
   },{signal:bindings.signal});
 }
 export async function assets(points) {
   if (!map) return;
-  const current=map;
-  if (!current.isStyleLoaded()) await new Promise(resolve=>current.once('load',resolve));
-  if (map !== current) return;
+  const current=map, signal=bindings.signal;
+  if (!await waitForStyle(current, signal)) return;
   const data={type:'FeatureCollection',features:points.map((coordinates,id)=>({type:'Feature',properties:{id},geometry:{type:'Point',coordinates}}))};
   if (current.getSource('assets')) current.getSource('assets').setData(data);
   else {

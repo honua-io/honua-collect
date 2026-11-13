@@ -28,7 +28,8 @@ field validation, local outbox creation and persistence after reload.
 For Android, publish the separate Spike.Maui project for net10.0-android,
 Release, with AndroidPackageFormats=apk, output under artifacts/shell-spike.
 Install only the resulting io.honua.collect.spike package; this has a separate
-application ID. No installable package has yet been verified. iOS requires the
+application ID. The Android arm64 APK has been produced on the build host; installation and device
+measurements remain pending. iOS requires the
 existing macOS build/signing path and founder device provisioning; signing
 secrets must never be committed.
 
@@ -46,7 +47,7 @@ unmeasured row is pending, never a pass or a fallback decision.
 | Offline archive | 2 GB archive, visible tiles under 300 ms, no network | Pending; local file-slice archive reader implemented; 2 GB fixture/device run pending |
 | Photo to outbox | under 2 s | Pending; native capture implemented; post-picker timer excludes shutter/picker delay |
 | Accessibility | every field labelled and reachable | Markup labels present; device screen reader audit pending |
-| Browser | automated inspection journey passes | Test authored; execution pending |
+| Browser | automated inspection journey passes | Form journey passed; map journey validation in progress |
 | iOS build | hosted macOS build green | Pending |
 
 1. Install the exact measured package on the founder's Android and iOS phones.
