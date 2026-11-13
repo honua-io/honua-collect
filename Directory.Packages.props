@@ -19,7 +19,7 @@
     in #31), then re-run restore to refresh the lockfiles.
   -->
   <PropertyGroup>
-    <HonuaSdkDotNetTrainVersion>1.12.0</HonuaSdkDotNetTrainVersion>
+    <HonuaSdkDotNetTrainVersion>2.2.0</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>10.0.130</MauiVersion>
   </PropertyGroup>
