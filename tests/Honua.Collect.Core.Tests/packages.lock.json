@@ -91,8 +91,8 @@
       },
       "Honua.Sdk.Abstractions": {
         "type": "Transitive",
-        "resolved": "1.12.0",
-        "contentHash": "sEw5ZPClPgBr/5nk/b7sPp0b3vE9B96UldX9DqokBgNU2K33j23AVIRTl5OvOoX8eUy1hIScwyFFD6Q8hZXLlQ=="
+        "resolved": "2.2.0",
+        "contentHash": "QC8C0CwgBsTkPiqtxhb2dZ72EQ9OVyK73RldRyLsKhyA6NKKXt9uBUktH73uxNN6PYum6zwcAGiQ589jbToOTg=="
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
@@ -236,7 +236,7 @@
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "Honua.Mobile.Offline": "[0.1.0-alpha.1, )",
           "Honua.Mobile.Sdk": "[0.1.0-alpha.1, )",
-          "Honua.Sdk.Field": "[1.12.0, )",
+          "Honua.Sdk.Field": "[2.2.0, )",
           "Microsoft.Data.Sqlite.Core": "[10.0.15, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
           "SkiaSharp": "[4.155.0, )"
@@ -273,11 +273,11 @@
       },
       "Honua.Sdk.Field": {
         "type": "CentralTransitive",
-        "requested": "[1.12.0, )",
-        "resolved": "1.12.0",
-        "contentHash": "qnxnvWzpEGO5UWTjoqof91EgFo9ECv5HXKayCUKjGpXLJ6ZCxlAGgexBzpfCrS1xnKstBGDoAo8hIIRTlkrnDA==",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "U7ZiLr1ObHWbvVgrBXq1yGTWOgMhKNYezIqZMaoh/vIcHIqfDSIUFAjfve/shWWAn/3/GKn5lxE/AAwXEQpb4Q==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.12.0"
+          "Honua.Sdk.Abstractions": "2.2.0"
         }
       },
       "Microsoft.Data.Sqlite.Core": {

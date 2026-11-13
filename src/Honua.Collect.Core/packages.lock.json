@@ -33,11 +33,11 @@
       },
       "Honua.Sdk.Field": {
         "type": "Direct",
-        "requested": "[1.12.0, )",
-        "resolved": "1.12.0",
-        "contentHash": "qnxnvWzpEGO5UWTjoqof91EgFo9ECv5HXKayCUKjGpXLJ6ZCxlAGgexBzpfCrS1xnKstBGDoAo8hIIRTlkrnDA==",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "U7ZiLr1ObHWbvVgrBXq1yGTWOgMhKNYezIqZMaoh/vIcHIqfDSIUFAjfve/shWWAn/3/GKn5lxE/AAwXEQpb4Q==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.12.0"
+          "Honua.Sdk.Abstractions": "2.2.0"
         }
       },
       "Microsoft.Data.Sqlite.Core": {
@@ -103,8 +103,8 @@
       },
       "Honua.Sdk.Abstractions": {
         "type": "Transitive",
-        "resolved": "1.12.0",
-        "contentHash": "sEw5ZPClPgBr/5nk/b7sPp0b3vE9B96UldX9DqokBgNU2K33j23AVIRTl5OvOoX8eUy1hIScwyFFD6Q8hZXLlQ=="
+        "resolved": "2.2.0",
+        "contentHash": "QC8C0CwgBsTkPiqtxhb2dZ72EQ9OVyK73RldRyLsKhyA6NKKXt9uBUktH73uxNN6PYum6zwcAGiQ589jbToOTg=="
       },
       "Microsoft.Data.Sqlite": {
         "type": "Transitive",
