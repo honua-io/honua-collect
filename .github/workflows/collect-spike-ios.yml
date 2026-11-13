@@ -1,0 +1,85 @@
+name: Collect spike iOS simulator
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/collect-spike-ios.yml'
+
+permissions:
+  contents: read
+  packages: read
+
+# C1 is a throwaway experiment, never an application release. Keep this CI
+# change separate from the spike and pin the reviewed source being measured.
+# No signing credentials, paid services, device deployment, or workflow dispatch.
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: '38997df8dc3eb108698f3b730f00eeb563ed9264'
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.404'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Select isolated SDK and record Apple toolchain
+        run: |
+          dotnet new globaljson --sdk-version 10.0.404 --roll-forward disable
+          dotnet --info
+          xcodebuild -version
+          xcrun simctl list devices available
+
+      - name: Authenticate package feed
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUGET_AUTH_USER: ${{ github.actor }}
+        run: >-
+          dotnet nuget update source github-honua
+          --username "$NUGET_AUTH_USER"
+          --password "$NUGET_AUTH_TOKEN"
+          --store-password-in-clear-text
+          --configfile NuGet.config
+
+      - name: Install iOS workload
+        run: dotnet workload install maui-ios --skip-manifest-update --source https://api.nuget.org/v3/index.json
+
+      - name: Prepare pinned map assets
+        run: |
+          npm ci --ignore-scripts --prefix scripts/shell-spike
+          npm run assets --prefix scripts/shell-spike
+
+      - name: Build unsigned ARM64 simulator application
+        run: >-
+          dotnet build src/Honua.Collect.Spike.Maui/Honua.Collect.Spike.Maui.csproj
+          -c Debug -f net10.0-ios -r iossimulator-arm64 -m:4
+          -p:TargetFrameworks=net10.0-ios
+          -p:UseSharedCompilation=false
+          -p:CodesignRequireProvisioningProfile=false
+          -o artifacts/ios-simulator
+
+      - name: Package simulator application
+        run: |
+          python3 - <<'PACKAGE'
+          import pathlib, subprocess
+          apps = list(pathlib.Path('artifacts/ios-simulator').glob('*.app'))
+          if len(apps) != 1:
+              raise SystemExit(f'Expected exactly one simulator app, found {len(apps)}')
+          subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent',
+                          str(apps[0]), 'artifacts/collect-spike-ios-simulator.zip'], check=True)
+          PACKAGE
+          shasum -a 256 artifacts/collect-spike-ios-simulator.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collect-spike-ios-simulator-38997df
+          path: artifacts/collect-spike-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
