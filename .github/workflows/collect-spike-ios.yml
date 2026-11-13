@@ -57,13 +57,28 @@ jobs:
           npm run assets --prefix scripts/shell-spike
 
       - name: Build unsigned ARM64 simulator application
-        run: >-
-          dotnet build src/Honua.Collect.Spike.Maui/Honua.Collect.Spike.Maui.csproj
-          -c Debug -f net10.0-ios -r iossimulator-arm64 -m:4
-          -p:TargetFrameworks=net10.0-ios
-          -p:UseSharedCompilation=false
-          -p:CodesignRequireProvisioningProfile=false
-          -o artifacts/ios-simulator
+        run: |
+          # Select iOS only in this runner's app project. A command-line
+          # TargetFrameworks override propagates to the net10.0 shared libraries
+          # and leaves their restore assets without the target they compile.
+          python3 - <<'PROJECT'
+          import pathlib, xml.etree.ElementTree as ET
+          project = pathlib.Path('src/Honua.Collect.Spike.Maui/Honua.Collect.Spike.Maui.csproj')
+          tree = ET.parse(project)
+          frameworks = tree.findall('./PropertyGroup/TargetFrameworks')
+          if len(frameworks) != 2:
+              raise SystemExit('Expected the pinned app project to declare two TargetFrameworks properties')
+          for group in tree.findall('./PropertyGroup'):
+              for framework in list(group.findall('TargetFrameworks')):
+                  group.remove(framework)
+          ET.SubElement(tree.find('./PropertyGroup'), 'TargetFrameworks').text = 'net10.0-ios'
+          tree.write(project, encoding='utf-8', xml_declaration=True)
+          PROJECT
+          dotnet build src/Honua.Collect.Spike.Maui/Honua.Collect.Spike.Maui.csproj \
+            -c Debug -f net10.0-ios -r iossimulator-arm64 -m:4 \
+            -p:UseSharedCompilation=false \
+            -p:CodesignRequireProvisioningProfile=false \
+            -o artifacts/ios-simulator
 
       - name: Package simulator application
         run: |
