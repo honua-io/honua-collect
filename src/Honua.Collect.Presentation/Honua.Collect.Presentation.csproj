@@ -15,6 +15,8 @@
     conflict review, map capture — is unit-testable without a device.
   -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" />
+    <PackageReference Include="SkiaSharp" />
     <ProjectReference Include="..\Honua.Collect.Core\Honua.Collect.Core.csproj" />
   </ItemGroup>
 

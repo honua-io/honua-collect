@@ -21,7 +21,7 @@
   <PropertyGroup>
     <HonuaSdkDotNetTrainVersion>1.12.0</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
-    <MauiVersion>10.0.120</MauiVersion>
+    <MauiVersion>10.0.130</MauiVersion>
   </PropertyGroup>
 
   <!-- First-party Honua platform packages (private github-honua feed). -->
@@ -41,13 +41,13 @@
     The App layer keeps its MAUI-Graphics path for on-device capture.
   -->
   <ItemGroup>
-    <PackageVersion Include="SkiaSharp" Version="4.154.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
+    <PackageVersion Include="SkiaSharp" Version="4.155.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.155.0" />
   </ItemGroup>
 
   <!-- Storage / crypto. -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.15" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
   </ItemGroup>
@@ -55,8 +55,8 @@
   <!-- App / MAUI runtime. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.15" />
     <PackageVersion Include="Plugin.Maui.Audio" Version="4.0.0" />
     <PackageVersion Include="ZXing.Net" Version="0.16.11" />
   </ItemGroup>
