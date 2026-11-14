@@ -13,13 +13,11 @@
     adapters formerly in the Honua.Mobile.Field package have been ported into
     this repo (see Field/), so we consume the SDK's field contracts
     (Honua.Sdk.Field) DIRECTLY rather than via the mobile package. Lower-level
-    mobile primitives (transport, offline storage) are still consumed as
-    Apache packages, never vendored. See ROADMAP.md.
+    mobile primitives are integrated separately; this core uses its existing
+    SQLCipher record store. Avoid adding a second native SQLite provider here.
   -->
   <ItemGroup>
     <PackageReference Include="Honua.Sdk.Field" />
-    <PackageReference Include="Honua.Mobile.Sdk" />
-    <PackageReference Include="Honua.Mobile.Offline" />
     <!-- SQLCipher-capable SQLite: the .Core package + the e_sqlcipher batteries
          bundle (version-matched on SQLitePCLRaw.core 2.1.11) so the record DB can
          be encrypted at rest via a connection-string Password (PRAGMA key). -->
