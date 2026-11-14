@@ -51,12 +51,13 @@ Keep credentials and private field data out of published evidence.
 3. Create a draft with the required field, conditional values, one repeat row,
    geometry and a photo. Save, close the app completely and reopen it offline.
    Confirm every value and the photo survive and the draft is not queued.
-4. Submit that draft offline. Create and submit a second record. Close and
-   reopen the app again. Confirm exactly two records remain pending, with the
-   same UUIDs, values and attachment counts.
-5. Reconnect and sync. Confirm exactly two remote records exist and capture
-   their remote IDs. Confirm the app reports both as sent and their attachments
-   can be opened. Repeat sync twice: record and attachment counts must not grow.
+4. Submit that draft offline. Create and submit a second record; record both
+   UUIDs as this run's cohort. Close and
+   reopen the app again. Confirm both cohort records remain pending, with the
+   same UUIDs, values and attachment counts; reconcile other records separately.
+5. Reconnect and sync. Confirm exactly one remote record exists for each cohort
+   UUID and capture their remote IDs. Confirm the app reports both as sent and their attachments
+   can be opened. Repeat sync twice: cohort record and attachment counts must not grow.
 6. Edit one sent record offline. Change that record independently on the server.
    Reconnect and pull/sync. Review the conflict, make an explicit resolution and
    sync again. Confirm the chosen values on both sides and unchanged identity.
@@ -77,7 +78,14 @@ an emulator, simulator or physical phone.
 Encryption and interruption checks additionally run in an isolated test harness:
 open the migrated database with the correct key, reject a wrong or missing key
 without replacement, interrupt migration before and after destination commit,
-and verify idempotent recovery. Never alter the secure-storage key on a real
+and verify idempotent recovery. Interrupt active uploads at two controlled
+checkpoints: after lease acquisition, and after server acceptance but before
+local acknowledgement persistence. Use a disposable database and a controlled
+server/proxy that can pause responses; record checkpoint logs and terminate the
+app process. Reopen and sync until the lease is recovered. Confirm each UUID has
+exactly one remote record, the remote ID persists and the queue drains without
+attachment duplication. If checkpoint instrumentation is unavailable, record
+these cases as blocked rather than substituting an offline restart. Never alter the secure-storage key on a real
 phone holding the only copy of field data to simulate these failures.
 
 ## Result record
