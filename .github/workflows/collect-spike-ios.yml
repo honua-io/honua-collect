@@ -16,6 +16,9 @@ jobs:
   simulator:
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      # The pinned .NET iOS workload requires the Xcode 26.0 toolchain.
+      DEVELOPER_DIR: /Applications/Xcode_26.0.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -32,6 +35,7 @@ jobs:
 
       - name: Select isolated SDK and record Apple toolchain
         run: |
+          test -d "$DEVELOPER_DIR"
           dotnet new globaljson --sdk-version 10.0.404 --roll-forward disable
           dotnet --info
           xcodebuild -version
