@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: '38997df8dc3eb108698f3b730f00eeb563ed9264'
+          ref: 'dbe73dca12412142266aa0d457eea3408054a083'
           persist-credentials: false
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -99,7 +99,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: collect-spike-ios-simulator-38997df
+          name: collect-spike-ios-simulator-dbe73dc
           path: artifacts/collect-spike-ios-simulator.zip
           if-no-files-found: error
           retention-days: 14
