@@ -187,6 +187,7 @@ Repo docs:
 | --- | --- |
 | [Self-hosting guide](docs/self-hosting.md) | Point Collect at a self-hosted Honua server (config surface, auth, quickstart). |
 | [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
+| [Shared offline runtime adoption](docs/mobile-offline-adoption.md) | Migration boundary and weekly physical-phone acceptance journey. |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | Lowering switching costs through XLSForm import and protocol reuse. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
