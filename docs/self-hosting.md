@@ -141,7 +141,7 @@ Paid value lives on Honua Server, which is licensed server-side.
    non-loopback host; add `pinnedCertificates` if you require pinning.
 
 3. **Build and deploy** the app per the
-   [README](../README.md#running-the-app-on-an-android-emulator).
+   [README](../README.md#run-the-app-on-an-android-emulator).
 
 4. **Sign in** on the Account tab against your server's token endpoint. Capture a
    record and sync it — it round-trips to your FeatureServer via
