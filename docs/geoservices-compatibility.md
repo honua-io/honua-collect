@@ -106,16 +106,16 @@ Collect reads and writes GeoServices REST feature services, including services h
 
 ## Deployment posture
 
-This is where the matrix flips in Collect's favour — the [#37](https://github.com/honua-io/honua-collect/issues/37)
-moat.
+Collect runs entirely on infrastructure the customer operates
+([#37](https://github.com/honua-io/honua-collect/issues/37)).
 
 | Capability | Honua Collect | Evidence |
 | --- | :---: | --- |
 | Open source | ✅ (Apache-2.0) | [LICENSE](../LICENSE) |
 | Self-hostable / on-prem | ✅ | [self-hosting guide](./self-hosting.md) |
 | Air-gapped capable | ✅ | offline capture; no license activation |
-| No per-seat SaaS tax / user-type tax | ✅ | every app feature is free; no in-app license check |
-| Bring-your-own identity (no vendor account) | ✅ | authenticates against your server's token endpoint |
+| All app features available to every signed-in user | ✅ | no in-app licence check |
+| Authenticates against your own server | ✅ | uses your server's token endpoint |
 
 ## Migration & data portability
 
@@ -155,7 +155,3 @@ To avoid overstating:
   renderer exist; the finished bulk/report UX is tracked in
   [#39](https://github.com/honua-io/honua-collect/issues/39).
 - **Background sync / push (🔭):** app-layer, planned ([#35](https://github.com/honua-io/honua-collect/issues/35)).
-
-For the strategic frame behind these gaps, see
-[COMPETITIVE-STRATEGY.md](./COMPETITIVE-STRATEGY.md).
-</content>

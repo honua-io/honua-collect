@@ -155,7 +155,4 @@ Paid value lives on Honua Server, which is licensed server-side.
 - [Data residency & self-host posture](./data-residency-and-self-host.md) — where
   records live and how the connection is secured.
 - [Importing forms and field data](./migration-from-external-forms.md)
-  — lowering the switching cost.
-- [Competitive strategy](./COMPETITIVE-STRATEGY.md) — the positioning frame.
-</content>
-</invoke>
+  — XLSForm import and protocol reuse.

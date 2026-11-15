@@ -1,10 +1,5 @@
 # Honua Collect — feature backlog
 
-> **Strategy:** for the competitive frame over this gap list — the rivalry
-> verdict, the incumbent weaknesses we exploit, and the three-horizon plan
-> (parity → differentiate → leapfrog) with its tracked epics — see
-> [`docs/COMPETITIVE-STRATEGY.md`](docs/COMPETITIVE-STRATEGY.md).
-
 Capability gaps in the Honua mobile stack. Each item is tagged with:
 
 - **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending · ✅ (suffix) verified working on a device/emulator
