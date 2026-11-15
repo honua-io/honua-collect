@@ -114,8 +114,8 @@ Collect runs entirely on infrastructure the customer operates
 | Open source | ✅ (Apache-2.0) | [LICENSE](../LICENSE) |
 | Self-hostable / on-prem | ✅ | [self-hosting guide](./self-hosting.md) |
 | Air-gapped capable | ✅ | offline capture; no license activation |
-| No in-app licence or user-type check | ✅ | every app feature is available to every signed-in user |
-| Bring-your-own identity (no vendor account) | ✅ | authenticates against your server's token endpoint |
+| All app features available to every signed-in user | ✅ | no in-app licence check |
+| Authenticates against your own server | ✅ | uses your server's token endpoint |
 
 ## Migration & data portability
 
