@@ -20,8 +20,7 @@ between.
 ## Status
 
 🚧 **Early stage, active development — not yet a GA field app.** The honest
-picture, kept current in [ROADMAP.md](ROADMAP.md), [BACKLOG.md](BACKLOG.md), and
-[docs/COMPETITIVE-STRATEGY.md](docs/COMPETITIVE-STRATEGY.md):
+picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 
 - **Solid today:** the platform-neutral `Honua.Collect.Core` logic layer (form
   runtime, records, sync, conflicts, export, provenance, …) and the
@@ -189,9 +188,8 @@ Repo docs:
 | [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
 | [Shared offline runtime adoption](docs/mobile-offline-adoption.md) | Migration boundary and weekly Android emulator and hosted iOS simulator acceptance journey (physical phones optional). |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
-| [Migrating external forms](docs/migration-from-external-forms.md) | Lowering switching costs through XLSForm import and protocol reuse. |
+| [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
-| [Competitive strategy](docs/COMPETITIVE-STRATEGY.md) | The three-horizon positioning frame over [BACKLOG.md](BACKLOG.md). |
 | [Mutation testing](docs/mutation-testing.md) | Stryker.NET setup and how the Core mutation score is measured. |
 
 ## Related Honua repos
