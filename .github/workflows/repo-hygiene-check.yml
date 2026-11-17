@@ -13,4 +13,4 @@ permissions:
 
 jobs:
   repo-hygiene:
-    uses: honua-io/.github/.github/workflows/repo-hygiene.yml@f4bdc749161f1a037a0a9c55b6995aa5295ba2c7
+    uses: honua-io/.github/.github/workflows/repo-hygiene.yml@238e7feb9a4b0b344388cdb0bc5a85561acec9c5
