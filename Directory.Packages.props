@@ -21,7 +21,7 @@
   <PropertyGroup>
     <HonuaSdkDotNetTrainVersion>2.2.0</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
-    <MauiVersion>10.0.130</MauiVersion>
+    <MauiVersion>11.0.10</MauiVersion>
   </PropertyGroup>
 
   <!-- First-party Honua platform packages (private github-honua feed). -->
