@@ -26,7 +26,7 @@ internal sealed class LazyRecordStore : IRecordStore
     public async Task<IReadOnlyList<CollectRecordEntry>> LoadAllAsync(CancellationToken ct = default)
         => await (await GetStoreAsync(ct).ConfigureAwait(false)).LoadAllAsync(ct).ConfigureAwait(false);
 
-    public async Task<bool> DeleteAsync(string recordId, CancellationToken ct = default)
+    public async Task DeleteAsync(string recordId, CancellationToken ct = default)
         => await (await GetStoreAsync(ct).ConfigureAwait(false)).DeleteAsync(recordId, ct).ConfigureAwait(false);
 
     private async Task<IRecordStore> GetStoreAsync(CancellationToken ct)
