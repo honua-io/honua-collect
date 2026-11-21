@@ -4,6 +4,7 @@
 using Honua.Collect.App.Services;
 using Honua.Collect.App.Views;
 using Honua.Collect.Core.Field.Forms;
+using Honua.Collect.Core.Field.Related;
 using Honua.Collect.Core.Forms;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
@@ -27,6 +28,7 @@ public partial class MainPage : ContentPage
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HttpClient _http;
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
+    private readonly IRelatedRecordStore _relatedStore;
 
     private FormDefinition _activeForm = SampleForms.FieldSite();
     private FormSession? _session;
@@ -35,13 +37,15 @@ public partial class MainPage : ContentPage
         AppSettings settings,
         RecordBook book,
         IHttpClientFactory httpClientFactory,
-        Func<GeoServicesFeatureSync> syncFactory)
+        Func<GeoServicesFeatureSync> syncFactory,
+        IRelatedRecordStore relatedStore)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _http = _httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
+        _relatedStore = relatedStore ?? throw new ArgumentNullException(nameof(relatedStore));
         InitializeComponent();
     }
 
@@ -50,7 +54,7 @@ public partial class MainPage : ContentPage
         _session = FormSession.CreateForNewRecord(_activeForm, Guid.NewGuid().ToString("n"));
         var viewModel = new FormPageViewModel(_session);
         viewModel.SubmitSucceeded += OnSubmitted;
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
     private async void OnCaptureKitClicked(object? sender, EventArgs e)
@@ -59,7 +63,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Capture kit: {record.Media.Count} attachment(s), asset tag “{record.Values.GetValueOrDefault("asset_tag")}”.";
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
     private async void OnSmartFormClicked(object? sender, EventArgs e)
@@ -68,7 +72,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Smart form submitted — total {record.Values.GetValueOrDefault("total")}.";
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
     private async void OnDownloadFormClicked(object? sender, EventArgs e)

@@ -22,7 +22,7 @@ public class FieldWidgetTemplateMapTests
     [InlineData(CaptureWidgetKind.DateTime, FieldWidgetTemplate.Fallback)]
     [InlineData(CaptureWidgetKind.File, FieldWidgetTemplate.Fallback)]
     [InlineData(CaptureWidgetKind.Location, FieldWidgetTemplate.Fallback)]
-    [InlineData(CaptureWidgetKind.RecordLink, FieldWidgetTemplate.Fallback)]
+    [InlineData(CaptureWidgetKind.RecordLink, FieldWidgetTemplate.RecordLink)]
     [InlineData(CaptureWidgetKind.Calculated, FieldWidgetTemplate.Fallback)]
     public void Maps_each_widget_kind_to_its_template(CaptureWidgetKind kind, FieldWidgetTemplate expected)
         => Assert.Equal(expected, FieldWidgetTemplateMap.For(kind));

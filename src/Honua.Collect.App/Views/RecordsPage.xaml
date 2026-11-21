@@ -20,14 +20,17 @@
 
             <Label Text="Drafts" Padding="16,6,16,2" FontSize="13" TextColor="Gray" />
             <CollectionView ItemsSource="{Binding Drafts}" ItemTemplate="{StaticResource RecordItem}"
+                            SelectionMode="Single" SelectionChanged="OnRecordSelected"
                             EmptyView="No drafts." />
 
             <Label Text="Outbox" Padding="16,10,16,2" FontSize="13" TextColor="Gray" />
             <CollectionView ItemsSource="{Binding Outbox}" ItemTemplate="{StaticResource RecordItem}"
+                            SelectionMode="Single" SelectionChanged="OnRecordSelected"
                             EmptyView="Outbox is empty." />
 
             <Label Text="Sent" Padding="16,10,16,2" FontSize="13" TextColor="Gray" />
             <CollectionView ItemsSource="{Binding Sent}" ItemTemplate="{StaticResource RecordItem}"
+                            SelectionMode="Single" SelectionChanged="OnRecordSelected"
                             EmptyView="Nothing sent yet." />
 
         </VerticalStackLayout>

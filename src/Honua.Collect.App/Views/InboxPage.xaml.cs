@@ -3,6 +3,7 @@
 
 using Honua.Collect.App.Services;
 using Honua.Collect.Core.Field.Forms;
+using Honua.Collect.Core.Field.Related;
 using Honua.Collect.Presentation.Assignments;
 using Honua.Collect.Presentation.Forms;
 using Honua.Sdk.Field.Records;
@@ -25,12 +26,17 @@ public partial class InboxPage : ContentPage
 
     private readonly Core.Storage.RecordBook _book;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IRelatedRecordStore _relatedStore;
     private InboxViewModel? _viewModel;
 
-    public InboxPage(Core.Storage.RecordBook book, IHttpClientFactory httpClientFactory)
+    public InboxPage(
+        Core.Storage.RecordBook book,
+        IHttpClientFactory httpClientFactory,
+        IRelatedRecordStore relatedStore)
     {
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _relatedStore = relatedStore ?? throw new ArgumentNullException(nameof(relatedStore));
         InitializeComponent();
     }
 
@@ -86,6 +92,6 @@ public partial class InboxPage : ContentPage
             await _book.AddSubmittedAsync(record);
         };
 
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 }

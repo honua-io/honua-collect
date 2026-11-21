@@ -21,17 +21,20 @@ public partial class SyncPage : ContentPage
     private readonly AppSettings _settings;
     private readonly RecordBook _book;
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
+    private readonly IInboxPullProgressStore _pullProgressStore;
     private readonly ILogger<SyncCenterViewModel>? _logger;
 
     public SyncPage(
         AppSettings settings,
         RecordBook book,
         Func<GeoServicesFeatureSync> syncFactory,
+        IInboxPullProgressStore pullProgressStore,
         ILogger<SyncCenterViewModel>? logger = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
+        _pullProgressStore = pullProgressStore ?? throw new ArgumentNullException(nameof(pullProgressStore));
         _logger = logger;
         InitializeComponent();
     }
@@ -123,5 +126,32 @@ public partial class SyncPage : ContentPage
             // (#98). vm.Conflicts is built by PullAsync, bound to the local entries.
             await Navigation.PushAsync(new ConflictReviewPage(vm.Conflicts.ToList(), _book.SaveAsync));
         }
+    }
+
+    private async void OnOpenPagedInboxPull(object? sender, EventArgs e)
+    {
+        const int pageSize = 100;
+        var pagedVm = new PagedInboxPullViewModel(
+            _pullProgressStore,
+            SampleForms.FieldSite(),
+            BuildLocalIndex,
+            (offset, ct) => _syncFactory().QueryPageAsync(_settings.Target, offset, pageSize, "1=1", ct));
+
+        await Navigation.PushAsync(new PagedInboxPullPage(pagedVm));
+    }
+
+    private IReadOnlyDictionary<long, Honua.Sdk.Field.Records.FieldRecord> BuildLocalIndex()
+    {
+        var index = new Dictionary<long, Honua.Sdk.Field.Records.FieldRecord>();
+        foreach (var entry in _book.All)
+        {
+            if (entry.RemoteId is { } remoteId
+                && long.TryParse(remoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
+            {
+                index[objectId] = entry.Record;
+            }
+        }
+
+        return index;
     }
 }

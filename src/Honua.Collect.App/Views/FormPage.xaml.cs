@@ -5,6 +5,8 @@ using Honua.Collect.App.Capture;
 using Honua.Collect.App.Services;
 using Honua.Collect.Core.Ai;
 using Honua.Collect.Core.Field.Capture;
+using Honua.Collect.Core.Field.Related;
+using Honua.Collect.Core.Storage;
 using Honua.Collect.Presentation.Forms;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,14 +22,24 @@ namespace Honua.Collect.App.Views;
 public partial class FormPage : ContentPage
 {
     private readonly HttpClient _aiHttp;
+    private readonly IRelatedRecordStore? _relatedStore;
+    private readonly RecordBook? _book;
 
     /// <summary>Creates the page for a form view-model.</summary>
     /// <param name="viewModel">The form to capture.</param>
     /// <param name="httpClientFactory">Factory supplying the configured AI HTTP client.</param>
-    public FormPage(FormPageViewModel viewModel, IHttpClientFactory httpClientFactory)
+    /// <param name="relatedStore">Optional durable store for record-link relationships (BACKLOG F4).</param>
+    /// <param name="book">Optional record book used to persist newly created related child drafts.</param>
+    public FormPage(
+        FormPageViewModel viewModel,
+        IHttpClientFactory httpClientFactory,
+        IRelatedRecordStore? relatedStore = null,
+        RecordBook? book = null)
     {
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         _aiHttp = httpClientFactory.CreateClient(MauiProgram.AnthropicHttpClient);
+        _relatedStore = relatedStore;
+        _book = book;
         InitializeComponent();
         BindingContext = viewModel;
     }
@@ -117,6 +129,27 @@ public partial class FormPage : ContentPage
         {
             await DisplayAlert("Scan", "Permission was denied.", "OK");
         }
+    }
+
+    private async void OnManageRelatedRecords(object? sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: FieldViewModel field }
+            || BindingContext is not FormPageViewModel vm)
+        {
+            return;
+        }
+
+        var related = vm.Session.GetRelated(field.FieldId);
+        var relatedVm = new RelatedRecordsViewModel(related, _relatedStore);
+        relatedVm.Changed += (_, _) => vm.RefreshFields();
+        relatedVm.ChildCreated += async (_, child) =>
+        {
+            if (_book is not null)
+            {
+                await _book.AddSubmittedAsync(child);
+            }
+        };
+        await Navigation.PushAsync(new RelatedRecordsPage(relatedVm));
     }
 
     private async void OnAiFill(object? sender, EventArgs e)

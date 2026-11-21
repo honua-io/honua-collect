@@ -696,6 +696,83 @@ public sealed class GeoServicesFeatureSync
         return new FeatureQueryResult(true, records, null);
     }
 
+    /// <summary>
+    /// Fetches a single ordered page of features at <paramref name="offset"/> using
+    /// <c>resultOffset</c>, <c>resultRecordCount</c>, and <c>orderByFields=objectid</c>,
+    /// shaped as an <see cref="InboxPage"/> for <see cref="PagedInboxPull"/>.
+    /// Throws <see cref="InvalidOperationException"/> on transport, JSON, or server
+    /// error so <see cref="PagedInboxPull"/> pauses cleanly at the current cursor.
+    /// </summary>
+    /// <param name="target">Target service/layer to query.</param>
+    /// <param name="offset">Zero-based feature offset to request.</param>
+    /// <param name="pageSize">Maximum features to fetch in this page.</param>
+    /// <param name="where">SQL-style filter; defaults to <c>1=1</c>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The decoded page and continuation cursor metadata.</returns>
+    public async Task<InboxPage> QueryPageAsync(
+        GeoServicesTarget target,
+        int offset,
+        int pageSize = 100,
+        string where = "1=1",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
+
+        var effectiveWhere = string.IsNullOrWhiteSpace(where) ? "1=1" : where;
+        var query = new Dictionary<string, string?>
+        {
+            ["f"] = "json",
+            ["where"] = effectiveWhere,
+            ["outFields"] = "*",
+            ["returnGeometry"] = "true",
+            ["orderByFields"] = DefaultObjectIdField,
+            ["resultOffset"] = offset.ToString(CultureInfo.InvariantCulture),
+            ["resultRecordCount"] = pageSize.ToString(CultureInfo.InvariantCulture),
+        };
+
+        var url = $"{target.QueryUrl}?{BuildQueryString(query)}";
+        string body;
+        try
+        {
+            using var response = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"HTTP {(int)response.StatusCode}: {body}");
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+
+        FeaturePage page;
+        try
+        {
+            page = ParseQueryPage(body);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Invalid response: {ex.Message}", ex);
+        }
+
+        if (page.Error is { } err)
+        {
+            throw new InvalidOperationException(err.Message);
+        }
+
+        var hasMore = page.ExceededTransferLimit && page.RawCount > 0;
+        var nextOffset = offset + page.RawCount;
+        return new InboxPage(page.Records, hasMore, nextOffset);
+    }
+
     private static string BuildQueryString(IReadOnlyDictionary<string, string?> parameters)
     {
         var pairs = parameters

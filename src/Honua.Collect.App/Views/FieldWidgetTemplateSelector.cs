@@ -31,6 +31,9 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
     /// <summary>Template for barcode/QR scan fields.</summary>
     public DataTemplate? BarcodeTemplate { get; set; }
 
+    /// <summary>Template for related-records link fields (BACKLOG F4).</summary>
+    public DataTemplate? RecordLinkTemplate { get; set; }
+
     /// <summary>Fallback template for any other field.</summary>
     public DataTemplate? FallbackTemplate { get; set; }
 
@@ -50,6 +53,7 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
             FieldWidgetTemplate.Choice => ChoiceTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.Media => MediaTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.Barcode => BarcodeTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.RecordLink => RecordLinkTemplate ?? FallbackTemplate,
             _ => FallbackTemplate,
         };
     }
