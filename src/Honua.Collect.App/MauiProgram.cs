@@ -255,7 +255,7 @@ public static class MauiProgram
 		builder.Services.AddTransient<GeometryCapturePage>();
 		builder.Services.AddTransient<SignaturePage>();
 		builder.Services.AddTransient<LoginPage>();
-		builder.Services.AddTransient<InboxPage>();
+		builder.Services.AddTransient<Honua.Collect.App.Views.InboxPage>();
 		builder.Services.AddTransient<ExportPage>();
 
 		builder.Logging.AddDebug();
