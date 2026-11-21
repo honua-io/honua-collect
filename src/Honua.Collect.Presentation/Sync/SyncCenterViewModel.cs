@@ -6,6 +6,8 @@ using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Mvvm;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Honua.Collect.Presentation.Sync;
 
@@ -80,6 +82,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     private readonly FeaturePuller? _puller;
     private readonly FormDefinition? _form;
     private readonly FeaturePullService _pullService = new();
+    private readonly ILogger<SyncCenterViewModel> _logger;
     private SyncSummary _summary;
     private bool _isSyncing;
     private bool _isPulling;
@@ -112,6 +115,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// <paramref name="uploader"/>. When null, every record uses <paramref name="uploader"/>.
     /// </param>
     /// <param name="batchSize">Maximum records per batch round-trip (defaults to <see cref="DefaultBatchSize"/>).</param>
+    /// <param name="logger">Optional structured logger.</param>
     public SyncCenterViewModel(
         IEnumerable<CollectRecordEntry> entries,
         RecordUploader uploader,
@@ -119,7 +123,8 @@ public sealed class SyncCenterViewModel : ObservableObject
         FormDefinition? form,
         RecordStatePersister? persist = null,
         BatchRecordUploader? batchUploader = null,
-        int batchSize = DefaultBatchSize)
+        int batchSize = DefaultBatchSize,
+        ILogger<SyncCenterViewModel>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
@@ -129,6 +134,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         _persist = persist;
         _puller = puller;
         _form = form;
+        _logger = logger ?? NullLogger<SyncCenterViewModel>.Instance;
         _entries = entries.ToList();
         Pending = new ObservableCollection<CollectRecordEntry>(_entries.Where(e => e.IsPendingUpload));
         Conflicts = new ObservableCollection<ConflictReviewViewModel>();
@@ -219,11 +225,13 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
 
         IsPulling = true;
+        _logger.LogInformation("Starting feature pull for form {FormId}.", _form.FormId);
         try
         {
             var queryResult = await _puller(cancellationToken).ConfigureAwait(false);
             if (!queryResult.Success)
             {
+                _logger.LogWarning("Feature pull failed for form {FormId}.", _form.FormId);
                 return null;
             }
 
@@ -260,6 +268,9 @@ public sealed class SyncCenterViewModel : ObservableObject
             }
 
             RebuildState();
+            _logger.LogInformation(
+                "Completed feature pull for form {FormId}: new={NewCount} conflicts={ConflictCount} unchanged={UnchangedCount}.",
+                _form.FormId, merge.NewRecords.Count, merge.Conflicts.Count, merge.Unchanged.Count);
             return merge;
         }
         finally
@@ -312,9 +323,12 @@ public sealed class SyncCenterViewModel : ObservableObject
 
         IsSyncing = true;
         var synced = 0;
+        var pendingCount = 0;
         try
         {
             var pending = _entries.Where(e => e.IsPendingUpload).ToList();
+            pendingCount = pending.Count;
+            _logger.LogInformation("Starting sync pass for {PendingCount} pending record(s).", pendingCount);
 
             if (_batchUploader is not null)
             {
@@ -335,6 +349,9 @@ public sealed class SyncCenterViewModel : ObservableObject
         {
             IsSyncing = false;
             RebuildState();
+            _logger.LogInformation(
+                "Completed sync pass: pending={PendingCount} synced={SyncedCount} remainingFailed={FailedCount}.",
+                pendingCount, synced, Summary.Failed);
         }
 
         return synced;
@@ -358,6 +375,10 @@ public sealed class SyncCenterViewModel : ObservableObject
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                _logger.LogWarning(
+                    ex,
+                    "Upload threw {ExceptionType} for record {RecordId}.",
+                    ex.GetType().Name, entry.Record.RecordId);
                 entry.MarkFailed(ex.Message);
             }
 
@@ -389,6 +410,10 @@ public sealed class SyncCenterViewModel : ObservableObject
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                _logger.LogWarning(
+                    ex,
+                    "Batch upload threw {ExceptionType} for {ChunkCount} record(s).",
+                    ex.GetType().Name, chunk.Count);
                 // A whole-batch transport failure fails every record in the chunk;
                 // they stay in the Outbox to retry on the next pass.
                 foreach (var entry in chunk)
@@ -455,9 +480,13 @@ public sealed class SyncCenterViewModel : ObservableObject
         {
             // Local persistence failed; keep the computed in-memory state. The
             // server side already reflects the upload, so we must not flip a synced
-            // record back to a re-uploadable state here. The next SaveAsync (e.g.
-            // on the following sync pass) will re-attempt the durable write.
-            _ = ex;
+            // record back to a re-uploadable state here. Log at Warning with the
+            // record id and exception type (never field values) so restart-duplicate
+            // risk is diagnosable.
+            _logger.LogWarning(
+                ex,
+                "Failed to persist post-sync state for record {RecordId} (syncState={SyncState}): {ExceptionType}.",
+                entry.Record.RecordId, entry.SyncState, ex.GetType().Name);
         }
     }
 

@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Honua.Collect.Core.Enterprise;
 
 /// <summary>
@@ -37,6 +40,7 @@ public sealed class AuthSessionManager
     private readonly SessionRefresher? _refresher;
     private readonly TimeProvider _clock;
     private readonly TimeSpan _refreshSkew;
+    private readonly ILogger<AuthSessionManager> _logger;
 
     // Serializes token refresh so a burst of near-expiry requests does not all call
     // the refresh endpoint at once and rotate refresh tokens that mutually invalidate
@@ -50,18 +54,21 @@ public sealed class AuthSessionManager
     /// <param name="refresher">Optional refresh-token exchange; null when the server issues no refresh token.</param>
     /// <param name="clock">Time source (defaults to system); injectable for tests.</param>
     /// <param name="refreshSkew">How far ahead of expiry to refresh proactively (default 5 minutes).</param>
+    /// <param name="logger">Optional structured logger.</param>
     public AuthSessionManager(
         IAuthSessionStore store,
         ISessionPersistence persistence,
         SessionRefresher? refresher = null,
         TimeProvider? clock = null,
-        TimeSpan? refreshSkew = null)
+        TimeSpan? refreshSkew = null,
+        ILogger<AuthSessionManager>? logger = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
         _refresher = refresher;
         _clock = clock ?? TimeProvider.System;
         _refreshSkew = refreshSkew ?? TimeSpan.FromMinutes(5);
+        _logger = logger ?? NullLogger<AuthSessionManager>.Instance;
     }
 
     /// <summary>Raised when a session has expired and could not be refreshed.</summary>
@@ -87,11 +94,13 @@ public sealed class AuthSessionManager
         if (saved.IsExpired(Now))
         {
             // Honor expiry on load: drop the stale token rather than resume it.
+            _logger.LogInformation("Discarded expired persisted session for user {UserId}.", saved.UserId);
             await _persistence.ClearAsync(cancellationToken).ConfigureAwait(false);
             return null;
         }
 
         _store.Set(saved);
+        _logger.LogInformation("Restored persisted session for user {UserId}.", saved.UserId);
         return saved;
     }
 
@@ -103,14 +112,17 @@ public sealed class AuthSessionManager
         ArgumentNullException.ThrowIfNull(session);
         _store.Set(session);
         await _persistence.SaveAsync(session, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Signed in user {UserId}.", session.UserId);
     }
 
     /// <summary>Clears the live session and removes any persisted copy.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
+        var previousUser = _store.Current?.UserId;
         _store.Set(null);
         await _persistence.ClearAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Signed out user {UserId}.", previousUser ?? "(none)");
     }
 
     /// <summary>
@@ -159,6 +171,7 @@ public sealed class AuthSessionManager
         }
 
         // Expired and unrecoverable: surface a graceful re-sign-in.
+        _logger.LogWarning("Auth session expired and could not be refreshed for user {UserId}; signing out.", current.UserId);
         await SignOutAsync(cancellationToken).ConfigureAwait(false);
         SessionExpired?.Invoke(this, EventArgs.Empty);
         return null;
@@ -199,15 +212,21 @@ public sealed class AuthSessionManager
             {
                 // A failed refresh is not fatal on its own — the caller falls through
                 // to the expiry decision (cancellation propagates intentionally).
+                _logger.LogWarning(
+                    ex,
+                    "Session refresh threw {ExceptionType} for user {UserId}.",
+                    ex.GetType().Name, toRefresh.UserId);
                 refreshed = null;
             }
 
             if (refreshed is not null && !refreshed.IsExpired(Now))
             {
                 await SignInAsync(refreshed, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Refreshed auth session for user {UserId}.", refreshed.UserId);
                 return refreshed;
             }
 
+            _logger.LogWarning("Session refresh returned no usable session for user {UserId}.", toRefresh.UserId);
             return null;
         }
         finally

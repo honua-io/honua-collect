@@ -3,6 +3,7 @@ using Honua.Collect.App.Services;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Sync;
+using Microsoft.Extensions.Logging;
 
 namespace Honua.Collect.App.Views;
 
@@ -14,11 +15,21 @@ namespace Honua.Collect.App.Views;
 /// </summary>
 public partial class SyncPage : ContentPage
 {
-    private readonly AppSettings _settings = ServiceHelper.Get<AppSettings>();
-    private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
+    private readonly AppSettings _settings;
+    private readonly RecordBook _book;
+    private readonly Func<GeoServicesFeatureSync> _syncFactory;
+    private readonly ILogger<SyncCenterViewModel>? _logger;
 
-    public SyncPage()
+    public SyncPage(
+        AppSettings settings,
+        RecordBook book,
+        Func<GeoServicesFeatureSync> syncFactory,
+        ILogger<SyncCenterViewModel>? logger = null)
     {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _book = book ?? throw new ArgumentNullException(nameof(book));
+        _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
+        _logger = logger;
         InitializeComponent();
     }
 
@@ -31,12 +42,12 @@ public partial class SyncPage : ContentPage
         // persister durably saves each entry's post-upload state so a restart does
         // not re-upload (and duplicate) an already-synced record.
         BindingContext = new SyncCenterViewModel(
-            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync);
+            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync, logger: _logger);
     }
 
     private async Task<FeatureSyncResult> UploadAsync(Core.Records.CollectRecordEntry entry, CancellationToken cancellationToken)
     {
-        var sync = ServiceHelper.Get<GeoServicesFeatureSync>();
+        var sync = _syncFactory();
 
         // Route by the record's transport state and review status:
         //  - a locally deleted record -> applyEdits DELETE against its server object
@@ -74,13 +85,13 @@ public partial class SyncPage : ContentPage
         IReadOnlyList<Core.Records.CollectRecordEntry> entries,
         CancellationToken cancellationToken)
     {
-        var sync = ServiceHelper.Get<GeoServicesFeatureSync>();
+        var sync = _syncFactory();
         var records = entries.Select(e => e.Record).ToList();
         return await sync.SubmitBatchAsync(records, _settings.Target, cancellationToken);
     }
 
     private async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)
-        => await ServiceHelper.Get<GeoServicesFeatureSync>()
+        => await _syncFactory()
             .QueryAsync(_settings.Target, "1=1", cancellationToken);
 
     private async void OnPull(object? sender, EventArgs e)

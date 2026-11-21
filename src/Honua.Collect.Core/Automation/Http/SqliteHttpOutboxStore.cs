@@ -231,10 +231,4 @@ public sealed class SqliteHttpOutboxStore : SqliteStoreBase, IHttpOutboxStore
             $"CREATE INDEX IF NOT EXISTS idx_{TableName}_due ON {TableName} (status, next_attempt_utc);";
         await dueIndexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
-
-    private static string ToStorage(DateTimeOffset value)
-        => value.ToString("O", CultureInfo.InvariantCulture);
-
-    private static DateTimeOffset FromStorage(string value)
-        => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 }

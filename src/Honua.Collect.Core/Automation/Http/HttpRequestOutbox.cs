@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Honua.Collect.Core.Automation.Http;
 
 /// <summary>The retry/backoff policy the outbox applies to a transient failure.</summary>
@@ -49,22 +52,26 @@ public sealed class HttpRequestOutbox
     private readonly IHttpRequestTransport _transport;
     private readonly TimeProvider _clock;
     private readonly HttpOutboxRetryPolicy _policy;
+    private readonly ILogger<HttpRequestOutbox> _logger;
 
     /// <summary>Creates the outbox.</summary>
     /// <param name="store">Durable entry store.</param>
     /// <param name="transport">The network seam requests are sent through.</param>
     /// <param name="clock">Time source (defaults to system); injectable for tests.</param>
     /// <param name="policy">Optional retry/backoff policy (defaults to <see cref="HttpOutboxRetryPolicy.Default"/>).</param>
+    /// <param name="logger">Optional structured logger.</param>
     public HttpRequestOutbox(
         IHttpOutboxStore store,
         IHttpRequestTransport transport,
         TimeProvider? clock = null,
-        HttpOutboxRetryPolicy? policy = null)
+        HttpOutboxRetryPolicy? policy = null,
+        ILogger<HttpRequestOutbox>? logger = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _clock = clock ?? TimeProvider.System;
         _policy = policy ?? HttpOutboxRetryPolicy.Default;
+        _logger = logger ?? NullLogger<HttpRequestOutbox>.Instance;
     }
 
     private DateTimeOffset Now => _clock.GetUtcNow();
@@ -84,13 +91,22 @@ public sealed class HttpRequestOutbox
         string? ruleName = null,
         CancellationToken ct = default)
     {
+        var (entry, _) = await EnqueueCoreAsync(request, ruleName, ct).ConfigureAwait(false);
+        return entry;
+    }
+
+    private async Task<(HttpOutboxEntry Entry, bool WasAdded)> EnqueueCoreAsync(
+        HttpOutboxRequest request,
+        string? ruleName,
+        CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.IdempotencyKey);
 
         var existing = await _store.FindByIdempotencyKeyAsync(request.IdempotencyKey, ct).ConfigureAwait(false);
         if (existing is not null)
         {
-            return existing;
+            return (existing, false);
         }
 
         var now = Now;
@@ -105,7 +121,7 @@ public sealed class HttpRequestOutbox
         };
 
         await _store.SaveAsync(entry, ct).ConfigureAwait(false);
-        return entry;
+        return (entry, true);
     }
 
     /// <summary>
@@ -122,9 +138,8 @@ public sealed class HttpRequestOutbox
         var enqueued = 0;
         foreach (var queued in result.HttpRequests)
         {
-            var before = await _store.FindByIdempotencyKeyAsync(queued.Request.IdempotencyKey, ct).ConfigureAwait(false);
-            await EnqueueAsync(queued.Request, queued.RuleName, ct).ConfigureAwait(false);
-            if (before is null)
+            var (_, wasAdded) = await EnqueueCoreAsync(queued.Request, queued.RuleName, ct).ConfigureAwait(false);
+            if (wasAdded)
             {
                 enqueued++;
             }
@@ -171,6 +186,13 @@ public sealed class HttpRequestOutbox
             }
         }
 
+        if (entries.Count > 0)
+        {
+            _logger.LogInformation(
+                "HTTP outbox drain completed: due={DueCount} sent={SentCount} retried={RetriedCount} failed={FailedCount}.",
+                entries.Count, sent, retried, failed);
+        }
+
         return new HttpDrainResult(sent, retried, failed);
     }
 
@@ -200,6 +222,10 @@ public sealed class HttpRequestOutbox
         {
             // A throwing transport is treated as a transient failure (offline-like),
             // so the outbox never loses an entry to an unexpected exception.
+            _logger.LogWarning(
+                ex,
+                "HTTP outbox transport error for entry {EntryId} (rule={RuleName}, attempt={Attempt}): {ExceptionType}.",
+                entry.Id, entry.RuleName ?? "(none)", entry.Attempts + 1, ex.GetType().Name);
             result = HttpSendResult.Offline(ex.Message);
         }
 
@@ -220,6 +246,9 @@ public sealed class HttpRequestOutbox
         var exhausted = attempts >= _policy.MaxAttempts;
         if (!result.IsRetryable || exhausted)
         {
+            _logger.LogWarning(
+                "HTTP outbox entry {EntryId} (rule={RuleName}) permanently failed after attempt {Attempt} (status={StatusCode}, exhausted={Exhausted}).",
+                entry.Id, entry.RuleName ?? "(none)", attempts, result.StatusCode, exhausted);
             await _store.SaveAsync(entry with
             {
                 Status = HttpOutboxStatus.Failed,
@@ -230,11 +259,15 @@ public sealed class HttpRequestOutbox
             return AttemptOutcome.Failed;
         }
 
+        var delay = _policy.DelayForAttempt(attempts);
+        _logger.LogWarning(
+            "HTTP outbox entry {EntryId} (rule={RuleName}) failed transiently on attempt {Attempt} (status={StatusCode}); retrying in {DelaySeconds}s.",
+            entry.Id, entry.RuleName ?? "(none)", attempts, result.StatusCode, (int)delay.TotalSeconds);
         await _store.SaveAsync(entry with
         {
             Status = HttpOutboxStatus.Pending,
             Attempts = attempts,
-            NextAttemptUtc = Now + _policy.DelayForAttempt(attempts),
+            NextAttemptUtc = Now + delay,
             LastStatusCode = result.StatusCode,
             LastError = result.Error,
         }, ct).ConfigureAwait(false);

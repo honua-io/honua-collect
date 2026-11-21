@@ -16,10 +16,15 @@ namespace Honua.Collect.App.Views;
 /// </summary>
 public partial class FormPage : ContentPage
 {
+    private readonly HttpClient _aiHttp;
+
     /// <summary>Creates the page for a form view-model.</summary>
     /// <param name="viewModel">The form to capture.</param>
-    public FormPage(FormPageViewModel viewModel)
+    /// <param name="httpClientFactory">Factory supplying the configured AI HTTP client.</param>
+    public FormPage(FormPageViewModel viewModel, IHttpClientFactory httpClientFactory)
     {
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _aiHttp = httpClientFactory.CreateClient(MauiProgram.AnthropicHttpClient);
         InitializeComponent();
         BindingContext = viewModel;
     }
@@ -110,9 +115,6 @@ public partial class FormPage : ContentPage
             await DisplayAlert("Scan", "Permission was denied.", "OK");
         }
     }
-
-    private readonly HttpClient _aiHttp =
-        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.AnthropicHttpClient);
 
     private async void OnAiFill(object? sender, EventArgs e)
     {

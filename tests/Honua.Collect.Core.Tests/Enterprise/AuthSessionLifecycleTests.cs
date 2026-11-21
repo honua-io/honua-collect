@@ -1,4 +1,5 @@
 using Honua.Collect.Core.Enterprise;
+using Microsoft.Extensions.Logging;
 
 namespace Honua.Collect.Core.Tests.Enterprise;
 
@@ -326,5 +327,53 @@ public class AuthSessionLifecycleTests
         store.Set(Session(TimeSpan.FromMinutes(-1), refresh: "rt1"));
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => manager.EnsureValidAsync());
+    }
+
+    [Fact]
+    public async Task Lifecycle_events_emit_structured_logs_without_leaking_tokens()
+    {
+        var store = new AuthSessionStore();
+        var persistence = new FakePersistence();
+        var clock = new TestClock();
+        var logger = new CaptureLogger<AuthSessionManager>();
+        var manager = new AuthSessionManager(
+            store,
+            persistence,
+            (_, _) => throw new InvalidOperationException("refresh boom"),
+            clock,
+            TimeSpan.FromMinutes(5),
+            logger);
+
+        var session = new AuthSession
+        {
+            UserId = "field-user-7",
+            AccessToken = "secret-access-token-xyz",
+            RefreshToken = "secret-refresh-token-xyz",
+            ExpiresAtUtc = clock.GetUtcNow().AddMinutes(-1),
+        };
+        await manager.SignInAsync(session);
+        var result = await manager.EnsureValidAsync();
+
+        Assert.Null(result);
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("field-user-7", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("InvalidOperationException", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("expired", StringComparison.OrdinalIgnoreCase));
+        Assert.All(logger.Entries, e =>
+        {
+            Assert.DoesNotContain("secret-access-token-xyz", e.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("secret-refresh-token-xyz", e.Message, StringComparison.Ordinal);
+        });
+    }
+
+    private sealed class CaptureLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 }

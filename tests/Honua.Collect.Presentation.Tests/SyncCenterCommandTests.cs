@@ -3,6 +3,7 @@ using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Mvvm;
 using Honua.Collect.Presentation.Sync;
 using Honua.Sdk.Field.Records;
+using Microsoft.Extensions.Logging;
 
 namespace Honua.Collect.Presentation.Tests;
 
@@ -148,5 +149,46 @@ public class SyncCenterCommandTests
         await first;
 
         Assert.Equal(1, calls); // the uploader ran exactly once
+    }
+
+    [Fact]
+    public async Task SyncAsync_logs_warning_with_record_id_and_exception_type_when_persist_fails()
+    {
+        var record = new FieldRecord { RecordId = "rec-persist-fail", FormId = "f1", Status = RecordStatus.Submitted };
+        record.Values["secret_field"] = "sensitive-field-value-do-not-log";
+        var entry = new CollectRecordEntry(record);
+        entry.MarkPending();
+
+        var logger = new CaptureLogger<SyncCenterViewModel>();
+        var vm = new SyncCenterViewModel(
+            [entry],
+            (_, _) => Task.FromResult(FeatureSyncResult.Ok(42)),
+            puller: null,
+            form: null,
+            persist: _ => throw new IOException("disk full"),
+            logger: logger);
+
+        var synced = await vm.SyncAsync();
+
+        Assert.Equal(1, synced);
+        Assert.Equal(RecordSyncState.Synced, entry.SyncState);
+        Assert.Contains(logger.Entries, e =>
+            e.Level == LogLevel.Warning
+            && e.Message.Contains("rec-persist-fail", StringComparison.Ordinal)
+            && e.Message.Contains("IOException", StringComparison.Ordinal));
+        Assert.All(logger.Entries, e =>
+            Assert.DoesNotContain("sensitive-field-value-do-not-log", e.Message, StringComparison.Ordinal));
+    }
+
+    private sealed class CaptureLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 }

@@ -27,11 +27,11 @@ public class AuditTrailTests
         var trail = new AuditTrail(new InMemoryAuditStore(), clock);
         var sink = AsSink(trail);
 
-        sink.SignIn("u1");
+        await sink.SignInAsync("u1");
         clock.Advance(TimeSpan.FromSeconds(1));
-        sink.Record(new AuditEvent(clock.GetUtcNow(), "u1", AuditAction.RecordCreated, "r1"));
+        await sink.RecordAsync(new AuditEvent(clock.GetUtcNow(), "u1", AuditAction.RecordCreated, "r1"));
         clock.Advance(TimeSpan.FromSeconds(1));
-        sink.SignOut("u1");
+        await sink.SignOutAsync("u1");
 
         var entries = await trail.QueryAsync();
         Assert.Equal(3, entries.Count);
@@ -50,8 +50,8 @@ public class AuditTrailTests
     {
         var store = new InMemoryAuditStore();
         var trail = new AuditTrail(store, new FakeTimeProvider());
-        AsSink(trail).SignIn("u1");
-        AsSink(trail).SyncPushed("u1", 5);
+        await AsSink(trail).SignInAsync("u1");
+        await AsSink(trail).SyncPushedAsync("u1", 5);
 
         Assert.True(await trail.VerifyAsync());
 
@@ -70,7 +70,7 @@ public class AuditTrailTests
     public async Task Secrets_are_scrubbed_from_logged_details()
     {
         var trail = new AuditTrail(new InMemoryAuditStore());
-        AsSink(trail).Record(new AuditEvent(
+        await AsSink(trail).RecordAsync(new AuditEvent(
             DateTimeOffset.UtcNow, "u1", AuditAction.SignIn,
             Details: "login token=abc123secret password=hunter2 Authorization: Bearer eyJabc.def.ghi"));
 
@@ -89,11 +89,11 @@ public class AuditTrailTests
         var trail = new AuditTrail(new InMemoryAuditStore(), clock);
         var sink = AsSink(trail);
 
-        sink.SignIn("alice");
+        await sink.SignInAsync("alice");
         clock.Advance(TimeSpan.FromMinutes(1));
-        sink.Record(new AuditEvent(clock.GetUtcNow(), "bob", AuditAction.RecordDeleted, "r9"));
+        await sink.RecordAsync(new AuditEvent(clock.GetUtcNow(), "bob", AuditAction.RecordDeleted, "r9"));
         clock.Advance(TimeSpan.FromMinutes(1));
-        sink.SignIn("alice");
+        await sink.SignInAsync("alice");
 
         var aliceOnly = await trail.QueryAsync(new AuditQuery(UserId: "alice"));
         Assert.Equal(2, aliceOnly.Count);
@@ -112,8 +112,8 @@ public class AuditTrailTests
     public async Task Export_returns_the_trail_as_jsonl_with_chain_hashes()
     {
         var trail = new AuditTrail(new InMemoryAuditStore(), new FakeTimeProvider());
-        AsSink(trail).SignIn("u1");
-        AsSink(trail).SignOut("u1");
+        await AsSink(trail).SignInAsync("u1");
+        await AsSink(trail).SignOutAsync("u1");
 
         var jsonl = await trail.ExportJsonlAsync();
         var lines = jsonl.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -132,9 +132,9 @@ public class AuditTrailTests
         {
             var clock = new FakeTimeProvider(new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero));
             var trail = new AuditTrail(new SqliteAuditStore(dbPath), clock);
-            AsSink(trail).SignIn("u1", details: "token=should-not-persist");
+            await AsSink(trail).SignInAsync("u1", details: "token=should-not-persist");
             clock.Advance(TimeSpan.FromSeconds(1));
-            AsSink(trail).SyncPulled("u1", 12);
+            await AsSink(trail).SyncPulledAsync("u1", 12);
 
             // A fresh store over the same file must see the persisted, ordered trail.
             var reopened = new AuditTrail(new SqliteAuditStore(dbPath));
@@ -146,7 +146,7 @@ public class AuditTrailTests
             Assert.True(await reopened.VerifyAsync());
 
             // A continued trail keeps the sequence monotonic across instances.
-            AsSink(reopened).SignOut("u1");
+            await AsSink(reopened).SignOutAsync("u1");
             var final = await reopened.QueryAsync();
             Assert.Equal(new long[] { 0, 1, 2 }, final.Select(e => e.Sequence).ToArray());
         }
@@ -180,5 +180,32 @@ public class AuditTrailTests
                 File.Delete(dbPath);
             }
         }
+    }
+
+    [Fact]
+    public async Task Lazy_audit_store_initializes_once_under_concurrency_and_delegates()
+    {
+        var invocations = 0;
+        var backing = new InMemoryAuditStore();
+        var lazy = new LazyAuditStore(async _ =>
+        {
+            Interlocked.Increment(ref invocations);
+            await Task.Delay(15);
+            return backing;
+        });
+
+        var trail = new AuditTrail(lazy, new FakeTimeProvider());
+        await Task.WhenAll(
+            AsSink(trail).SignInAsync("u1"),
+            AsSink(trail).SessionRefreshedAsync("u1"),
+            AsSink(trail).SessionExpiredAsync("u1"),
+            AsSink(trail).SignOutAsync("u1"));
+
+        Assert.Equal(1, invocations);
+        var entries = await lazy.QueryAsync();
+        Assert.Equal(4, entries.Count);
+        Assert.Equal(3L, await lazy.HeadSequenceAsync());
+        Assert.False(string.IsNullOrEmpty(await lazy.HeadHashAsync()));
+        Assert.True(await trail.VerifyAsync());
     }
 }

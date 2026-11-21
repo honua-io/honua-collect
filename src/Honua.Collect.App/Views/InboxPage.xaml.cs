@@ -20,10 +20,14 @@ public partial class InboxPage : ContentPage
     // bundled field-site form so the screen works fully offline on first run.
     private const string DemoUserId = "mobile_offline_demo";
 
+    private readonly Core.Storage.RecordBook _book;
+    private readonly IHttpClientFactory _httpClientFactory;
     private InboxViewModel? _viewModel;
 
-    public InboxPage()
+    public InboxPage(Core.Storage.RecordBook book, IHttpClientFactory httpClientFactory)
     {
+        _book = book ?? throw new ArgumentNullException(nameof(book));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         InitializeComponent();
     }
 
@@ -76,9 +80,9 @@ public partial class InboxPage : ContentPage
         viewModel.SubmitSucceeded += async (_, record) =>
         {
             record.Location = assignment.Location ?? new FieldGeoPoint(21.31, -157.81);
-            await ServiceHelper.Get<Core.Storage.RecordBook>().AddSubmittedAsync(record);
+            await _book.AddSubmittedAsync(record);
         };
 
-        await Navigation.PushAsync(new FormPage(viewModel));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
     }
 }

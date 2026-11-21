@@ -290,16 +290,4 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         alter.CommandText = $"ALTER TABLE {TableName} ADD COLUMN version INTEGER NOT NULL DEFAULT 0;";
         await alter.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
-
-    private static object ToStorage(DateTimeOffset value)
-        => value.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
-
-    private static object ToStorage(DateTimeOffset? value)
-        => value is { } v ? ToStorage(v) : DBNull.Value;
-
-    private static DateTimeOffset? FromStorage(SqliteDataReader reader, int ordinal)
-        => reader.IsDBNull(ordinal)
-            ? null
-            : DateTimeOffset.Parse(reader.GetString(ordinal), System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.RoundtripKind);
 }

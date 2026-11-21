@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Honua.Collect.Core.Field.Forms;
+using Honua.Collect.Core.Imaging;
 using Honua.Sdk.Field.Forms;
 
 namespace Honua.Collect.Core.Ai;
@@ -24,6 +25,16 @@ public sealed record AnthropicPhotoToFieldsOptions
 
     /// <summary>Maximum response tokens. Defaults to 1024 — the structured output is small.</summary>
     public int MaxTokens { get; init; } = 1024;
+
+    /// <summary>
+    /// Longest-edge cap in pixels when downscaling a photo before base64 encoding.
+    /// Defaults to <see cref="ImageResizeOptions.DefaultMaxEdge"/> (1600 px) so large
+    /// camera originals are shrunk before allocation and upload.
+    /// </summary>
+    public int MaxImageEdge { get; init; } = ImageResizeOptions.DefaultMaxEdge;
+
+    /// <summary>JPEG re-encode quality (1–100) for photos resized before upload.</summary>
+    public int ImageQuality { get; init; } = ImageResizeOptions.DefaultQuality;
 }
 
 /// <summary>
@@ -59,6 +70,7 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
 
     private readonly HttpClient _http;
     private readonly AnthropicPhotoToFieldsOptions _options;
+    private readonly IImageResizer _imageResizer;
 
     /// <summary>Creates the provider.</summary>
     /// <param name="httpClient">
@@ -67,7 +79,14 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
     /// default headers — auth and version headers are set per request.
     /// </param>
     /// <param name="options">API key, model id, and limits.</param>
-    public AnthropicPhotoToFieldsProvider(HttpClient httpClient, AnthropicPhotoToFieldsOptions options)
+    /// <param name="imageResizer">
+    /// Optional image resizer used to downscale and JPEG-compress large field photos
+    /// before base64 encoding; defaults to <see cref="SkiaImageResizer"/>.
+    /// </param>
+    public AnthropicPhotoToFieldsProvider(
+        HttpClient httpClient,
+        AnthropicPhotoToFieldsOptions options,
+        IImageResizer? imageResizer = null)
     {
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -75,6 +94,8 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
         {
             throw new ArgumentException("An Anthropic API key is required.", nameof(options));
         }
+
+        _imageResizer = imageResizer ?? new SkiaImageResizer();
     }
 
     /// <inheritdoc />
@@ -86,10 +107,17 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
         ArgumentException.ThrowIfNullOrWhiteSpace(photoPath);
         ArgumentNullException.ThrowIfNull(form);
 
-        byte[] imageBytes;
+        var targets = TargetFields(form);
+        if (targets.Count == 0)
+        {
+            return Failed("The form has no extractable fields.");
+        }
+
+        string base64Image;
+        string mediaType;
         try
         {
-            imageBytes = await File.ReadAllBytesAsync(photoPath, cancellationToken).ConfigureAwait(false);
+            (base64Image, mediaType) = await LoadAndPrepareImageAsync(photoPath, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -100,14 +128,7 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
             return Failed($"Could not read photo '{photoPath}': {ex.Message}");
         }
 
-        var targets = TargetFields(form);
-        if (targets.Count == 0)
-        {
-            return Failed("The form has no extractable fields.");
-        }
-
-        var mediaType = MediaTypeForPath(photoPath);
-        var request = BuildRequest(Convert.ToBase64String(imageBytes), mediaType, form, targets);
+        var request = BuildRequest(base64Image, mediaType, form, targets);
 
         AnthropicMessageResponse? response;
         try
@@ -356,6 +377,40 @@ public sealed class AnthropicPhotoToFieldsProvider : IPhotoToFieldsProvider
         };
 
         return Math.Clamp(raw, 0.0, 1.0);
+    }
+
+    private async Task<(string Base64Image, string MediaType)> LoadAndPrepareImageAsync(
+        string photoPath,
+        CancellationToken cancellationToken)
+    {
+        var rawBytes = await File.ReadAllBytesAsync(photoPath, cancellationToken).ConfigureAwait(false);
+        if (rawBytes.Length == 0)
+        {
+            return (string.Empty, MediaTypeForPath(photoPath));
+        }
+
+        try
+        {
+            var resized = _imageResizer.Resize(rawBytes, new ImageResizeOptions
+            {
+                MaxEdge = _options.MaxImageEdge,
+                Quality = _options.ImageQuality,
+                Format = ImageEncodeFormat.Jpeg,
+                SkipWhenWithinBudget = true,
+            });
+            var mediaType = resized.Format switch
+            {
+                ImageEncodeFormat.Png => "image/png",
+                ImageEncodeFormat.Webp => "image/webp",
+                _ => "image/jpeg",
+            };
+            return (Convert.ToBase64String(resized.Bytes), mediaType);
+        }
+        catch (ImageDecodeException)
+        {
+            // Non-raster or unsupported codec bytes: fall back to sending the original payload.
+            return (Convert.ToBase64String(rawBytes), MediaTypeForPath(photoPath));
+        }
     }
 
     private static string MediaTypeForPath(string path)

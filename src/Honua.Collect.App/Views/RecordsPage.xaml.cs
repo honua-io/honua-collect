@@ -7,10 +7,11 @@ namespace Honua.Collect.App.Views;
 /// <summary>The Drafts/Outbox/Sent records screen, rebuilt from the record book on view.</summary>
 public partial class RecordsPage : ContentPage
 {
-    private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
+    private readonly RecordBook _book;
 
-    public RecordsPage()
+    public RecordsPage(RecordBook book)
     {
+        _book = book ?? throw new ArgumentNullException(nameof(book));
         InitializeComponent();
     }
 

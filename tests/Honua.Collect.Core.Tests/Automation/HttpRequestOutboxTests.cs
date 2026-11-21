@@ -1,5 +1,6 @@
 using Honua.Collect.Core.Automation;
 using Honua.Collect.Core.Automation.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Honua.Collect.Core.Tests.Automation;
 
@@ -254,5 +255,83 @@ public class HttpRequestOutboxTests
         await outbox.EnqueueAsync(Request("c"));
         Assert.Equal(0, await outbox.PurgeTerminalAsync());
         Assert.Single(await store.LoadAllAsync());
+    }
+
+    [Fact]
+    public async Task EnqueueFrom_performs_only_one_idempotency_lookup_per_request()
+    {
+        var inner = new InMemoryHttpOutboxStore();
+        var countingStore = new CountingOutboxStore(inner);
+        var outbox = new HttpRequestOutbox(countingStore, new FakeTransport(), new FakeClock(Start));
+
+        var rule = new AutomationRule
+        {
+            Name = "queue-webhook",
+            Trigger = AutomationTrigger.RecordSave,
+            Actions = [HttpRequestAction.Post("https://example.test/hook", "{\"flag\":true}", "rec-99")],
+        };
+        var result = new AutomationRuntime().Run(
+            [rule],
+            new AutomationEvent(AutomationTrigger.RecordSave),
+            new Dictionary<string, object?>());
+
+        var firstCount = await outbox.EnqueueFromAsync(result);
+        var secondCount = await outbox.EnqueueFromAsync(result);
+
+        Assert.Equal(1, firstCount);
+        Assert.Equal(0, secondCount);
+        Assert.Equal(2, countingStore.FindByIdempotencyKeyCalls);
+    }
+
+    [Fact]
+    public async Task Drain_logs_structured_warnings_and_summary()
+    {
+        var clock = new FakeClock(Start);
+        var store = new InMemoryHttpOutboxStore();
+        var transport = new FakeTransport(new HttpSendResult(503), new HttpSendResult(400));
+        var logger = new ListLogger<HttpRequestOutbox>();
+        var outbox = new HttpRequestOutbox(store, transport, clock, logger: logger);
+
+        await outbox.EnqueueAsync(Request("k1"), "rule-retry");
+        await outbox.EnqueueAsync(Request("k2"), "rule-fail");
+        await outbox.DrainAsync();
+
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("rule-retry", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("rule-fail", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("drain completed", StringComparison.Ordinal));
+    }
+
+    private sealed class CountingOutboxStore(IHttpOutboxStore inner) : IHttpOutboxStore
+    {
+        public int FindByIdempotencyKeyCalls { get; private set; }
+
+        public Task SaveAsync(HttpOutboxEntry entry, CancellationToken ct = default) => inner.SaveAsync(entry, ct);
+
+        public Task<IReadOnlyList<HttpOutboxEntry>> LoadAllAsync(CancellationToken ct = default) => inner.LoadAllAsync(ct);
+
+        public Task<IReadOnlyList<HttpOutboxEntry>> LoadDueAsync(DateTimeOffset nowUtc, CancellationToken ct = default)
+            => inner.LoadDueAsync(nowUtc, ct);
+
+        public Task<HttpOutboxEntry?> FindByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct = default)
+        {
+            FindByIdempotencyKeyCalls++;
+            return inner.FindByIdempotencyKeyAsync(idempotencyKey, ct);
+        }
+
+        public Task<int> PurgeTerminalAsync(CancellationToken ct = default) => inner.PurgeTerminalAsync(ct);
+
+        public Task DeleteAsync(string id, CancellationToken ct = default) => inner.DeleteAsync(id, ct);
+    }
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 }

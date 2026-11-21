@@ -97,7 +97,36 @@ public class DeviceAuthorizationTests
     }
 
     [Fact]
-    public async Task Require_records_a_denial_to_the_audit_sink()
+    public async Task RequireAsync_records_a_denial_to_the_audit_sink()
+    {
+        var store = new AuthSessionStore();
+        store.Set(SessionWithRoles("field-worker"));
+        var audit = new AuditTrail(new InMemoryAuditStore());
+        var authz = new DeviceAuthorization(store, StandardMap(), audit);
+
+        await Assert.ThrowsAsync<PermissionDeniedException>(() => authz.RequireAsync(CollectPermission.DeleteRecords));
+
+        var trail = await audit.QueryAsync();
+        var denial = Assert.Single(trail);
+        Assert.Equal(AuditAction.PermissionDenied, denial.Event.Action);
+        Assert.Equal("u1", denial.Event.UserId);
+    }
+
+    [Fact]
+    public async Task RequireAsync_succeeds_without_recording_denial_when_permitted()
+    {
+        var store = new AuthSessionStore();
+        store.Set(SessionWithRoles("field-worker"));
+        var audit = new AuditTrail(new InMemoryAuditStore());
+        var authz = new DeviceAuthorization(store, StandardMap(), audit);
+
+        await authz.RequireAsync(CollectPermission.CaptureRecords);
+
+        Assert.Empty(await audit.QueryAsync());
+    }
+
+    [Fact]
+    public void Require_throws_without_blocking_when_audit_sink_is_present()
     {
         var store = new AuthSessionStore();
         store.Set(SessionWithRoles("field-worker"));
@@ -105,11 +134,6 @@ public class DeviceAuthorizationTests
         var authz = new DeviceAuthorization(store, StandardMap(), audit);
 
         Assert.Throws<PermissionDeniedException>(() => authz.Require(CollectPermission.DeleteRecords));
-
-        var trail = await audit.QueryAsync();
-        var denial = Assert.Single(trail);
-        Assert.Equal(AuditAction.PermissionDenied, denial.Event.Action);
-        Assert.Equal("u1", denial.Event.UserId);
     }
 
     [Fact]
