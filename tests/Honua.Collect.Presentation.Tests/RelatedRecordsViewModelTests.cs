@@ -90,7 +90,8 @@ public sealed class RelatedRecordsViewModelTests : IDisposable
 
         vm.NewChildLabel = "Leaking gasket";
         var created = await vm.CreateChildAsync();
-        Assert.Equal("child-1", created.RecordId);
+        Assert.NotNull(created);
+        Assert.Equal("child-1", created!.RecordId);
         Assert.Same(created, createdEventRecord);
         Assert.Equal(string.Empty, vm.NewChildLabel);
         Assert.True(vm.HasChildren);
@@ -170,8 +171,9 @@ public sealed class RelatedRecordsViewModelTests : IDisposable
         Assert.False(vm.UnlinkCommand.CanExecute(null));
 
         var child = await vm.CreateChildAsync("Cracked cap");
+        Assert.NotNull(child);
         var row = Assert.Single(vm.Children);
-        Assert.Equal(child.RecordId, row.RecordId);
+        Assert.Equal(child!.RecordId, row.RecordId);
         Assert.True(vm.UnlinkCommand.CanExecute(row));
         Assert.True(await vm.UnlinkAsync(row));
         Assert.Empty(vm.Children);

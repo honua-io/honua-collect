@@ -99,11 +99,11 @@ public sealed class RecordHistoryViewModel : ObservableObject
         _history = history ?? throw new ArgumentNullException(nameof(history));
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
         _recordId = recordId;
-        UndoLastChangeCommand = new RelayCommand(() => _ = UndoLastChangeAsync(), () => CanRevert);
+        UndoLastChangeCommand = new RelayCommand(() => _ = RunCommandAsync(() => UndoLastChangeAsync()), () => CanRevert);
         RevertToVersionCommand = new RelayCommand<RecordEditVersionViewModel>(
-            v => _ = RevertToVersionAsync(v),
+            v => _ = RunCommandAsync(() => RevertToVersionAsync(v)),
             v => v is not null && CanRevert);
-        RevertToOriginalCommand = new RelayCommand(() => _ = RevertToOriginalAsync(), () => CanRevert);
+        RevertToOriginalCommand = new RelayCommand(() => _ = RunCommandAsync(() => RevertToOriginalAsync()), () => CanRevert);
     }
 
     /// <summary>Creates an interactive history view-model with undo and revert-to-version triggers.</summary>
@@ -172,15 +172,20 @@ public sealed class RecordHistoryViewModel : ObservableObject
     /// <param name="ct">Cancellation token.</param>
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var edits = await _history.GetHistoryAsync(_recordId, ct).ConfigureAwait(false);
-        Versions.Clear();
-        foreach (var edit in edits.OrderByDescending(e => e.Sequence))
+        if (IsBusy)
         {
-            Versions.Add(new RecordEditVersionViewModel(edit));
+            return;
         }
 
-        OnPropertyChanged(nameof(HasHistory));
-        NotifyRevertState();
+        IsBusy = true;
+        try
+        {
+            await ReloadCoreAsync(ct);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     /// <summary>
@@ -199,8 +204,8 @@ public sealed class RecordHistoryViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var result = await _revertService.UndoLastChangeAsync(_entry, _editorUserId, ct: ct).ConfigureAwait(false);
-            await LoadAsync(ct).ConfigureAwait(false);
+            var result = await _revertService.UndoLastChangeAsync(_entry, _editorUserId, ct: ct);
+            await ReloadCoreAsync(ct);
             StatusMessage = result.RevertEdit is { } edit
                 ? $"Undid last change (recorded as v{edit.Sequence + 1})."
                 : "Nothing to undo — record already matches the previous state.";
@@ -233,10 +238,8 @@ public sealed class RecordHistoryViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var result = await _revertService
-                .RevertToVersionAsync(_entry, version.Sequence, _editorUserId, ct: ct)
-                .ConfigureAwait(false);
-            await LoadAsync(ct).ConfigureAwait(false);
+            var result = await _revertService.RevertToVersionAsync(_entry, version.Sequence, _editorUserId, ct: ct);
+            await ReloadCoreAsync(ct);
             StatusMessage = result.RevertEdit is { } edit
                 ? $"Reverted to v{version.Version} (recorded as v{edit.Sequence + 1})."
                 : $"Record already matches v{version.Version}.";
@@ -265,10 +268,8 @@ public sealed class RecordHistoryViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var result = await _revertService
-                .RevertToVersionAsync(_entry, -1, _editorUserId, ct: ct)
-                .ConfigureAwait(false);
-            await LoadAsync(ct).ConfigureAwait(false);
+            var result = await _revertService.RevertToVersionAsync(_entry, -1, _editorUserId, ct: ct);
+            await ReloadCoreAsync(ct);
             StatusMessage = result.RevertEdit is { } edit
                 ? $"Reverted to original capture (recorded as v{edit.Sequence + 1})."
                 : "Record already matches the original capture.";
@@ -278,6 +279,31 @@ public sealed class RecordHistoryViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    private async Task ReloadCoreAsync(CancellationToken ct)
+    {
+        var edits = await _history.GetHistoryAsync(_recordId, ct);
+        Versions.Clear();
+        foreach (var edit in edits.OrderByDescending(e => e.Sequence))
+        {
+            Versions.Add(new RecordEditVersionViewModel(edit));
+        }
+
+        OnPropertyChanged(nameof(HasHistory));
+        NotifyRevertState();
+    }
+
+    private async Task RunCommandAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            StatusMessage = $"Revert failed: {ex.Message}";
         }
     }
 

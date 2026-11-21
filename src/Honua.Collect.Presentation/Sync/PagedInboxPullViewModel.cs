@@ -53,10 +53,10 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         _fetchPageAsync = fetchPageAsync ?? throw new ArgumentNullException(nameof(fetchPageAsync));
         _pull = new PagedInboxPull(_progressStore);
 
-        PulledRows = [];
+        LatestPageRows = [];
         Conflicts = [];
-        ResumeCommand = new RelayCommand(() => _ = ResumePullAsync(), () => !IsPulling);
-        PullFromStartCommand = new RelayCommand(() => _ = PullFromStartAsync(), () => !IsPulling);
+        ResumeCommand = new RelayCommand(() => _ = RunCommandAsync(() => ResumePullAsync()), () => !IsPulling);
+        PullFromStartCommand = new RelayCommand(() => _ = RunCommandAsync(() => PullFromStartAsync()), () => !IsPulling);
     }
 
     /// <summary>Current durable paging cursor.</summary>
@@ -174,8 +174,12 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>Classifications merged during the active session.</summary>
-    public ObservableCollection<PullClassification> PulledRows { get; }
+    /// <summary>
+    /// Classifications from the most recently merged page (kept bounded to O(page)
+    /// memory even on million-row layers; cumulative counts are in
+    /// <see cref="PulledCount"/>, <see cref="NewCount"/>, and <see cref="ConflictCount"/>).
+    /// </summary>
+    public ObservableCollection<PullClassification> LatestPageRows { get; }
 
     /// <summary>Conflicts discovered during the active session.</summary>
     public ObservableCollection<RecordConflict> Conflicts { get; }
@@ -190,7 +194,7 @@ public sealed class PagedInboxPullViewModel : ObservableObject
     /// <param name="ct">Cancellation token.</param>
     public async Task LoadCursorAsync(CancellationToken ct = default)
     {
-        Cursor = await _progressStore.LoadCursorAsync(ct).ConfigureAwait(false);
+        Cursor = await _progressStore.LoadCursorAsync(ct);
     }
 
     /// <summary>Resumes pulling from the persisted cursor until complete or a page fetch faults.</summary>
@@ -217,7 +221,7 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         LastError = null;
         if (fromStart)
         {
-            PulledRows.Clear();
+            LatestPageRows.Clear();
             Conflicts.Clear();
             NewCount = 0;
             ConflictCount = 0;
@@ -227,8 +231,8 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         {
             var localIndex = _localIndexProvider();
             var result = fromStart
-                ? await _pull.PullAllAsync(_form, localIndex, FetchAsync, ct, OnPageMergedAsync).ConfigureAwait(false)
-                : await _pull.ResumeAsync(_form, localIndex, FetchAsync, ct, OnPageMergedAsync).ConfigureAwait(false);
+                ? await _pull.PullAllAsync(_form, localIndex, FetchAsync, ct, OnPageMergedAsync)
+                : await _pull.ResumeAsync(_form, localIndex, FetchAsync, ct, OnPageMergedAsync);
 
             Cursor = result.Cursor;
             IsFaulted = result.Faulted;
@@ -246,9 +250,10 @@ public sealed class PagedInboxPullViewModel : ObservableObject
 
     private Task OnPageMergedAsync(PullMergeResult page, CancellationToken ct)
     {
+        LatestPageRows.Clear();
         foreach (var item in page.Classifications)
         {
-            PulledRows.Add(item);
+            LatestPageRows.Add(item);
         }
 
         foreach (var conflict in page.Conflicts)
@@ -259,5 +264,18 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         NewCount += page.NewRecords.Count;
         ConflictCount += page.Conflicts.Count;
         return Task.CompletedTask;
+    }
+
+    private async Task RunCommandAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            IsFaulted = true;
+            LastError = ex.Message;
+        }
     }
 }

@@ -135,19 +135,7 @@ public partial class SyncPage : ContentPage
             _pullProgressStore,
             SampleForms.FieldSite(),
             BuildLocalIndex,
-            async (offset, ct) =>
-            {
-                var query = await _syncFactory().QueryAsync(_settings.Target, "1=1", ct);
-                if (!query.Success)
-                {
-                    throw new InvalidOperationException(query.Error ?? "Server query failed.");
-                }
-
-                var slice = query.Records.Skip(offset).Take(pageSize).ToList();
-                var nextOffset = offset + slice.Count;
-                var hasMore = nextOffset < query.Records.Count;
-                return new Core.Sync.InboxPage(slice, hasMore, nextOffset);
-            });
+            (offset, ct) => _syncFactory().QueryPageAsync(_settings.Target, offset, pageSize, "1=1", ct));
 
         await Navigation.PushAsync(new PagedInboxPullPage(pagedVm));
     }

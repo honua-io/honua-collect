@@ -6,14 +6,19 @@ using Honua.Collect.Core.Sync;
 namespace Honua.Collect.App.Services;
 
 /// <summary>
-/// Persists the O(1) <see cref="InboxPullCursor"/> in platform preferences so an
-/// interrupted paged inbox pull resumes from the last completed page across restarts.
+/// Persists the O(1) <see cref="InboxPullCursor"/> in platform preferences, scoped
+/// to the configured service and layer so changing targets never resumes at another
+/// layer's offset.
 /// </summary>
 internal sealed class PreferencesInboxPullProgressStore : IInboxPullProgressStore
 {
-    private const string OffsetKey = "honua_collect_inbox_pull_next_offset";
-    private const string CountKey = "honua_collect_inbox_pull_pulled_count";
-    private const string CompletedKey = "honua_collect_inbox_pull_completed";
+    private readonly string _keyPrefix;
+
+    public PreferencesInboxPullProgressStore(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _keyPrefix = $"honua_collect_inbox_pull:{settings.Target.ServiceId}:{settings.Target.LayerId}:";
+    }
 
     public Task SaveProgressAsync(
         InboxPullCursor cursor,
@@ -21,17 +26,17 @@ internal sealed class PreferencesInboxPullProgressStore : IInboxPullProgressStor
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(cursor);
-        Preferences.Default.Set(OffsetKey, cursor.NextOffset);
-        Preferences.Default.Set(CountKey, cursor.PulledCount);
-        Preferences.Default.Set(CompletedKey, cursor.Completed);
+        Preferences.Default.Set(_keyPrefix + "next_offset", cursor.NextOffset);
+        Preferences.Default.Set(_keyPrefix + "pulled_count", cursor.PulledCount);
+        Preferences.Default.Set(_keyPrefix + "completed", cursor.Completed);
         return Task.CompletedTask;
     }
 
     public Task<InboxPullCursor> LoadCursorAsync(CancellationToken ct = default)
     {
-        var nextOffset = Preferences.Default.Get(OffsetKey, 0);
-        var pulledCount = Preferences.Default.Get(CountKey, 0L);
-        var completed = Preferences.Default.Get(CompletedKey, false);
+        var nextOffset = Preferences.Default.Get(_keyPrefix + "next_offset", 0);
+        var pulledCount = Preferences.Default.Get(_keyPrefix + "pulled_count", 0L);
+        var completed = Preferences.Default.Get(_keyPrefix + "completed", false);
         return Task.FromResult(new InboxPullCursor(nextOffset, pulledCount, completed));
     }
 }

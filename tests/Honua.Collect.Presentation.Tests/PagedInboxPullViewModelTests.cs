@@ -101,7 +101,7 @@ public sealed class PagedInboxPullViewModelTests
         Assert.Equal(1, vm.NewCount);
         Assert.Equal(0, vm.ConflictCount);
         Assert.Contains("Paused after error", vm.StatusSummary);
-        Assert.Single(vm.PulledRows);
+        Assert.Single(vm.LatestPageRows);
 
         // Fresh VM hydrates the durable cursor and shows resumable status immediately.
         var resumedVm = new PagedInboxPullViewModel(
@@ -128,6 +128,7 @@ public sealed class PagedInboxPullViewModelTests
         Assert.Equal(2, resumedVm.PulledCount);
         Assert.Equal(1, resumedVm.ConflictCount);
         Assert.Single(resumedVm.Conflicts);
+        Assert.Single(resumedVm.LatestPageRows);
         Assert.Contains("Complete:", resumedVm.StatusSummary);
         Assert.Equal([0, 1, 1], requestedOffsets);
     }
@@ -158,6 +159,6 @@ public sealed class PagedInboxPullViewModelTests
         Assert.Equal([0], offsets);
         Assert.Equal(1, vm.PulledCount);
         Assert.Equal(1, vm.NewCount);
-        Assert.Single(vm.PulledRows);
+        Assert.Single(vm.LatestPageRows);
     }
 }

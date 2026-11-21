@@ -4,28 +4,32 @@
              x:Class="Honua.Collect.App.Views.PagedInboxPullPage"
              Title="Paged Inbox Pull">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16,12" RowSpacing="10">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Padding="16,12" RowSpacing="10">
 
         <VerticalStackLayout Grid.Row="0" Spacing="4">
             <Label Text="{Binding StatusSummary}" FontAttributes="Bold" />
             <Label Text="{Binding LastError}" FontSize="12" TextColor="Red" />
         </VerticalStackLayout>
 
-        <Label Grid.Row="1" Text="Pulled classifications" FontSize="13" TextColor="Gray" />
+        <Label Grid.Row="1" Text="Latest page classifications" FontSize="13" TextColor="Gray" />
 
-        <CollectionView Grid.Row="2" ItemsSource="{Binding PulledRows}"
+        <CollectionView Grid.Row="2" ItemsSource="{Binding LatestPageRows}"
                         EmptyView="No pages pulled in this session yet.">
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Grid Padding="4,8" ColumnDefinitions="*,Auto">
-                        <Label Text="{Binding Server.ObjectId, StringFormat='Object #{0}'}" VerticalOptions="Center" />
+                        <Label Text="{Binding ObjectId, StringFormat='Object #{0}'}" VerticalOptions="Center" />
                         <Label Grid.Column="1" Text="{Binding Disposition}" FontSize="12" TextColor="Gray" VerticalOptions="Center" />
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <Grid Grid.Row="3" ColumnDefinitions="*,*" ColumnSpacing="10">
+        <Label Grid.Row="3"
+               Text="{Binding ConflictCount, StringFormat='Conflicts detected this session: {0}'}"
+               FontSize="12" TextColor="#B71C1C" />
+
+        <Grid Grid.Row="4" ColumnDefinitions="*,*" ColumnSpacing="10">
             <Button Text="Resume pull" Command="{Binding ResumeCommand}" />
             <Button Grid.Column="1" Text="Pull from start" Command="{Binding PullFromStartCommand}" />
         </Grid>

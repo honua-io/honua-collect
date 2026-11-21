@@ -116,6 +116,11 @@ public sealed class FormPageViewModel : ObservableObject
 
     private void RefreshAll()
     {
+        // Validate first so scalar FieldState values (including record-link collections
+        // mutated through RelatedRecords) and per-field validation errors are recomputed
+        // before bound FieldViewModels notify the UI.
+        var validation = _session.Validate();
+
         foreach (var field in Fields)
         {
             field.Refresh();
@@ -128,7 +133,6 @@ public sealed class FormPageViewModel : ObservableObject
 
         OnPropertyChanged(nameof(VisibleFields));
 
-        var validation = _session.Validate();
         CanSubmit = validation.IsValid;
         ErrorSummary = validation.IsValid
             ? string.Empty

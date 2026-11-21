@@ -17,17 +17,20 @@ public partial class RecordsPage : ContentPage
     private readonly IRecordHistoryStore _historyStore;
     private readonly RecordRevertService _revertService;
     private readonly IAuthSessionStore _sessionStore;
+    private readonly IDeviceAuthorization _authorization;
 
     public RecordsPage(
         RecordBook book,
         IRecordHistoryStore historyStore,
         RecordRevertService revertService,
-        IAuthSessionStore sessionStore)
+        IAuthSessionStore sessionStore,
+        IDeviceAuthorization authorization)
     {
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _historyStore = historyStore ?? throw new ArgumentNullException(nameof(historyStore));
         _revertService = revertService ?? throw new ArgumentNullException(nameof(revertService));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+        _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         InitializeComponent();
     }
 
@@ -51,12 +54,13 @@ public partial class RecordsPage : ContentPage
         }
 
         var editorId = _sessionStore.Current?.UserId;
-        if (string.IsNullOrWhiteSpace(editorId))
-        {
-            editorId = "local_field_user";
-        }
+        var canEdit = !string.IsNullOrWhiteSpace(editorId)
+            && _authorization.Can(CollectPermission.EditRecords, row.RecordId);
 
-        var historyVm = new RecordHistoryViewModel(_historyStore, row.Entry, _revertService, editorId);
+        var historyVm = canEdit
+            ? new RecordHistoryViewModel(_historyStore, row.Entry, _revertService, editorId!)
+            : new RecordHistoryViewModel(_historyStore, row.RecordId);
+
         await Navigation.PushAsync(new RecordHistoryPage(historyVm));
     }
 }

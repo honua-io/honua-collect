@@ -92,6 +92,6 @@ public partial class InboxPage : ContentPage
             await _book.AddSubmittedAsync(record);
         };
 
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 }

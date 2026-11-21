@@ -54,7 +54,7 @@ public partial class MainPage : ContentPage
         _session = FormSession.CreateForNewRecord(_activeForm, Guid.NewGuid().ToString("n"));
         var viewModel = new FormPageViewModel(_session);
         viewModel.SubmitSucceeded += OnSubmitted;
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
     private async void OnCaptureKitClicked(object? sender, EventArgs e)
@@ -63,7 +63,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Capture kit: {record.Media.Count} attachment(s), asset tag “{record.Values.GetValueOrDefault("asset_tag")}”.";
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
     private async void OnSmartFormClicked(object? sender, EventArgs e)
@@ -72,7 +72,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Smart form submitted — total {record.Values.GetValueOrDefault("total")}.";
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
     private async void OnDownloadFormClicked(object? sender, EventArgs e)

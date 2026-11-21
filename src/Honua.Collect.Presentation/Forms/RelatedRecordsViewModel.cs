@@ -65,9 +65,11 @@ public sealed class RelatedRecordsViewModel : ObservableObject
         _store = store;
         _idGenerator = idGenerator ?? (() => Guid.NewGuid().ToString("n"));
         Children = [];
-        CreateChildCommand = new RelayCommand(() => _ = CreateChildAsync(), () => !IsBusy);
-        LinkExistingCommand = new RelayCommand(() => _ = LinkExistingAsync(), () => !IsBusy);
-        UnlinkCommand = new RelayCommand<RelatedRecordRowViewModel>(row => _ = UnlinkAsync(row), row => row is not null && !IsBusy);
+        CreateChildCommand = new RelayCommand(() => _ = RunCommandAsync(() => CreateChildAsync()), () => !IsBusy);
+        LinkExistingCommand = new RelayCommand(() => _ = RunCommandAsync(() => LinkExistingAsync()), () => !IsBusy);
+        UnlinkCommand = new RelayCommand<RelatedRecordRowViewModel>(
+            row => _ = RunCommandAsync(() => UnlinkAsync(row)),
+            row => row is not null && !IsBusy);
         RefreshChildren();
     }
 
@@ -173,13 +175,21 @@ public sealed class RelatedRecordsViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var persisted = await _store.ListAsync(ParentRecordId, FieldId, ct).ConfigureAwait(false);
+            var persisted = await _store.ListAsync(ParentRecordId, FieldId, ct);
+            var added = false;
             foreach (var link in persisted)
             {
-                _related.Link(link.RecordId, link.Label, link.SourceId);
+                if (_related.Link(link.RecordId, link.Label, link.SourceId))
+                {
+                    added = true;
+                }
             }
 
             RefreshChildren();
+            if (added)
+            {
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
         }
         finally
         {
@@ -193,9 +203,14 @@ public sealed class RelatedRecordsViewModel : ObservableObject
     /// </summary>
     /// <param name="label">Optional display label; defaults to <see cref="NewChildLabel"/>.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The created child record.</returns>
-    public async Task<FieldRecord> CreateChildAsync(string? label = null, CancellationToken ct = default)
+    /// <returns>The created child record, or <see langword="null"/> if another operation is in flight.</returns>
+    public async Task<FieldRecord?> CreateChildAsync(string? label = null, CancellationToken ct = default)
     {
+        if (IsBusy)
+        {
+            return null;
+        }
+
         var effectiveLabel = string.IsNullOrWhiteSpace(label)
             ? (string.IsNullOrWhiteSpace(NewChildLabel) ? null : NewChildLabel.Trim())
             : label.Trim();
@@ -209,7 +224,15 @@ public sealed class RelatedRecordsViewModel : ObservableObject
             if (_store is not null)
             {
                 var link = _related.Children.Last(c => string.Equals(c.RecordId, child.RecordId, StringComparison.Ordinal));
-                await _store.LinkAsync(ParentRecordId, FieldId, link, Behavior, ct).ConfigureAwait(false);
+                try
+                {
+                    await _store.LinkAsync(ParentRecordId, FieldId, link, Behavior, ct);
+                }
+                catch
+                {
+                    _related.Unlink(child.RecordId);
+                    throw;
+                }
             }
 
             NewChildLabel = string.Empty;
@@ -231,12 +254,17 @@ public sealed class RelatedRecordsViewModel : ObservableObject
     /// <param name="childRecordId">Child record id; defaults to <see cref="ExistingRecordId"/>.</param>
     /// <param name="label">Optional display label; defaults to <see cref="ExistingRecordLabel"/>.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns><see langword="true"/> if a new link was added; <see langword="false"/> if invalid or duplicate.</returns>
+    /// <returns><see langword="true"/> if a new link was added; <see langword="false"/> if invalid, busy, or duplicate.</returns>
     public async Task<bool> LinkExistingAsync(
         string? childRecordId = null,
         string? label = null,
         CancellationToken ct = default)
     {
+        if (IsBusy)
+        {
+            return false;
+        }
+
         var id = string.IsNullOrWhiteSpace(childRecordId) ? ExistingRecordId.Trim() : childRecordId.Trim();
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -260,7 +288,15 @@ public sealed class RelatedRecordsViewModel : ObservableObject
             if (_store is not null)
             {
                 var link = _related.Children.Last(c => string.Equals(c.RecordId, id, StringComparison.Ordinal));
-                await _store.LinkAsync(ParentRecordId, FieldId, link, Behavior, ct).ConfigureAwait(false);
+                try
+                {
+                    await _store.LinkAsync(ParentRecordId, FieldId, link, Behavior, ct);
+                }
+                catch
+                {
+                    _related.Unlink(id);
+                    throw;
+                }
             }
 
             ExistingRecordId = string.Empty;
@@ -282,7 +318,7 @@ public sealed class RelatedRecordsViewModel : ObservableObject
     /// <returns><see langword="true"/> if a link was removed.</returns>
     public async Task<bool> UnlinkAsync(RelatedRecordRowViewModel? row, CancellationToken ct = default)
     {
-        if (row is null)
+        if (row is null || IsBusy)
         {
             return false;
         }
@@ -290,8 +326,7 @@ public sealed class RelatedRecordsViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var removed = _related.Unlink(row.RecordId);
-            if (!removed)
+            if (!_related.Children.Any(c => string.Equals(c.RecordId, row.RecordId, StringComparison.Ordinal)))
             {
                 StatusMessage = $"Record '{row.RecordId}' was not linked.";
                 return false;
@@ -299,9 +334,10 @@ public sealed class RelatedRecordsViewModel : ObservableObject
 
             if (_store is not null)
             {
-                await _store.UnlinkAsync(ParentRecordId, FieldId, row.RecordId, ct).ConfigureAwait(false);
+                await _store.UnlinkAsync(ParentRecordId, FieldId, row.RecordId, ct);
             }
 
+            _related.Unlink(row.RecordId);
             RefreshChildren();
             StatusMessage = $"Unlinked '{row.DisplayLabel}'.";
             Changed?.Invoke(this, EventArgs.Empty);
@@ -310,6 +346,18 @@ public sealed class RelatedRecordsViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    private async Task RunCommandAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            StatusMessage = $"Operation failed: {ex.Message}";
         }
     }
 
