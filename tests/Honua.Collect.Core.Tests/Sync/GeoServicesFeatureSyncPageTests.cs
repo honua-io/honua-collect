@@ -24,7 +24,7 @@ public sealed class GeoServicesFeatureSyncPageTests
         }
     }
 
-    private static GeoServicesTarget Target => new("inspections", 0);
+    private static GeoServicesTarget Target => new("https://honua.test", "inspections", 0);
 
     [Fact]
     public async Task QueryPageAsync_sends_offset_and_count_and_advances_cursor()
