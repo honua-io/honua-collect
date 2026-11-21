@@ -27,6 +27,7 @@
             <Label x:Name="ResultLabel" />
             <Button Text="Sync now" Command="{Binding SyncCommand}" />
             <Button Text="Pull from server" Clicked="OnPull" />
+            <Button Text="Resilient paged inbox pull" Clicked="OnOpenPagedInboxPull" />
         </VerticalStackLayout>
 
     </Grid>
