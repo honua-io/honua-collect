@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Storage;
@@ -176,6 +177,31 @@ public abstract class SqliteStoreBase
             _schemaGate.Release();
         }
     }
+
+    /// <summary>Formats a timestamp for SQLite TEXT storage in round-trip ISO-8601 form.</summary>
+    /// <param name="value">Timestamp to format.</param>
+    /// <returns>The round-trip formatted timestamp string.</returns>
+    protected static string ToStorage(DateTimeOffset value)
+        => value.ToString("O", CultureInfo.InvariantCulture);
+
+    /// <summary>Formats a nullable timestamp for SQLite parameter binding, returning <see cref="DBNull.Value"/> when null.</summary>
+    /// <param name="value">Nullable timestamp to format.</param>
+    /// <returns>The formatted string or <see cref="DBNull.Value"/>.</returns>
+    protected static object ToStorage(DateTimeOffset? value)
+        => value is { } v ? ToStorage(v) : DBNull.Value;
+
+    /// <summary>Parses a round-trip ISO-8601 timestamp read from SQLite TEXT storage.</summary>
+    /// <param name="value">Stored timestamp string.</param>
+    /// <returns>The parsed timestamp.</returns>
+    protected static DateTimeOffset FromStorage(string value)
+        => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    /// <summary>Reads a nullable round-trip ISO-8601 timestamp from a SQLite data reader.</summary>
+    /// <param name="reader">The active data reader.</param>
+    /// <param name="ordinal">Column ordinal.</param>
+    /// <returns>The parsed timestamp, or <see langword="null"/> when the column is SQL NULL.</returns>
+    protected static DateTimeOffset? FromStorage(SqliteDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal) ? null : FromStorage(reader.GetString(ordinal));
 
     private static bool LooksLikeConnectionString(string value)
         => value.Contains('=', StringComparison.Ordinal);

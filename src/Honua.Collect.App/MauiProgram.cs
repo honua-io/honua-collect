@@ -1,4 +1,5 @@
 using Honua.Collect.App.Services;
+using Honua.Collect.App.Views;
 using Honua.Collect.Core.Enterprise;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
@@ -95,7 +96,8 @@ public static class MauiProgram
 			return new AuthSessionManager(
 				sp.GetRequiredService<IAuthSessionStore>(),
 				sp.GetRequiredService<ISessionPersistence>(),
-				refresher.RefreshAsync);
+				refresher.RefreshAsync,
+				logger: sp.GetService<ILogger<AuthSessionManager>>());
 		});
 
 		// The transport handler validates/refreshes via the lifecycle just before
@@ -113,8 +115,8 @@ public static class MauiProgram
 		// as the record store. Secrets are scrubbed before persisting; the trail can be
 		// queried/exported off-device for SIEM/audit.
 		var auditDbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-audit.db");
-		builder.Services.AddSingleton<IAuditStore>(_ =>
-			new SqliteAuditStore(auditDbPath, DbKeyProvider.GetOrCreateKeyAsync().GetAwaiter().GetResult()));
+		builder.Services.AddSingleton<IAuditStore>(_ => new LazyAuditStore(async _ =>
+			new SqliteAuditStore(auditDbPath, await DbKeyProvider.GetOrCreateKeyAsync().ConfigureAwait(false))));
 		builder.Services.AddSingleton(sp => new AuditTrail(sp.GetRequiredService<IAuditStore>()));
 		builder.Services.AddSingleton<IAuditSink>(sp => sp.GetRequiredService<AuditTrail>());
 
@@ -237,6 +239,8 @@ public static class MauiProgram
 				factory.CreateClient(ServerHttpClient),
 				uploadHttp: factory.CreateClient(UploadHttpClient));
 		});
+		builder.Services.AddSingleton<Func<GeoServicesFeatureSync>>(sp =>
+			() => sp.GetRequiredService<GeoServicesFeatureSync>());
 
 		// The shared, thread-safe record book over a SQLCipher-encrypted store. The
 		// book builds the store lazily so the encryption key is fetched from secure
@@ -244,11 +248,19 @@ public static class MauiProgram
 		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-records.db");
 		builder.Services.AddSingleton(_ => new RecordBook(() => OpenEncryptedStoreAsync(dbPath)));
 
+		// Shell tab pages resolved via constructor injection (no static service locator).
+		builder.Services.AddTransient<MainPage>();
+		builder.Services.AddTransient<RecordsPage>();
+		builder.Services.AddTransient<SyncPage>();
+		builder.Services.AddTransient<GeometryCapturePage>();
+		builder.Services.AddTransient<SignaturePage>();
+		builder.Services.AddTransient<LoginPage>();
+		builder.Services.AddTransient<InboxPage>();
+		builder.Services.AddTransient<ExportPage>();
+
 		builder.Logging.AddDebug();
 
-		var app = builder.Build();
-		ServiceHelper.Initialize(app.Services);
-		return app;
+		return builder.Build();
 	}
 
 	/// <summary>

@@ -23,7 +23,7 @@ public static class DbKeyProvider
     /// <returns>A base64-encoded 256-bit key.</returns>
     public static async Task<string> GetOrCreateKeyAsync()
     {
-        var existing = await SecureStorage.Default.GetAsync(KeyName);
+        var existing = await SecureStorage.Default.GetAsync(KeyName).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existing))
         {
             return existing;
@@ -35,14 +35,14 @@ public static class DbKeyProvider
             // Re-check inside the lock: a concurrent caller may have created and stored
             // the key while we waited, in which case we must return that one — never
             // generate and overwrite it.
-            existing = await SecureStorage.Default.GetAsync(KeyName);
+            existing = await SecureStorage.Default.GetAsync(KeyName).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(existing))
             {
                 return existing;
             }
 
             var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await SecureStorage.Default.SetAsync(KeyName, key);
+            await SecureStorage.Default.SetAsync(KeyName, key).ConfigureAwait(false);
             return key;
         }
         finally

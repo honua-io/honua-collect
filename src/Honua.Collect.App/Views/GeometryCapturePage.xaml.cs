@@ -22,9 +22,7 @@ public partial class GeometryCapturePage : ContentPage
     private const int MinZoom = 2;
     private const int MaxZoom = 19;
 
-    private readonly OsmTileLoader _tiles = new(
-        Path.Combine(FileSystem.AppDataDirectory, "tiles"),
-        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.TileHttpClient));
+    private readonly OsmTileLoader _tiles;
     private readonly SlippyMapDrawable _map;
     private MapCaptureViewModel _vm = new(CapturedGeometryType.Point);
 
@@ -32,8 +30,12 @@ public partial class GeometryCapturePage : ContentPage
     private PointF _lastDrag;
     private double _moved;
 
-    public GeometryCapturePage()
+    public GeometryCapturePage(IHttpClientFactory httpClientFactory)
     {
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _tiles = new OsmTileLoader(
+            Path.Combine(FileSystem.AppDataDirectory, "tiles"),
+            httpClientFactory.CreateClient(MauiProgram.TileHttpClient));
         InitializeComponent();
 
         _map = new SlippyMapDrawable(_tiles) { Vertices = _vm.Vertices };

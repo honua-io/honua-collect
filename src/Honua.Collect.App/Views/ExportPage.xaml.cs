@@ -15,10 +15,11 @@ namespace Honua.Collect.App.Views;
 /// </summary>
 public partial class ExportPage : ContentPage
 {
-    private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
+    private readonly RecordBook _book;
 
-    public ExportPage()
+    public ExportPage(RecordBook book)
     {
+        _book = book ?? throw new ArgumentNullException(nameof(book));
         InitializeComponent();
     }
 

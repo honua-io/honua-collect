@@ -19,16 +19,26 @@ namespace Honua.Collect.App;
 /// </summary>
 public partial class MainPage : ContentPage
 {
-    private readonly AppSettings _settings = ServiceHelper.Get<AppSettings>();
-    private readonly RecordBook _book = ServiceHelper.Get<RecordBook>();
-    private readonly HttpClient _http =
-        ServiceHelper.Get<IHttpClientFactory>().CreateClient(MauiProgram.ServerHttpClient);
+    private readonly AppSettings _settings;
+    private readonly RecordBook _book;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly HttpClient _http;
+    private readonly Func<GeoServicesFeatureSync> _syncFactory;
 
     private FormDefinition _activeForm = SampleForms.FieldSite();
     private FormSession? _session;
 
-    public MainPage()
+    public MainPage(
+        AppSettings settings,
+        RecordBook book,
+        IHttpClientFactory httpClientFactory,
+        Func<GeoServicesFeatureSync> syncFactory)
     {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _book = book ?? throw new ArgumentNullException(nameof(book));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _http = _httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
+        _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
         InitializeComponent();
     }
 
@@ -37,7 +47,7 @@ public partial class MainPage : ContentPage
         _session = FormSession.CreateForNewRecord(_activeForm, Guid.NewGuid().ToString("n"));
         var viewModel = new FormPageViewModel(_session);
         viewModel.SubmitSucceeded += OnSubmitted;
-        await Navigation.PushAsync(new FormPage(viewModel));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
     }
 
     private async void OnCaptureKitClicked(object? sender, EventArgs e)
@@ -46,7 +56,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Capture kit: {record.Media.Count} attachment(s), asset tag “{record.Values.GetValueOrDefault("asset_tag")}”.";
-        await Navigation.PushAsync(new FormPage(viewModel));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
     }
 
     private async void OnSmartFormClicked(object? sender, EventArgs e)
@@ -55,7 +65,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Smart form submitted — total {record.Values.GetValueOrDefault("total")}.";
-        await Navigation.PushAsync(new FormPage(viewModel));
+        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory));
     }
 
     private async void OnDownloadFormClicked(object? sender, EventArgs e)
@@ -86,7 +96,7 @@ public partial class MainPage : ContentPage
         StatusLabel.Text = "Submitting to server…";
         try
         {
-            var sync = ServiceHelper.Get<GeoServicesFeatureSync>();
+            var sync = _syncFactory();
             var result = await sync.SubmitAsync(record, _settings.Target);
             if (result.Success)
             {

@@ -190,19 +190,5 @@ public sealed class SqliteAssignmentStore : SqliteStoreBase, IAssignmentStore
         indexCommand.CommandText =
             $"CREATE INDEX IF NOT EXISTS idx_{TableName}_user ON {TableName} (assigned_user_id);";
         await indexCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-
     }
-
-    private static object ToStorage(DateTimeOffset value)
-        => value.ToString("O", CultureInfo.InvariantCulture);
-
-    private static object ToStorage(DateTimeOffset? value)
-        => value is { } v ? ToStorage(v) : DBNull.Value;
-
-    private static DateTimeOffset? FromStorage(SqliteDataReader reader, int ordinal)
-        => reader.IsDBNull(ordinal)
-            ? null
-            : DateTimeOffset.Parse(reader.GetString(ordinal), CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind);
-
 }

@@ -4,6 +4,7 @@ using System.Text.Json;
 using Honua.Collect.Core.Ai;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
+using SkiaSharp;
 
 namespace Honua.Collect.Core.Tests.Ai;
 
@@ -569,6 +570,49 @@ public class AnthropicPhotoToFieldsProviderTests
             var image = doc.RootElement.GetProperty("messages")[0].GetProperty("content")
                 .EnumerateArray().Single(b => b.GetProperty("type").GetString() == "image");
             Assert.Equal(expectedMediaType, image.GetProperty("source").GetProperty("media_type").GetString());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Large_raster_photo_is_downscaled_and_reencoded_to_jpeg_before_upload()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".png");
+        try
+        {
+            using (var bitmap = new SKBitmap(2400, 1200))
+            {
+                bitmap.Erase(SKColors.SteelBlue);
+                using var image = SKImage.FromBitmap(bitmap);
+                using var png = image.Encode(SKEncodedImageFormat.Png, 100);
+                File.WriteAllBytes(path, png.ToArray());
+            }
+
+            var handler = new StubHandler(Ok(ToolUseResponse(("species", "Oak", 0.95))));
+            var provider = new AnthropicPhotoToFieldsProvider(new HttpClient(handler), new AnthropicPhotoToFieldsOptions
+            {
+                ApiKey = "sk-test-key",
+                MaxImageEdge = 800,
+                ImageQuality = 75,
+            });
+
+            var result = await provider.ExtractAsync(path, Form());
+
+            Assert.Single(result.Fields);
+            using var doc = JsonDocument.Parse(handler.LastBody!);
+            var source = doc.RootElement.GetProperty("messages")[0].GetProperty("content")
+                .EnumerateArray().Single(b => b.GetProperty("type").GetString() == "image")
+                .GetProperty("source");
+            Assert.Equal("image/jpeg", source.GetProperty("media_type").GetString());
+
+            var sentBytes = Convert.FromBase64String(source.GetProperty("data").GetString()!);
+            using var decoded = SKBitmap.Decode(sentBytes);
+            Assert.NotNull(decoded);
+            Assert.Equal(800, decoded.Width);
+            Assert.Equal(400, decoded.Height);
         }
         finally
         {

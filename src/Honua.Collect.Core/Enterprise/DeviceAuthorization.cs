@@ -175,6 +175,15 @@ public interface IDeviceAuthorization
     /// <param name="action">Action being attempted.</param>
     /// <param name="resource">Target resource id, or null.</param>
     void Require(CollectPermission action, string? resource = null);
+
+    /// <summary>
+    /// Asynchronously enforces an action, awaiting audit recording before throwing
+    /// <see cref="PermissionDeniedException"/> when denied.
+    /// </summary>
+    /// <param name="action">Action being attempted.</param>
+    /// <param name="resource">Target resource id, or null.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task RequireAsync(CollectPermission action, string? resource = null, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -223,7 +232,44 @@ public sealed class DeviceAuthorization : IDeviceAuthorization
         }
 
         var userId = _sessions.Current?.UserId ?? "(anonymous)";
-        _audit?.PermissionDenied(userId, action, resource);
+        if (_audit is not null)
+        {
+            _ = RecordDenialBestEffortAsync(_audit, userId, action, resource);
+        }
+
         throw new PermissionDeniedException(userId, action);
+    }
+
+    /// <inheritdoc />
+    public async Task RequireAsync(CollectPermission action, string? resource = null, CancellationToken ct = default)
+    {
+        if (Can(action, resource))
+        {
+            return;
+        }
+
+        var userId = _sessions.Current?.UserId ?? "(anonymous)";
+        if (_audit is not null)
+        {
+            await _audit.PermissionDeniedAsync(userId, action, resource, ct).ConfigureAwait(false);
+        }
+
+        throw new PermissionDeniedException(userId, action);
+    }
+
+    private static async Task RecordDenialBestEffortAsync(
+        IAuditSink audit,
+        string userId,
+        CollectPermission action,
+        string? resource)
+    {
+        try
+        {
+            await audit.PermissionDeniedAsync(userId, action, resource).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Fire-and-forget path for synchronous Require: never surface unobserved task exceptions.
+        }
     }
 }

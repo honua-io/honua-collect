@@ -35,13 +35,6 @@ public sealed class AuditTrail : IAuditSink
     DateTimeOffset IAuditSink.Now() => _clock.GetUtcNow();
 
     /// <inheritdoc />
-    public AuditEntry Record(AuditEvent auditEvent)
-        => RecordAsync(auditEvent).GetAwaiter().GetResult();
-
-    /// <summary>Asynchronously records an event, persisting it to the durable store.</summary>
-    /// <param name="auditEvent">Event to record.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The persisted entry.</returns>
     public async Task<AuditEntry> RecordAsync(AuditEvent auditEvent, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(auditEvent);
