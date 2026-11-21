@@ -28,10 +28,11 @@ def write_fixture_repo(root: Path) -> None:
         "</Project>\n",
         encoding="utf-8",
     )
+    (root / "docs").mkdir(parents=True)
     (root / "src/Honua.Collect.App/Honua.Collect.App.csproj").write_text(
         "<Project>\n"
         "  <ItemGroup>\n"
-        '    <MauiAsset Include="..\\..\\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" />\n'
+        '    <MauiAsset Include="..\\..\\docs\\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" />\n'
         '    <MauiAsset Include="..\\..\\NOTICE" LogicalName="NOTICE" />\n'
         "  </ItemGroup>\n"
         "  <ItemGroup>\n"
@@ -41,7 +42,7 @@ def write_fixture_repo(root: Path) -> None:
         "</Project>\n",
         encoding="utf-8",
     )
-    (root / "THIRD-PARTY-NOTICES.md").write_text(
+    (root / "docs/THIRD-PARTY-NOTICES.md").write_text(
         "# Notices\n\n"
         f"{MOD.TABLE_START}\n"
         "| Package | Version | License | Project |\n"
@@ -96,7 +97,7 @@ class LicenseHygieneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_fixture_repo(root)
-            notices = root / "THIRD-PARTY-NOTICES.md"
+            notices = root / "docs/THIRD-PARTY-NOTICES.md"
             notices.write_text(
                 f"{MOD.TABLE_START}\n"
                 "| Package | Version | License | Project |\n"
@@ -107,7 +108,7 @@ class LicenseHygieneTests(unittest.TestCase):
             )
             errors = MOD.run_checks(root)
             self.assertTrue(any("Version mismatch" in e and "Honua.Sdk.Field" in e for e in errors))
-            self.assertTrue(any("missing from THIRD-PARTY-NOTICES.md" in e and "SkiaSharp" in e for e in errors))
+            self.assertTrue(any("missing from docs/THIRD-PARTY-NOTICES.md" in e and "SkiaSharp" in e for e in errors))
 
     def test_missing_app_maui_asset_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

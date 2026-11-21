@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Verify SPDX license headers and THIRD-PARTY-NOTICES.md alignment.
+"""Verify SPDX license headers and docs/THIRD-PARTY-NOTICES.md alignment.
 
 Checks:
 1. Every C# file under src/ and tests/ (excluding bin/ and obj/) begins with
    the repository Apache-2.0 SPDX header.
-2. THIRD-PARTY-NOTICES.md lists every shipping PackageReference from
+2. docs/THIRD-PARTY-NOTICES.md lists every shipping PackageReference from
    src/**/*.csproj with its exact resolved version from Directory.Packages.props.
-3. src/Honua.Collect.App/Honua.Collect.App.csproj packages THIRD-PARTY-NOTICES.md
+3. src/Honua.Collect.App/Honua.Collect.App.csproj packages docs/THIRD-PARTY-NOTICES.md
    and NOTICE as MauiAsset entries so shipped binaries carry attributions.
 """
 from __future__ import annotations
@@ -116,10 +116,10 @@ def parse_notices_table(notices_path: Path) -> dict[str, str]:
 
 
 def check_third_party_notices(repo_root: Path) -> list[str]:
-    notices_path = repo_root / "THIRD-PARTY-NOTICES.md"
+    notices_path = repo_root / "docs/THIRD-PARTY-NOTICES.md"
     props_path = repo_root / "Directory.Packages.props"
     if not notices_path.is_file():
-        return ["Missing THIRD-PARTY-NOTICES.md at repository root"]
+        return ["Missing docs/THIRD-PARTY-NOTICES.md"]
     if not props_path.is_file():
         return ["Missing Directory.Packages.props at repository root"]
 
@@ -136,14 +136,14 @@ def check_third_party_notices(repo_root: Path) -> list[str]:
         if expected_version is None:
             errors.append(f"Shipping package missing from Directory.Packages.props: {pkg}")
         elif pkg not in listed:
-            errors.append(f"Shipping package missing from THIRD-PARTY-NOTICES.md: {pkg} ({expected_version})")
+            errors.append(f"Shipping package missing from docs/THIRD-PARTY-NOTICES.md: {pkg} ({expected_version})")
         elif listed[pkg] != expected_version:
             errors.append(
-                f"Version mismatch in THIRD-PARTY-NOTICES.md for {pkg}: "
+                f"Version mismatch in docs/THIRD-PARTY-NOTICES.md for {pkg}: "
                 f"found {listed[pkg]}, expected {expected_version}"
             )
     for extra in sorted(set(listed) - shipping):
-        errors.append(f"Non-shipping package listed in THIRD-PARTY-NOTICES.md: {extra}")
+        errors.append(f"Non-shipping package listed in docs/THIRD-PARTY-NOTICES.md: {extra}")
     return errors
 
 

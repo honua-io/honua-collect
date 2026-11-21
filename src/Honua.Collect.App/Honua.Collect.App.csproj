@@ -72,7 +72,7 @@
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-		<MauiAsset Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" />
+		<MauiAsset Include="..\..\docs\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" />
 		<MauiAsset Include="..\..\NOTICE" LogicalName="NOTICE" />
 		<!-- appsettings.json is read synchronously at startup, so embed it (a MauiAsset
 		     would require the async FileSystem API and risk an async-over-sync hang). -->
