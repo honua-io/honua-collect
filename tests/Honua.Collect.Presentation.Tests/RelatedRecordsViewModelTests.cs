@@ -42,7 +42,7 @@ public sealed class RelatedRecordsViewModelTests : IDisposable
             new FormSection
             {
                 SectionId = "main",
-                Title = "Main",
+                Label = "Main",
                 Fields =
                 [
                     new FormField
@@ -50,10 +50,7 @@ public sealed class RelatedRecordsViewModelTests : IDisposable
                         FieldId = "deficiencies",
                         Label = "Deficiencies",
                         Type = FormFieldType.RecordLink,
-                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                        {
-                            ["referencedFormId"] = "deficiency_report",
-                        },
+                        ReferencedFormId = "deficiency_report",
                     },
                 ],
             },

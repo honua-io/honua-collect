@@ -40,16 +40,18 @@ public sealed class PagedInboxPullViewModelTests
             new FormSection
             {
                 SectionId = "main",
-                Title = "Main",
+                Label = "Main",
                 Fields = [new FormField { FieldId = "status", Label = "Status", Type = FormFieldType.Text }],
             },
         ],
     };
 
-    private static PulledRecord ServerRecord(long objectId, string status) => new(
-        objectId,
-        new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase) { ["status"] = status },
-        Location: null);
+    private static PulledRecord ServerRecord(long objectId, string status)
+    {
+        var record = new FieldRecord { RecordId = $"srv-{objectId}", FormId = "site_check" };
+        record.Values["status"] = status;
+        return new PulledRecord(objectId, record);
+    }
 
     [Fact]
     public async Task Fault_mid_run_preserves_cursor_and_resume_finishes_without_repulling_first_page()
