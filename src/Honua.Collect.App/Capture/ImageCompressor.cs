@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 using Honua.Collect.Core.Imaging;
 using Microsoft.Maui.Graphics;
 using Microsoft.Maui.Graphics.Platform;

@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Automation;
 
 /// <summary>The context handed to an AI action when it runs as an automation step.</summary>

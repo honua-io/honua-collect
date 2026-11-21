@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 using Honua.Sdk.Field.Forms;
 
 namespace Honua.Collect.Core.Export;

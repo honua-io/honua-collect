@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 using Honua.Collect.Core.Field.Measurement;
 
 namespace Honua.Collect.Core.Tests.Field.Measurement;

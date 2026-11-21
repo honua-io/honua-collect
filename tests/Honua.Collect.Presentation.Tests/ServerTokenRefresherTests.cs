@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 using System.Net;
 using Honua.Collect.Core.Enterprise;
 using Honua.Collect.Presentation.Auth;

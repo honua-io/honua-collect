@@ -44,3 +44,7 @@ coverage*.xml
 cov-*.xml
 coverage*.json
 **/TestResults/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

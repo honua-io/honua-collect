@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Notifications;
 
 /// <summary>The kind of push notification delivered to the field app (BACKLOG E6).</summary>

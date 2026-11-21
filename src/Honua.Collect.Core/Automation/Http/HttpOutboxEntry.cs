@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Automation.Http;
 
 /// <summary>The delivery state of an HTTP request queued in the outbox.</summary>
