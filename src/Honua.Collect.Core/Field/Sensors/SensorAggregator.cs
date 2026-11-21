@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Field.Sensors;
 
 /// <summary>How a window of <see cref="SensorReading"/>s collapses to a single value.</summary>

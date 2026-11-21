@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Provenance;
 
 /// <summary>A capture provenance manifest together with its Ed25519 signature.</summary>

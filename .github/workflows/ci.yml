@@ -88,6 +88,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Verify license headers and third-party notices
+        run: |
+          python3 scripts/test-license-hygiene.py
+          python3 scripts/check-license-hygiene.py
+
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'

@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Reports;
 
 /// <summary>The kind of a parsed report block.</summary>

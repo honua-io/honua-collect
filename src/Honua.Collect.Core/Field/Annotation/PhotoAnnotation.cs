@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Field.Annotation;
 
 /// <summary>The kind of markup drawn on a photo (BACKLOG C7).</summary>

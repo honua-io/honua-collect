@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Enterprise;
 
 /// <summary>Auditable actions recorded on the device (BACKLOG E3).</summary>

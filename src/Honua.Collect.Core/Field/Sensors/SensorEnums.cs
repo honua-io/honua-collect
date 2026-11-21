@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Field.Sensors;
 
 /// <summary>Quality flag carried by a <see cref="SensorReading"/>.</summary>

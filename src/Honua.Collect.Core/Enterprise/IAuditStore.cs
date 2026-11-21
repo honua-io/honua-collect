@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Honua.Collect.Core.Enterprise;
 
 /// <summary>A filter over the audit trail for the query/export API (BACKLOG E3).</summary>

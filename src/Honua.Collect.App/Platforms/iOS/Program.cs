@@ -1,4 +1,7 @@
-﻿using ObjCRuntime;
+﻿// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+using ObjCRuntime;
 using UIKit;
 
 namespace Honua.Collect.App;

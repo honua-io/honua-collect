@@ -1,3 +1,6 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 using Honua.Collect.Core.Assignments;
 using Honua.Collect.Core.Field.Geometry;
 using Honua.Collect.Core.Records;
