@@ -6,6 +6,7 @@ using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Collect.Presentation.Mvvm;
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Forms;
 
@@ -59,6 +60,7 @@ public sealed class FieldViewModel : ObservableObject
         CaptureWidgetKind.Signature => "Sign",
         CaptureWidgetKind.Sketch => "Sketch",
         CaptureWidgetKind.Barcode => "Scan barcode",
+        CaptureWidgetKind.RecordLink => "Manage related records",
         _ => "Add attachment",
     };
 
@@ -111,6 +113,14 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>Number of media attachments captured for this field.</summary>
     public int MediaCount => State.Media.Count;
 
+    /// <summary>Number of linked child records for a <see cref="CaptureWidgetKind.RecordLink"/> field.</summary>
+    public int RelatedCount => State.Value switch
+    {
+        IReadOnlyCollection<FieldRecordLinkValue> links => links.Count,
+        ICollection<FieldRecordLinkValue> links => links.Count,
+        _ => 0,
+    };
+
     /// <summary>
     /// Registers a captured media file against this field (used by the photo/
     /// signature/sketch widgets). Pushes through the host and refreshes.
@@ -140,5 +150,6 @@ public sealed class FieldViewModel : ObservableObject
         OnPropertyChanged(nameof(ErrorText));
         OnPropertyChanged(nameof(HasError));
         OnPropertyChanged(nameof(MediaCount));
+        OnPropertyChanged(nameof(RelatedCount));
     }
 }

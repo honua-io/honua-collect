@@ -32,6 +32,9 @@ public enum FieldWidgetTemplate
     /// <summary>Barcode/QR scan editor.</summary>
     Barcode,
 
+    /// <summary>Related-records link editor (BACKLOG F4).</summary>
+    RecordLink,
+
     /// <summary>Fallback editor for any other field.</summary>
     Fallback,
 }
@@ -41,9 +44,9 @@ public static class FieldWidgetTemplateMap
 {
     /// <summary>
     /// Returns the editor template for a widget kind. Photo, video, audio,
-    /// signature, and sketch all share the media editor; barcode, text, number,
-    /// toggle, and choice each map to their own; everything else (date/time,
-    /// file, location, record link, calculated, and any future kind) falls back.
+    /// signature, and sketch all share the media editor; barcode, record link,
+    /// text, number, toggle, and choice each map to their own; everything else
+    /// (date/time, file, location, calculated, and any future kind) falls back.
     /// </summary>
     /// <param name="widget">The capture widget kind.</param>
     /// <returns>The editor template to render.</returns>
@@ -56,6 +59,7 @@ public static class FieldWidgetTemplateMap
         CaptureWidgetKind.Photo or CaptureWidgetKind.Video or CaptureWidgetKind.Audio
             or CaptureWidgetKind.Signature or CaptureWidgetKind.Sketch => FieldWidgetTemplate.Media,
         CaptureWidgetKind.Barcode => FieldWidgetTemplate.Barcode,
+        CaptureWidgetKind.RecordLink => FieldWidgetTemplate.RecordLink,
         _ => FieldWidgetTemplate.Fallback,
     };
 }

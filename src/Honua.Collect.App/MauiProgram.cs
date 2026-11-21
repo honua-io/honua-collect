@@ -4,6 +4,7 @@
 using Honua.Collect.App.Services;
 using Honua.Collect.App.Views;
 using Honua.Collect.Core.Enterprise;
+using Honua.Collect.Core.Field.Related;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Core.Sync;
 using Honua.Collect.Presentation.Auth;
@@ -250,6 +251,8 @@ public static class MauiProgram
 		// storage off the UI thread (no startup blocking).
 		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-records.db");
 		builder.Services.AddSingleton(_ => new RecordBook(() => OpenEncryptedStoreAsync(dbPath)));
+		builder.Services.AddSingleton<IRelatedRecordStore>(_ => new LazyRelatedRecordStore(async _ =>
+			new SqliteRelatedRecordStore(dbPath, await DbKeyProvider.GetOrCreateKeyAsync().ConfigureAwait(false))));
 
 		// Shell tab pages resolved via constructor injection (no static service locator).
 		builder.Services.AddTransient<MainPage>();
