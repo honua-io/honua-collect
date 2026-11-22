@@ -204,9 +204,13 @@ public partial class FormPage : ContentPage
     private async Task CapturePhotoAsync(FieldViewModel field)
     {
         var action = await DisplayActionSheet("Add photo", "Cancel", null, "Take photo", "Choose from gallery");
+
+        // Only a photo taken now is geotagged with the device position; a gallery
+        // pick may have been taken elsewhere and earlier.
+        var capturedNow = action == "Take photo" && MediaPicker.Default.IsCaptureSupported;
         var photo = action switch
         {
-            "Take photo" => MediaPicker.Default.IsCaptureSupported
+            "Take photo" => capturedNow
                 ? await MediaPicker.Default.CapturePhotoAsync()
                 : await MediaPicker.Default.PickPhotoAsync(),
             "Choose from gallery" => await MediaPicker.Default.PickPhotoAsync(),
@@ -218,7 +222,7 @@ public partial class FormPage : ContentPage
             return;
         }
 
-        var (geotag, geoMeta) = await TryCaptureGeotagAsync(field);
+        var (geotag, geoMeta) = capturedNow ? await TryCaptureGeotagAsync(field) : (null, null);
 
         // Land the original, downscale + re-encode (C8), and keep only the small copy.
         var imported = await CaptureFiles.ImportAsync(photo);
@@ -231,7 +235,7 @@ public partial class FormPage : ContentPage
         var metadata = geoMeta ?? new MediaCaptureMetadata();
 
         // Offer markup/annotation (C7) — keep the original path in metadata so
-        // annotations remain re-editable alongside the flattened evidence PNG.
+        // annotations remain re-editable alongside the flattened evidence JPEG.
         if (await DisplayAlert("Photo", "Add markup to this photo?", "Annotate", "Skip"))
         {
             var annotated = await PhotoAnnotationPage.CaptureResultAsync(Navigation, compressed);
@@ -271,7 +275,8 @@ public partial class FormPage : ContentPage
             return;
         }
 
-        var (geotag, geoMeta) = await TryCaptureGeotagAsync(field);
+        // As for photos, only a video recorded now gets the device position.
+        var (geotag, geoMeta) = action == "Record video" ? await TryCaptureGeotagAsync(field) : (null, null);
         var imported = await CaptureFiles.ImportAsync(video);
         CaptureOrDiscard(
             () => field.CaptureMedia(

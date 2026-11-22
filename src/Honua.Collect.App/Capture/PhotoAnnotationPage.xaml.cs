@@ -35,6 +35,7 @@ public partial class PhotoAnnotationPage : ContentPage
     private readonly TaskCompletionSource<PhotoAnnotationResult?> _result = new();
     private string _color = Palette[0].Hex;
     private AnnotationShape _tool = AnnotationShape.Freehand;
+    private bool _closing;
 
     private PhotoAnnotationPage(string sourceImagePath, PhotoAnnotationOverlay? initialOverlay = null)
     {
@@ -179,6 +180,12 @@ public partial class PhotoAnnotationPage : ContentPage
 
     private async void OnCancel(object? sender, EventArgs e)
     {
+        if (_closing)
+        {
+            return;
+        }
+
+        _closing = true;
         _result.TrySetResult(null);
         await Navigation.PopModalAsync();
         _drawable.Dispose();
@@ -186,11 +193,20 @@ public partial class PhotoAnnotationPage : ContentPage
 
     private async void OnSave(object? sender, EventArgs e)
     {
+        if (_closing)
+        {
+            return;
+        }
+
         if (_drawable.IsEmpty && !_hadInitialOverlay)
         {
             StatusLabel.Text = "Nothing to capture.";
             return;
         }
+
+        // Rendering runs off the UI thread; a second Save or Cancel tap meanwhile
+        // must not render again or pop the modal twice.
+        _closing = true;
 
         // Flatten with the Core renderer at the source image's native pixel size, so
         // the markup is burned in at full resolution and the saved evidence is the
@@ -202,8 +218,10 @@ public partial class PhotoAnnotationPage : ContentPage
         {
             await Task.Run(() => PhotoAnnotationRenderer.RenderToFile(_sourceImagePath, path, overlay));
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
+            or InvalidOperationException or ArgumentException)
         {
+            _closing = false;
             StatusLabel.Text = "Could not save the markup.";
             return;
         }

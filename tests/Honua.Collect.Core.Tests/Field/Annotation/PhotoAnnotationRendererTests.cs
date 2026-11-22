@@ -174,4 +174,33 @@ public class PhotoAnnotationRendererTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => PhotoAnnotationRenderer.RenderToJpeg(source, new PhotoAnnotationOverlay(), quality));
     }
+
+    [Fact]
+    public void RenderToPng_skips_degenerate_shapes_without_drawing()
+    {
+        var source = CreateBlankPng(40, 30, SKColors.White);
+        var overlay = new PhotoAnnotationOverlay([
+            new PhotoAnnotation { Shape = AnnotationShape.Arrow, Points = [new(0.5, 0.5), new(0.5, 0.5)] },
+            new PhotoAnnotation { Shape = AnnotationShape.Arrow, Points = [new(0.2, 0.2)] },
+            new PhotoAnnotation { Shape = AnnotationShape.Rectangle, Points = [new(0.2, 0.2)] },
+            new PhotoAnnotation { Shape = AnnotationShape.Text, Points = [new(0.2, 0.8)], Text = "  " },
+        ]);
+
+        using var decoded = SKBitmap.Decode(PhotoAnnotationRenderer.RenderToPng(source, overlay));
+
+        var nonWhitePixels = 0;
+        for (var y = 0; y < decoded.Height; y++)
+        {
+            for (var x = 0; x < decoded.Width; x++)
+            {
+                if (decoded.GetPixel(x, y) != SKColors.White)
+                {
+                    nonWhitePixels++;
+                }
+            }
+        }
+
+        // Only the zero-length arrow's round-capped line dot may be drawn.
+        Assert.True(nonWhitePixels < 40, $"Expected degenerate shapes to draw almost nothing, got {nonWhitePixels}.");
+    }
 }
