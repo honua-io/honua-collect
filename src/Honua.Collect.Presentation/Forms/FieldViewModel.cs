@@ -147,6 +147,7 @@ public sealed class FieldViewModel : ObservableObject
         OnPropertyChanged(nameof(Choices));
         OnPropertyChanged(nameof(SelectedChoice));
         OnPropertyChanged(nameof(IsVisible));
+        OnPropertyChanged(nameof(IsRequired));
         OnPropertyChanged(nameof(ErrorText));
         OnPropertyChanged(nameof(HasError));
         OnPropertyChanged(nameof(MediaCount));
