@@ -13,7 +13,7 @@ namespace Honua.Collect.App.Capture;
 /// Photo markup pad (BACKLOG C7). Draws a captured photo as the background of a
 /// <see cref="GraphicsView"/> and lets a field worker draw freehand strokes,
 /// arrows, rectangles, ellipses, and text callouts in selectable colors. On save
-/// the photo and markup are flattened to a new PNG at native resolution; the
+/// the photo and markup are flattened to a new JPEG at native resolution; the
 /// structured markup is also returned as a <see cref="PhotoAnnotationOverlay"/>
 /// in normalized 0..1 coordinates so the original image is never modified and
 /// the markup can be re-edited later. Shown modally via <see cref="CaptureAsync"/>
@@ -31,6 +31,7 @@ public partial class PhotoAnnotationPage : ContentPage
 
     private readonly AnnotationDrawable _drawable;
     private readonly bool _hadInitialOverlay;
+    private readonly string _sourceImagePath;
     private readonly TaskCompletionSource<PhotoAnnotationResult?> _result = new();
     private string _color = Palette[0].Hex;
     private AnnotationShape _tool = AnnotationShape.Freehand;
@@ -38,6 +39,7 @@ public partial class PhotoAnnotationPage : ContentPage
     private PhotoAnnotationPage(string sourceImagePath, PhotoAnnotationOverlay? initialOverlay = null)
     {
         _hadInitialOverlay = initialOverlay is { Count: > 0 };
+        _sourceImagePath = sourceImagePath;
         _drawable = new AnnotationDrawable(LoadImage(sourceImagePath), initialOverlay);
         InitializeComponent();
         Canvas.Drawable = _drawable;
@@ -46,7 +48,7 @@ public partial class PhotoAnnotationPage : ContentPage
 
     /// <summary>
     /// Presents the markup pad modally over <paramref name="sourceImagePath"/> and
-    /// returns the flattened PNG path, or <see langword="null"/> if the user
+    /// returns the flattened image path, or <see langword="null"/> if the user
     /// cancelled or drew nothing. Use <see cref="CaptureResultAsync"/> for the
     /// overlay metadata as well.
     /// </summary>
@@ -60,7 +62,7 @@ public partial class PhotoAnnotationPage : ContentPage
     }
 
     /// <summary>
-    /// Presents the markup pad modally and returns both the flattened PNG path and
+    /// Presents the markup pad modally and returns both the flattened image path and
     /// the structured <see cref="PhotoAnnotationOverlay"/>, or <see langword="null"/>
     /// if the user cancelled or drew nothing. Pass <paramref name="initialOverlay"/>
     /// to re-edit existing markup non-destructively.
@@ -177,9 +179,9 @@ public partial class PhotoAnnotationPage : ContentPage
 
     private async void OnCancel(object? sender, EventArgs e)
     {
-        _drawable.Dispose();
         _result.TrySetResult(null);
         await Navigation.PopModalAsync();
+        _drawable.Dispose();
     }
 
     private async void OnSave(object? sender, EventArgs e)
@@ -190,40 +192,25 @@ public partial class PhotoAnnotationPage : ContentPage
             return;
         }
 
-        // Flatten at the source image's native pixel size so the markup is burned
-        // in at full resolution rather than at the (smaller) on-screen size.
-        var width = (int)Math.Max(1, _drawable.ImageWidth);
-        var height = (int)Math.Max(1, _drawable.ImageHeight);
+        // Flatten with the Core renderer at the source image's native pixel size, so
+        // the markup is burned in at full resolution and the saved evidence is the
+        // same drawing that Core CI tests. JPEG keeps the attachment within the
+        // field's content-type and size policy, like an unannotated photo.
         var overlay = _drawable.BuildOverlay();
-
-        var path = CaptureFiles.NewPath(".png");
-        using (var context = new PlatformBitmapExportContext(width, height, 1))
+        var path = CaptureFiles.NewPath(".jpg");
+        try
         {
-            RenderFlattened(context.Canvas, width, height, overlay);
-            using var stream = File.Create(path);
-            context.WriteToStream(stream);
+            await Task.Run(() => PhotoAnnotationRenderer.RenderToFile(_sourceImagePath, path, overlay));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
+        {
+            StatusLabel.Text = "Could not save the markup.";
+            return;
         }
 
-        _drawable.Dispose();
         _result.TrySetResult(new PhotoAnnotationResult(path, overlay));
         await Navigation.PopModalAsync();
-    }
-
-    private void RenderFlattened(ICanvas canvas, int width, int height, PhotoAnnotationOverlay overlay)
-    {
-        var rect = new RectF(0, 0, width, height);
-
-        if (_drawable.Image is { } image)
-        {
-            canvas.DrawImage(image, 0, 0, width, height);
-        }
-        else
-        {
-            canvas.FillColor = Colors.White;
-            canvas.FillRectangle(rect);
-        }
-
-        DrawAnnotations(canvas, overlay.Annotations, width, height);
+        _drawable.Dispose();
     }
 
     private static void DrawAnnotations(
@@ -349,8 +336,6 @@ public partial class PhotoAnnotationPage : ContentPage
         public AnnotationDrawable(IImage? image, PhotoAnnotationOverlay? initialOverlay)
         {
             Image = image;
-            ImageWidth = image?.Width ?? 0f;
-            ImageHeight = image?.Height ?? 0f;
             if (initialOverlay is not null)
             {
                 _items.AddRange(initialOverlay.Annotations);
@@ -370,10 +355,6 @@ public partial class PhotoAnnotationPage : ContentPage
             Image?.Dispose();
             Image = null;
         }
-
-        public float ImageWidth { get; }
-
-        public float ImageHeight { get; }
 
         public string StrokeColorHex { get; set; } = Palette[0].Hex;
 
@@ -412,7 +393,7 @@ public partial class PhotoAnnotationPage : ContentPage
 
         public void EndShape()
         {
-            if (_activeShape is { } shape && _activePoints.Count > 0)
+            if (_activeShape is { } shape && _activePoints.Count > 0 && !IsZeroSizeTwoPointShape(shape))
             {
                 _items.Add(new PhotoAnnotation
                 {
@@ -425,6 +406,13 @@ public partial class PhotoAnnotationPage : ContentPage
             _activeShape = null;
             _activePoints.Clear();
         }
+
+        // A tap with the arrow, rectangle or ellipse tool has the same start and end
+        // point; saving it would add an invisible shape to the evidence overlay.
+        private bool IsZeroSizeTwoPointShape(AnnotationShape shape) =>
+            shape is not AnnotationShape.Freehand
+            && _activePoints.Count >= 2
+            && _activePoints[0].Equals(_activePoints[^1]);
 
         public void AddText(PointF p, string text, double width, double height)
         {
@@ -461,7 +449,7 @@ public partial class PhotoAnnotationPage : ContentPage
             }
 
             var toDraw = _items;
-            if (_activeShape is { } shape && _activePoints.Count > 0)
+            if (_activeShape is { } shape && _activePoints.Count > 0 && !IsZeroSizeTwoPointShape(shape))
             {
                 toDraw =
                 [
@@ -477,8 +465,8 @@ public partial class PhotoAnnotationPage : ContentPage
 
 /// <summary>
 /// The outcome of a <see cref="PhotoAnnotationPage"/> session: the flattened
-/// evidence PNG and the structured markup overlay (normalized coordinates).
+/// evidence JPEG and the structured markup overlay (normalized coordinates).
 /// </summary>
-/// <param name="ImagePath">Path to the flattened annotated PNG.</param>
+/// <param name="ImagePath">Path to the flattened annotated JPEG.</param>
 /// <param name="Overlay">The structured markup, in normalized image coordinates.</param>
 public sealed record PhotoAnnotationResult(string ImagePath, PhotoAnnotationOverlay Overlay);

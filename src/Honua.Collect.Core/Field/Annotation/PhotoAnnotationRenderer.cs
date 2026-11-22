@@ -23,7 +23,30 @@ public static class PhotoAnnotationRenderer
     /// <param name="sourceImageBytes">Encoded source image (JPEG, PNG, WebP, etc.).</param>
     /// <param name="overlay">Annotations to burn onto the image.</param>
     /// <returns>PNG-encoded bytes of the annotated image.</returns>
-    public static byte[] RenderToPng(ReadOnlySpan<byte> sourceImageBytes, PhotoAnnotationOverlay overlay)
+    public static byte[] RenderToPng(ReadOnlySpan<byte> sourceImageBytes, PhotoAnnotationOverlay overlay) =>
+        Render(sourceImageBytes, overlay, SKEncodedImageFormat.Png, 100);
+
+    /// <summary>
+    /// Renders <paramref name="overlay"/> on top of the encoded image bytes and
+    /// returns the flattened image as JPEG, so an annotated photo keeps the
+    /// size and content type of a compressed capture.
+    /// </summary>
+    /// <param name="sourceImageBytes">Encoded source image (JPEG, PNG, WebP, etc.).</param>
+    /// <param name="overlay">Annotations to burn onto the image.</param>
+    /// <param name="quality">JPEG quality, 1-100.</param>
+    /// <returns>JPEG-encoded bytes of the annotated image.</returns>
+    public static byte[] RenderToJpeg(ReadOnlySpan<byte> sourceImageBytes, PhotoAnnotationOverlay overlay, int quality = 85)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(quality, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(quality, 100);
+        return Render(sourceImageBytes, overlay, SKEncodedImageFormat.Jpeg, quality);
+    }
+
+    private static byte[] Render(
+        ReadOnlySpan<byte> sourceImageBytes,
+        PhotoAnnotationOverlay overlay,
+        SKEncodedImageFormat format,
+        int quality)
     {
         ArgumentNullException.ThrowIfNull(overlay);
         if (sourceImageBytes.IsEmpty)
@@ -54,18 +77,19 @@ public static class PhotoAnnotationRenderer
         }
 
         using var image = surface.Snapshot();
-        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100)
-            ?? throw new InvalidOperationException("Failed to encode annotated PNG.");
+        using var encoded = image.Encode(format, quality)
+            ?? throw new InvalidOperationException($"Failed to encode annotated {format} image.");
 
         return encoded.ToArray();
     }
 
     /// <summary>
     /// Renders <paramref name="overlay"/> onto <paramref name="sourcePath"/> and
-    /// writes the flattened PNG to <paramref name="destinationPath"/>.
+    /// writes the flattened image to <paramref name="destinationPath"/>: JPEG when
+    /// the destination ends in <c>.jpg</c> or <c>.jpeg</c>, PNG otherwise.
     /// </summary>
     /// <param name="sourcePath">Path to the source image file.</param>
-    /// <param name="destinationPath">Path where the flattened PNG will be written.</param>
+    /// <param name="destinationPath">Path where the flattened image will be written.</param>
     /// <param name="overlay">Annotations to burn onto the image.</param>
     public static void RenderToFile(string sourcePath, string destinationPath, PhotoAnnotationOverlay overlay)
     {
@@ -74,7 +98,11 @@ public static class PhotoAnnotationRenderer
         ArgumentNullException.ThrowIfNull(overlay);
 
         var bytes = File.ReadAllBytes(sourcePath);
-        var rendered = RenderToPng(bytes, overlay);
+        var extension = Path.GetExtension(destinationPath);
+        var rendered = extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+                ? RenderToJpeg(bytes, overlay)
+                : RenderToPng(bytes, overlay);
         File.WriteAllBytes(destinationPath, rendered);
     }
 
@@ -173,7 +201,7 @@ public static class PhotoAnnotationRenderer
             return;
         }
 
-        var headLen = MathF.Min(MathF.Max(strokeWidth * 4f, strokeWidth * 6f), length * 0.5f);
+        var headLen = MathF.Min(strokeWidth * 6f, length * 0.5f);
         var angle = MathF.Atan2(dy, dx);
         const float spread = 0.45f; // ~26 degrees
 

@@ -22,6 +22,8 @@ public sealed class FieldViewModel : ObservableObject
 {
     private readonly ICaptureHost _host;
     private readonly Action _onChanged;
+    private IReadOnlyList<MediaAttachmentItemViewModel>? _mediaItems;
+    private IReadOnlyList<MediaAttachmentItemViewModel>? _notifiedMediaItems;
 
     /// <summary>Creates a field view-model bound to a host field.</summary>
     /// <param name="host">The form session or repeat row that owns the field.</param>
@@ -121,9 +123,35 @@ public sealed class FieldViewModel : ObservableObject
     public bool CanCaptureMore =>
         State.Field.Validation.MaxMediaCount is not { } max || MediaCount < max;
 
-    /// <summary>Presentation summaries for each media attachment captured on this field.</summary>
-    public IReadOnlyList<MediaAttachmentItemViewModel> MediaItems =>
-        State.Media.Select(a => new MediaAttachmentItemViewModel(a)).ToList();
+    /// <summary>Presentation summaries for each media attachment captured on this field.
+    /// Built once per change of the field's attachments, not on every refresh.</summary>
+    public IReadOnlyList<MediaAttachmentItemViewModel> MediaItems
+    {
+        get
+        {
+            if (MediaItemsAreStale())
+            {
+                _mediaItems = State.Media.Select(a => new MediaAttachmentItemViewModel(a)).ToList();
+            }
+
+            return _mediaItems!;
+        }
+    }
+
+    /// <summary>
+    /// Whether a capture on this field should read the device location: false when
+    /// the field's media policy turns geotagging off, so the app does not prompt for
+    /// or read GPS only to have Core discard it.
+    /// </summary>
+    public bool CapturesLocation =>
+        !FormFieldTypes.IsMedia(State.Field.Type)
+        || (State.Field.MediaPolicy ?? new FieldMediaCapturePolicy()).CaptureLocation;
+
+    /// <summary>Whether this field holds the attachment with <paramref name="attachmentId"/>.</summary>
+    /// <param name="attachmentId">Attachment identifier.</param>
+    /// <returns><see langword="true"/> when the attachment belongs to this field.</returns>
+    public bool HasAttachment(string attachmentId) =>
+        State.Media.Any(a => string.Equals(a.AttachmentId, attachmentId, StringComparison.Ordinal));
 
     /// <summary>Number of linked child records for a <see cref="CaptureWidgetKind.RecordLink"/> field.</summary>
     public int RelatedCount => State.Value switch
@@ -269,7 +297,37 @@ public sealed class FieldViewModel : ObservableObject
         OnPropertyChanged(nameof(MediaCount));
         OnPropertyChanged(nameof(HasMedia));
         OnPropertyChanged(nameof(CanCaptureMore));
-        OnPropertyChanged(nameof(MediaItems));
+        var mediaItems = MediaItems;
+        if (!ReferenceEquals(mediaItems, _notifiedMediaItems))
+        {
+            _notifiedMediaItems = mediaItems;
+            OnPropertyChanged(nameof(MediaItems));
+        }
+
         OnPropertyChanged(nameof(RelatedCount));
+    }
+
+    private bool MediaItemsAreStale()
+    {
+        if (_mediaItems is null)
+        {
+            return true;
+        }
+
+        var media = State.Media;
+        if (media.Count != _mediaItems.Count)
+        {
+            return true;
+        }
+
+        for (var i = 0; i < media.Count; i++)
+        {
+            if (!ReferenceEquals(media[i], _mediaItems[i].Attachment))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

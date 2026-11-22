@@ -137,4 +137,41 @@ public class PhotoAnnotationRendererTests
         Assert.Throws<ArgumentException>(() => PhotoAnnotationRenderer.RenderToPng([], overlay));
         Assert.Throws<InvalidDataException>(() => PhotoAnnotationRenderer.RenderToPng([1, 2, 3, 4], overlay));
     }
+
+    [Fact]
+    public void RenderToFile_writes_jpeg_for_a_jpg_destination()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"honua-ann-{Guid.NewGuid():n}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var srcPath = Path.Combine(tempDir, "src.png");
+            var dstPath = Path.Combine(tempDir, "out.jpg");
+            File.WriteAllBytes(srcPath, CreateBlankPng(64, 48, SKColors.White));
+            var overlay = new PhotoAnnotationOverlay([
+                new PhotoAnnotation { Shape = AnnotationShape.Rectangle, Points = [new(0.2, 0.2), new(0.8, 0.8)] },
+            ]);
+
+            PhotoAnnotationRenderer.RenderToFile(srcPath, dstPath, overlay);
+
+            using var codec = SKCodec.Create(dstPath);
+            Assert.Equal(SKEncodedImageFormat.Jpeg, codec.EncodedFormat);
+            Assert.Equal(64, codec.Info.Width);
+            Assert.Equal(48, codec.Info.Height);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    public void RenderToJpeg_rejects_quality_out_of_range(int quality)
+    {
+        var source = CreateBlankPng(8, 8, SKColors.White);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => PhotoAnnotationRenderer.RenderToJpeg(source, new PhotoAnnotationOverlay(), quality));
+    }
 }
