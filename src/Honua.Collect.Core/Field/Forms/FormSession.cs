@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Honua.Collect.Core.Field.Forms.Cascade;
+using Honua.Collect.Core.Field.Forms.Validation;
 using Honua.Collect.Core.Field.Related;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Forms.Expressions;
@@ -40,6 +41,7 @@ public sealed class FormSession : ICaptureHost
     private readonly Dictionary<string, ChoiceCascadeRule> _cascades = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RecordLinkBehavior> _linkBehaviors = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RelatedRecords> _related = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IReadOnlyList<FormFieldValidationRule> _validationRules;
     private readonly FormDefinition _scalarForm;
 
     private FormSession(
@@ -48,7 +50,8 @@ public sealed class FormSession : ICaptureHost
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
         IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
         Localization.FormLocalization? localization = null,
-        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null)
+        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null,
+        IEnumerable<FormFieldValidationRule>? validationRules = null)
     {
         // When a localization service is supplied (BACKLOG F2), the runtime binds to
         // the form localized to the active language. Field ids, types, validation,
@@ -58,6 +61,7 @@ public sealed class FormSession : ICaptureHost
 
         Form = form;
         Record = record;
+        _validationRules = validationRules is null ? [] : validationRules.ToList();
 
         if (cascadeRules is not null)
         {
@@ -204,17 +208,23 @@ public sealed class FormSession : ICaptureHost
     /// keyed by field id. Surfaced through <see cref="GetRelated"/>; defaults to
     /// <see cref="RecordLinkBehavior.Cascade"/> for any field not listed.
     /// </param>
+    /// <param name="validationRules">
+    /// Optional product-level validation rules (conditional requiredness, regex
+    /// pattern, numeric range, and text length) evaluated live alongside the SDK
+    /// validator.
+    /// </param>
     public static FormSession Open(
         FormDefinition form,
         FieldRecord record,
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds = null,
         IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
         Localization.FormLocalization? localization = null,
-        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null)
+        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null,
+        IEnumerable<FormFieldValidationRule>? validationRules = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(record);
-        return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors);
+        return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors, validationRules);
     }
 
     /// <summary>Starts a session for a brand-new record.</summary>
@@ -254,6 +264,11 @@ public sealed class FormSession : ICaptureHost
     /// keyed by field id. Surfaced through <see cref="GetRelated"/>; defaults to
     /// <see cref="RecordLinkBehavior.Cascade"/> for any field not listed.
     /// </param>
+    /// <param name="validationRules">
+    /// Optional product-level validation rules (conditional requiredness, regex
+    /// pattern, numeric range, and text length) evaluated live alongside the SDK
+    /// validator.
+    /// </param>
     /// <returns>A session for a new draft record.</returns>
     public static FormSession CreateForNewRecord(
         FormDefinition form,
@@ -264,7 +279,8 @@ public sealed class FormSession : ICaptureHost
         IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
         IReadOnlyDictionary<string, object?>? seedDefaults = null,
         Localization.FormLocalization? localization = null,
-        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null)
+        IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null,
+        IEnumerable<FormFieldValidationRule>? validationRules = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -281,7 +297,7 @@ public sealed class FormSession : ICaptureHost
             ApplyResolvedDefaults(form, record, seedDefaults);
         }
 
-        return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors);
+        return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors, validationRules);
     }
 
     /// <summary>Gets the live state for a field.</summary>
@@ -464,6 +480,26 @@ public sealed class FormSession : ICaptureHost
         var visibleErrors = validation.Errors
             .Where(error => _states.TryGetValue(error.FieldId, out var s) && s.IsVisible)
             .ToList();
+
+        foreach (var state in _ordered)
+        {
+            state.IsRequired = FieldValidationEvaluator.IsRequired(state.Field, _validationRules, Record.Values);
+
+            if (_validationRules.Count > 0 && state.IsVisible)
+            {
+                var sdkFlaggedRequired = state.Field.Required &&
+                    visibleErrors.Any(e => string.Equals(e.FieldId, state.FieldId, StringComparison.OrdinalIgnoreCase));
+                var ruleErrors = FieldValidationEvaluator.Evaluate(
+                    state,
+                    _validationRules,
+                    Record.Values,
+                    sdkAlreadyFlaggedRequired: sdkFlaggedRequired);
+                if (ruleErrors.Count > 0)
+                {
+                    visibleErrors.AddRange(ruleErrors);
+                }
+            }
+        }
 
         foreach (var state in _ordered)
         {
