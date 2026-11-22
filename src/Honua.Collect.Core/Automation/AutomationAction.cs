@@ -121,3 +121,20 @@ public sealed record ScheduleFollowUpAction(string Description, int DueInDays) :
 /// <param name="ActionId">Identifier of the registered AI action to invoke.</param>
 /// <param name="Prompt">Optional prompt/instruction passed to the action.</param>
 public sealed record RunAiAction(string ActionId, string? Prompt = null) : AutomationAction;
+
+/// <summary>
+/// Routes the current record to a configured webhook or integration target by its
+/// <paramref name="TargetId"/> (#127). Unlike <see cref="HttpRequestAction"/> (which
+/// embeds a static URL and body in the rule), this action decouples form rules from
+/// endpoint URLs, signing secrets, and payload formats: the
+/// <see cref="Webhooks.RecordAutomationRouter"/> resolves the target, serializes the
+/// record payload, signs it, and enqueues it into the durable
+/// <see cref="Http.HttpRequestOutbox"/>.
+/// </summary>
+/// <param name="TargetId">Identifier of the configured <see cref="Webhooks.WebhookTarget"/>.</param>
+/// <param name="EventType">Optional override for the emitted webhook event name.</param>
+/// <param name="ExtraMetadata">Optional key/value metadata merged into the webhook payload.</param>
+public sealed record DispatchWebhookAction(
+    string TargetId,
+    string? EventType = null,
+    IReadOnlyDictionary<string, string>? ExtraMetadata = null) : AutomationAction;

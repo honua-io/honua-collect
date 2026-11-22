@@ -28,6 +28,7 @@ public sealed class FieldState
         Field = field ?? throw new ArgumentNullException(nameof(field));
         Section = section ?? throw new ArgumentNullException(nameof(section));
         RepeatInstance = repeatInstance;
+        IsRequired = field.Required;
         AvailableChoices = field.Choices ?? [];
     }
 
@@ -57,10 +58,11 @@ public sealed class FieldState
     public bool IsVisible { get; internal set; } = true;
 
     /// <summary>
-    /// Whether a value is currently required. Mirrors <see cref="FormField.Required"/>
-    /// but is only enforced while <see cref="IsVisible"/> is <see langword="true"/>.
+    /// Whether a value is currently required, combining <see cref="FormField.Required"/>
+    /// with any conditional requiredness rules. Only enforced while
+    /// <see cref="IsVisible"/> is <see langword="true"/>.
     /// </summary>
-    public bool IsRequired => Field.Required;
+    public bool IsRequired { get; internal set; }
 
     /// <summary>Validation messages for this field from the last validation pass.</summary>
     public IReadOnlyList<string> Errors => _errors;
