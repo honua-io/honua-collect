@@ -8,10 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.History;
 
-/// <summary>
-/// The durable edit log (BACKLOG #38): records each committed edit as a versioned,
-/// field-level diff and advances the entry's monotonic version counter.
-/// </summary>
 public sealed class RecordEditLogTests : IDisposable
 {
     private readonly string _dbPath;

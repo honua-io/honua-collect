@@ -7,43 +7,19 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.History;
 
-/// <summary>
-/// An <see cref="IRecordHistoryStore"/> backed by the same SQLite database file the
-/// captured records live in (BACKLOG #38 reuses the existing storage seam — no new
-/// database). Each <see cref="RecordEdit"/> is appended to a dedicated
-/// <c>record_edit_history</c> table keyed by <c>(record_id, sequence)</c>; the
-/// field-level <see cref="FieldChange"/>s are serialized to JSON
-/// <em>preserving each value's type</em> (a long stays a number, a bool stays a
-/// boolean, a list stays an array) so a revert restores the original typed value
-/// and a follow-up diff sees no spurious type-flip change. Values round-trip back
-/// as <see cref="System.Text.Json.JsonElement"/>s — exactly as
-/// <see cref="Storage.SqliteRecordStore"/> rehydrates live record values — so the
-/// history and the live record compare like-for-like. The primary key plus the
-/// next-sequence check in <see cref="AppendAsync"/> keep the per-record sequence
-/// monotonic and gap-free, so the log is tamper-evident.
-/// </summary>
 public sealed class SqliteRecordHistoryStore : SqliteStoreBase, IRecordHistoryStore
 {
     private const string TableName = "record_edit_history";
 
     private static readonly JsonSerializerOptions ChangesJsonOptions = new(JsonSerializerDefaults.General);
 
-    /// <summary>
-    /// Creates a history store over the given connection string or database file
-    /// path (same conventions as <see cref="Storage.SqliteRecordStore"/>), so both
-    /// stores can target one device database.
-    /// </summary>
-    /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    /// <param name="encryptionKey">Optional SQLCipher key; when set, the database must be encrypted at rest.</param>
     public SqliteRecordHistoryStore(string connectionStringOrPath, string? encryptionKey = null)
         : base(connectionStringOrPath, encryptionKey)
     {
     }
 
-    /// <inheritdoc />
     protected override string StoreDescription => "field history database";
 
-    /// <inheritdoc />
     public async Task AppendAsync(string recordId, RecordEdit edit, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -81,7 +57,6 @@ public sealed class SqliteRecordHistoryStore : SqliteStoreBase, IRecordHistorySt
         await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<RecordEdit>> GetHistoryAsync(string recordId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -106,7 +81,6 @@ public sealed class SqliteRecordHistoryStore : SqliteStoreBase, IRecordHistorySt
         return edits;
     }
 
-    /// <inheritdoc />
     public async Task<int> GetNextSequenceAsync(string recordId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -191,7 +165,7 @@ public sealed class SqliteRecordHistoryStore : SqliteStoreBase, IRecordHistorySt
     // unambiguous.
     private static object ReadNumber(JsonElement element)
     {
-        // NB: box each branch to object explicitly. A `cond ? long : double` ternary
+        // NB: box each branch to object explicitly. A `cond ? long: double` ternary
         // unifies to double, which would silently widen an integral 5L to 5d.
         if (element.TryGetInt64(out var l))
         {
@@ -201,7 +175,6 @@ public sealed class SqliteRecordHistoryStore : SqliteStoreBase, IRecordHistorySt
         return element.GetDouble();
     }
 
-    /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();

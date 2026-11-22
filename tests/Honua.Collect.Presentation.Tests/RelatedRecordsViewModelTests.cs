@@ -9,10 +9,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Tests;
 
-/// <summary>
-/// Covers the related-records (F4) view-model and field-level integration: creating,
-/// linking, unlinking, durable SQLite persistence, hydration, and integrity policies.
-/// </summary>
 public sealed class RelatedRecordsViewModelTests : IDisposable
 {
     private readonly string _dbPath;

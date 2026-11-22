@@ -10,18 +10,8 @@ using ZXing.Common;
 
 namespace Honua.Collect.App.Capture;
 
-/// <summary>
-/// Decodes a barcode / QR code from a still image (BACKLOG C6). The image is
-/// captured with the camera or picked from the gallery, then decoded with the
-/// pure-.NET ZXing core — ZXing.Net.Maui's live-preview control only targets
-/// net6, so this still-image path keeps the feature on net10 without that
-/// dependency.
-/// </summary>
 public static class BarcodeDecoder
 {
-    /// <summary>Decodes the first barcode found in the image, or null if none.</summary>
-    /// <param name="imagePath">Path to the image file to decode.</param>
-    /// <returns>The decoded payload text, or null.</returns>
     public static Task<string?> DecodeAsync(string imagePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);

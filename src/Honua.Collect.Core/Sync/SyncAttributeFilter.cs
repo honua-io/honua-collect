@@ -6,32 +6,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Sync;
 
-/// <summary>
-/// A <c>where</c>-style attribute predicate for selective sync (BACKLOG S2): a
-/// small, SQL-like filter that decides whether a record's attribute
-/// <see cref="FieldRecord.Values"/> match, without a database. The same text is
-/// also emitted to the GeoServices <c>query</c> endpoint as the <c>where</c>
-/// clause so the server pre-filters the pull, and is re-applied locally so the
-/// device never trusts the server to have filtered correctly.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The grammar is a GeoServices REST <c>where</c> subset:
-/// <c>field op value [AND|OR field op value ...]</c> where <c>op</c> is one of
-/// <c>= != &lt;&gt; &lt; &lt;= &gt; &gt;=</c>, <c>LIKE</c> (with <c>%</c>
-/// wildcards), <c>IN (v1, v2, ...)</c>, or <c>IS NULL</c> / <c>IS NOT NULL</c>.
-/// String literals are single-quoted; bare tokens are parsed as numbers. <c>AND</c>
-/// binds tighter than <c>OR</c>. Comparisons are culture-invariant; numeric
-/// comparisons fall back to a case-insensitive string compare when either side is
-/// non-numeric so a text field still filters predictably.
-/// </para>
-/// <para>
-/// This is a filter, not a general SQL engine: parentheses, functions, and joins
-/// are out of scope. Anything it cannot parse throws <see cref="FormatException"/>
-/// at construction so a bad config fails fast instead of silently syncing
-/// everything.
-/// </para>
-/// </remarks>
 public sealed class SyncAttributeFilter
 {
     private readonly string _where;
@@ -43,13 +17,8 @@ public sealed class SyncAttributeFilter
         _predicate = predicate;
     }
 
-    /// <summary>The original <c>where</c> text (used as the server query clause).</summary>
     public string Where => _where;
 
-    /// <summary>Parses a <c>where</c> clause into a reusable filter.</summary>
-    /// <param name="where">The <c>where</c>-style predicate text.</param>
-    /// <returns>The compiled filter.</returns>
-    /// <exception cref="FormatException">The clause could not be parsed.</exception>
     public static SyncAttributeFilter Parse(string where)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(where);
@@ -64,9 +33,6 @@ public sealed class SyncAttributeFilter
         return new SyncAttributeFilter(where.Trim(), predicate);
     }
 
-    /// <summary>Whether a record's attributes satisfy the predicate.</summary>
-    /// <param name="record">Record to test.</param>
-    /// <returns><see langword="true"/> when the record matches.</returns>
     public bool Matches(FieldRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -141,7 +107,7 @@ public sealed class SyncAttributeFilter
             return r => negate ? Lookup(r, field) is not null : Lookup(r, field) is null;
         }
 
-        // field IN (v1, v2, ...)
+        // field IN (v1, v2,...)
         if (IsKeyword(op, "IN"))
         {
             var members = ParseInList(tokens, ref index);

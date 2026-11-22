@@ -5,10 +5,6 @@ using Honua.Collect.Core.History;
 
 namespace Honua.Collect.App.Services;
 
-/// <summary>
-/// Lazily initializes an <see cref="IRecordHistoryStore"/> through an async factory
-/// so the encryption key is fetched from secure storage off the startup thread.
-/// </summary>
 internal sealed class LazyRecordHistoryStore : IRecordHistoryStore
 {
     private readonly Func<CancellationToken, Task<IRecordHistoryStore>> _factory;

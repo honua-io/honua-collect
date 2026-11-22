@@ -6,25 +6,13 @@ using Honua.Collect.Core.Enterprise;
 
 namespace Honua.Collect.Presentation.Auth;
 
-/// <summary>
-/// Exchanges sign-in credentials for a short-lived bearer token at the server's
-/// GeoServices REST-style token endpoint (<c>/sharing/rest/generateToken</c>). On success it
-/// returns an <see cref="AuthSession"/> whose <see cref="AuthSession.AccessToken"/>
-/// is the server-issued token (NOT the user's password) and whose expiry is the
-/// server's — so the transport never carries the raw password and stale tokens are
-/// withheld. Extracted from the login page so the exchange is unit-testable.
-/// </summary>
 public sealed class ServerCredentialVerifier
 {
-    /// <summary>Default GeoServices REST token endpoint path.</summary>
     public const string DefaultTokenEndpoint = "/sharing/rest/generateToken";
 
     private readonly HttpClient _http;
     private readonly string _tokenEndpoint;
 
-    /// <summary>Creates the verifier.</summary>
-    /// <param name="http">HTTP client pointed at the server (base address set).</param>
-    /// <param name="tokenEndpoint">The token-issuing endpoint path.</param>
     public ServerCredentialVerifier(HttpClient http, string tokenEndpoint = DefaultTokenEndpoint)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -32,7 +20,6 @@ public sealed class ServerCredentialVerifier
         _tokenEndpoint = tokenEndpoint;
     }
 
-    /// <summary>A <see cref="CredentialVerifier"/> over this verifier — pass to a <see cref="LoginViewModel"/>.</summary>
     public async Task<AuthSession?> VerifyAsync(string username, string password, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -52,10 +39,6 @@ public sealed class ServerCredentialVerifier
         return ParseTokenResponse(username, body);
     }
 
-    /// <summary>
-    /// Parses a GeoServices REST <c>generateToken</c> response into a session, or null for an
-    /// error/invalid-credentials body (which has no <c>token</c>). Testable without HTTP.
-    /// </summary>
     public static AuthSession? ParseTokenResponse(string username, string json)
     {
         if (string.IsNullOrWhiteSpace(json))

@@ -5,17 +5,8 @@ using System.Globalization;
 
 namespace Honua.Collect.Core.Field;
 
-/// <summary>
-/// Shared value-coercion helpers for comparing portable field values. Form
-/// values arrive as loosely typed <see cref="object"/>s (a number may be an
-/// <see cref="int"/>, a <see cref="double"/>, or a numeric string), so equality
-/// and ordering need consistent coercion. Used by both the form runtime
-/// (visibility evaluation) and the conflict detector so they agree on whether
-/// two values are "the same".
-/// </summary>
 internal static class FieldValues
 {
-    /// <summary>Loosely-typed equality: numeric when both coerce to numbers, else case-insensitive text.</summary>
     public static bool AreEqual(object? left, object? right)
     {
         if (left is null && right is null)
@@ -31,7 +22,6 @@ internal static class FieldValues
         return string.Equals(ToText(left), ToText(right), StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Attempts to coerce a value to a <see cref="double"/>.</summary>
     public static bool TryAsDouble(object? value, out double parsed)
     {
         switch (value)
@@ -53,7 +43,6 @@ internal static class FieldValues
         }
     }
 
-    /// <summary>Renders a value to its invariant text form.</summary>
     public static string ToText(object? value) => value switch
     {
         null => string.Empty,

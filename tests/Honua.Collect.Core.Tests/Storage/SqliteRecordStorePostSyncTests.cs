@@ -8,12 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Storage;
 
-/// <summary>
-/// Persistence of post-sync editability + edit-version on the record store
-/// (BACKLOG #38): a re-edited synced record round-trips as a single
-/// <see cref="RecordSyncState.PendingUpdate"/> row that keeps its server id and
-/// version across a restart, with no duplicate insert.
-/// </summary>
 public sealed class SqliteRecordStorePostSyncTests : IDisposable
 {
     private readonly string _dbPath;

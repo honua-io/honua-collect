@@ -13,7 +13,7 @@ public class SyncExtentTests
     {
         // A UTM-style extent in metres — far outside any valid lat/lon range, which
         // is the whole point: these projected easting/northing values would be
-        // nonsense if funnelled through a WGS84 lat/lon type (#302).
+        // nonsense if funnelled through a WGS84 lat/lon type.
         var extent = new SyncExtent(500_000, 4_100_000, 510_000, 4_110_000);
 
         Assert.True(extent.Contains(new PlanarPoint(505_000, 4_105_000)));  // inside

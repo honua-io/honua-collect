@@ -5,15 +5,8 @@ using SkiaSharp;
 
 namespace Honua.Collect.Core.Tests.Imaging;
 
-/// <summary>
-/// Generates small synthetic image bytes for the C8 resize tests — no device, no
-/// fixture files. Paints a deterministic two-tone pattern (left half red, right half
-/// blue) so orientation can be asserted by sampling a known corner of the decoded
-/// output. EXIF orientation is injected by hand-writing a minimal APP1/TIFF block.
-/// </summary>
 internal static class SyntheticImage
 {
-    /// <summary>Encodes a width x height image with the left half red and right half blue.</summary>
     public static byte[] TwoTone(int width, int height, SKEncodedImageFormat format, int quality = 90)
     {
         using var bitmap = new SKBitmap(width, height);
@@ -29,11 +22,6 @@ internal static class SyntheticImage
         return data.ToArray();
     }
 
-    /// <summary>
-    /// Wraps a JPEG with an EXIF APP1 segment carrying the given orientation tag (1–8),
-    /// so a resizer's EXIF-normalisation path can be exercised. The pixel data is left
-    /// unrotated; only the orientation tag is set.
-    /// </summary>
     public static byte[] JpegWithExifOrientation(int width, int height, ushort orientation)
     {
         var jpeg = TwoTone(width, height, SKEncodedImageFormat.Jpeg);
@@ -76,10 +64,8 @@ internal static class SyntheticImage
         return result.ToArray();
     }
 
-    /// <summary>Decodes bytes back to a bitmap for assertions.</summary>
     public static SKBitmap Decode(byte[] bytes) => SKBitmap.Decode(bytes);
 
-    /// <summary>The dominant colour sampled at the given pixel of decoded bytes.</summary>
     public static SKColor PixelAt(byte[] bytes, int x, int y)
     {
         using var bitmap = SKBitmap.Decode(bytes);

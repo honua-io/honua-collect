@@ -5,11 +5,6 @@ using Honua.Collect.Core.Sync;
 
 namespace Honua.Collect.App.Services;
 
-/// <summary>
-/// Persists the O(1) <see cref="InboxPullCursor"/> in platform preferences, scoped
-/// to the configured service and layer so changing targets never resumes at another
-/// layer's offset.
-/// </summary>
 internal sealed class PreferencesInboxPullProgressStore : IInboxPullProgressStore
 {
     private readonly string _keyPrefix;

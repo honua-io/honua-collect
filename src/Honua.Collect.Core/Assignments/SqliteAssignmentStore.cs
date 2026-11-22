@@ -8,30 +8,17 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Assignments;
 
-/// <summary>
-/// An <see cref="IAssignmentStore"/> backed by a single SQLite database file via
-/// <c>Microsoft.Data.Sqlite</c>, sharing the encrypted-at-rest posture of
-/// <see cref="Storage.SqliteRecordStore"/> (an optional SQLCipher key applied as the
-/// connection <c>Password</c>). The schema is created lazily on first use, so a
-/// fresh device file is usable immediately, and an existing record database can be
-/// reused — the assignments table is independent of <c>collect_records</c>.
-/// </summary>
 public sealed class SqliteAssignmentStore : SqliteStoreBase, IAssignmentStore
 {
     private const string TableName = "collect_assignments";
 
-    /// <summary>Creates a store over the given connection string or database file path.</summary>
-    /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    /// <param name="encryptionKey">Optional SQLCipher key; when non-empty the database is encrypted at rest.</param>
     public SqliteAssignmentStore(string connectionStringOrPath, string? encryptionKey = null)
         : base(connectionStringOrPath, encryptionKey)
     {
     }
 
-    /// <inheritdoc />
     protected override string StoreDescription => "assignment database";
 
-    /// <inheritdoc />
     public async Task SaveAsync(FieldAssignment assignment, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(assignment);
@@ -84,18 +71,15 @@ public sealed class SqliteAssignmentStore : SqliteStoreBase, IAssignmentStore
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public Task<IReadOnlyList<FieldAssignment>> LoadAllAsync(CancellationToken ct = default)
         => QueryAsync(userId: null, ct);
 
-    /// <inheritdoc />
     public Task<IReadOnlyList<FieldAssignment>> LoadForUserAsync(string userId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         return QueryAsync(userId, ct);
     }
 
-    /// <inheritdoc />
     public async Task DeleteAsync(string assignmentId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assignmentId);
@@ -164,7 +148,6 @@ public sealed class SqliteAssignmentStore : SqliteStoreBase, IAssignmentStore
         return assignment;
     }
 
-    /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();

@@ -5,12 +5,6 @@ using Honua.Collect.Core.History;
 
 namespace Honua.Collect.Core.Tests.History;
 
-/// <summary>
-/// The in-memory <see cref="RecordEditHistory.RevertTo"/> and the durable revert path
-/// must use ONE reverse-apply, so they can never drift. These tests exercise the
-/// shared <see cref="RecordEditHistory.ReverseApplyAfter"/> directly, including the
-/// sequence-not-index locating that lets a sparse/partial window revert correctly.
-/// </summary>
 public sealed class SharedReverseApplyTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 14, 8, 0, 0, TimeSpan.Zero);

@@ -7,38 +7,17 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Field.Related;
 
-/// <summary>
-/// An <see cref="IRelatedRecordStore"/> backed by the same on-device SQLite engine
-/// as <see cref="Storage.SqliteRecordStore"/> — it reuses the device database file
-/// rather than introducing a new store (BACKLOG F4). Each parent→child link is one
-/// row keyed by (parent, field, child); the row also carries the referenced form,
-/// a display label, and the <see cref="RecordLinkBehavior"/> so referential
-/// integrity is enforced at delete time. The schema is created lazily on first use.
-/// </summary>
 public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordStore
 {
     private const string Table = "collect_record_links";
 
-    /// <summary>
-    /// Creates a store over the given connection string or database file path — pass
-    /// the same value used for <see cref="Storage.SqliteRecordStore"/> so links share
-    /// the device database.
-    /// </summary>
-    /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    /// <param name="encryptionKey">
-    /// Optional SQLCipher key, applied as the connection <c>Password</c> (PRAGMA key)
-    /// when non-empty — supply the same key as the record store so the whole device
-    /// database is encrypted at rest.
-    /// </param>
     public SqliteRelatedRecordStore(string connectionStringOrPath, string? encryptionKey = null)
         : base(connectionStringOrPath, encryptionKey)
     {
     }
 
-    /// <inheritdoc />
     protected override string StoreDescription => "record-links database";
 
-    /// <inheritdoc />
     public async Task LinkAsync(
         string parentRecordId,
         string fieldId,
@@ -73,7 +52,6 @@ public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordSt
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async Task<bool> UnlinkAsync(string parentRecordId, string fieldId, string childRecordId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parentRecordId);
@@ -89,7 +67,6 @@ public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordSt
         return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<FieldRecordLinkValue>> ListAsync(string parentRecordId, string fieldId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parentRecordId);
@@ -122,7 +99,6 @@ public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordSt
         return links;
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<string>> DeleteParentAsync(string parentRecordId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(parentRecordId);
@@ -172,7 +148,6 @@ public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordSt
         return cascaded;
     }
 
-    /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();

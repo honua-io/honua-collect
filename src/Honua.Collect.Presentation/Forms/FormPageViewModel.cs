@@ -8,13 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Forms;
 
-/// <summary>
-/// View-model for the dynamic form-capture screen. It wraps a <see cref="FormSession"/> and exposes the scalar fields
-/// and repeat groups the XAML renders, a live validation summary, and the
-/// save-draft / submit commands. All field edits flow back through the runtime,
-/// which recomputes visibility, calculated fields, and validation; the page then
-/// refreshes so dependent fields show/hide and errors update live.
-/// </summary>
 public sealed class FormPageViewModel : ObservableObject
 {
     private readonly FormSession _session;
@@ -22,8 +15,6 @@ public sealed class FormPageViewModel : ObservableObject
     private bool _canSubmit;
     private bool _isSubmitted;
 
-    /// <summary>Creates the page view-model over a form session.</summary>
-    /// <param name="session">The capture session to drive.</param>
     public FormPageViewModel(FormSession session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -42,58 +33,44 @@ public sealed class FormPageViewModel : ObservableObject
         RefreshAll();
     }
 
-    /// <summary>Form title.</summary>
     public string Title => _session.Form.Name;
 
-    /// <summary>Scalar (non-repeating) field view-models, in form order.</summary>
     public IReadOnlyList<FieldViewModel> Fields { get; }
 
-    /// <summary>Repeatable-section view-models.</summary>
     public IReadOnlyList<RepeatGroupViewModel> RepeatGroups { get; }
 
-    /// <summary>Visible field view-models (for renderers that hide rather than disable).</summary>
     public IEnumerable<FieldViewModel> VisibleFields => Fields.Where(f => f.IsVisible);
 
-    /// <summary>A human-readable summary of outstanding validation errors.</summary>
     public string ErrorSummary
     {
         get => _errorSummary;
         private set => SetProperty(ref _errorSummary, value);
     }
 
-    /// <summary>Whether the form is complete and can be submitted.</summary>
     public bool CanSubmit
     {
         get => _canSubmit;
         private set => SetProperty(ref _canSubmit, value);
     }
 
-    /// <summary>Whether the form has been submitted.</summary>
     public bool IsSubmitted
     {
         get => _isSubmitted;
         private set => SetProperty(ref _isSubmitted, value);
     }
 
-    /// <summary>The underlying record (for persistence / navigation).</summary>
     public FieldRecord Record => _session.Record;
 
-    /// <summary>The underlying capture session (for AI-assisted fill, etc.).</summary>
     public FormSession Session => _session;
 
-    /// <summary>Re-reads field state after the session is mutated externally (e.g. AI fill).</summary>
     public void RefreshFields() => RefreshAll();
 
-    /// <summary>Submits the form when valid.</summary>
     public ICommand SubmitCommand { get; }
 
-    /// <summary>Saves the current state as a draft.</summary>
     public ICommand SaveDraftCommand { get; }
 
-    /// <summary>Raised when the record is successfully submitted.</summary>
     public event EventHandler<FieldRecord>? SubmitSucceeded;
 
-    /// <summary>Raised when a draft is saved.</summary>
     public event EventHandler<FieldRecord>? DraftSaved;
 
     private void Submit()

@@ -189,7 +189,7 @@ proven; these are device-sensor integrations.
 | # | Item | Status | Owner |
 |---|---|---|---|
 | A1 | Voice-to-fields | 🧱 | collect |
-| A2 | Photo-to-fields (Anthropic vision; needs API key) | 🧱 | collect |
+| A2 | Photo-to-fields (vision API; needs API key) | ❌ | collect |
 | A3 | Media redaction / face-blur execution | 🧱 | collect |
 
 ## 7. Enterprise auth & admin

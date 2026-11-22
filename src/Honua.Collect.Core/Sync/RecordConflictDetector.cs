@@ -9,20 +9,8 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Sync;
 
-/// <summary>
-/// Compares a locally-edited record against the server's current version and
-/// produces a field-level <see cref="RecordConflict"/> for manual review
-/// (BACKLOG S1). Comparison uses the same loose value coercion as the form
-/// runtime, and treats two "missing" values (null, empty string, empty list) as
-/// equal so a blank-vs-null difference is never reported as a conflict.
-/// </summary>
 public static class RecordConflictDetector
 {
-    /// <summary>Detects the fields that differ between two versions of a record.</summary>
-    /// <param name="form">Form definition supplying field order and labels.</param>
-    /// <param name="local">The locally-edited record.</param>
-    /// <param name="server">The server's current version of the record.</param>
-    /// <returns>A conflict describing the differing fields (possibly empty).</returns>
     public static RecordConflict Detect(FormDefinition form, FieldRecord local, FieldRecord server)
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -74,11 +62,6 @@ public static class RecordConflictDetector
         return FieldValues.AreEqual(left, right);
     }
 
-    /// <summary>
-    /// Whether a value counts as "missing" for conflict/merge purposes: null, blank
-    /// text, JSON null, or an empty collection. Shared with the CRDT merge
-    /// (<see cref="CrdtRecordMerge"/>) so both decide "set vs cleared" identically.
-    /// </summary>
     internal static bool IsMissing(object? value) => value switch
     {
         null => true,

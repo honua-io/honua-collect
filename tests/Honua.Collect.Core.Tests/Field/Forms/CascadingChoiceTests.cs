@@ -10,7 +10,7 @@ namespace Honua.Collect.Core.Tests.Field.Forms;
 public class CascadingChoiceTests
 {
     // country -> region -> city, modelled with FieldChoice.ParentValue and
-    // Collect-side ChoiceCascadeRule linkage (BACKLOG F3).
+    // Collect-side ChoiceCascadeRule linkage.
     private static FormDefinition GeoForm() => new()
     {
         FormId = "geo",

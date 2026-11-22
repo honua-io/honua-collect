@@ -7,11 +7,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Records;
 
-/// <summary>
-/// Post-sync editability (BACKLOG #38): a synced record can be re-opened and edited,
-/// returning to a pending state that preserves the server id so the edit uploads as
-/// an update rather than a duplicate insert.
-/// </summary>
 public class PostSyncEditTests
 {
     private static CollectRecordEntry Synced(string id, string remoteId)

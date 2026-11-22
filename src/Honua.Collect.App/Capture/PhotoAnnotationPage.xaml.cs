@@ -9,18 +9,8 @@ using IImage = Microsoft.Maui.Graphics.IImage;
 
 namespace Honua.Collect.App.Capture;
 
-/// <summary>
-/// Photo markup pad (BACKLOG C7). Draws a captured photo as
-/// the background of a <see cref="GraphicsView"/> and lets a field worker draw
-/// freehand strokes over it in one of a few markup colors. On save the photo and
-/// the strokes are flattened to a new PNG (the evidence image); the structured
-/// markup is also returned as a <see cref="PhotoAnnotationOverlay"/> in normalized
-/// 0..1 coordinates so the original image is never modified and the markup can be
-/// re-rendered or re-edited. Shown modally via <see cref="CaptureAsync"/>.
-/// </summary>
 public partial class PhotoAnnotationPage : ContentPage
 {
-    /// <summary>The markup color choices offered to the user.</summary>
     private static readonly (string Name, string Hex)[] Palette =
     [
         ("Red", "#FF3B30"),
@@ -42,29 +32,12 @@ public partial class PhotoAnnotationPage : ContentPage
         UpdateColorLabel();
     }
 
-    /// <summary>
-    /// Presents the markup pad modally over <paramref name="sourceImagePath"/> and
-    /// returns the flattened PNG path, or <see langword="null"/> if the user
-    /// cancelled or drew nothing. Use <see cref="CaptureAsync"/> for the overlay
-    /// metadata as well.
-    /// </summary>
-    /// <param name="navigation">The navigation stack to present on.</param>
-    /// <param name="sourceImagePath">Path to the photo to annotate.</param>
-    /// <returns>The annotated image path, or null.</returns>
     public static async Task<string?> CaptureAsync(INavigation navigation, string sourceImagePath)
     {
         var result = await CaptureResultAsync(navigation, sourceImagePath);
         return result?.ImagePath;
     }
 
-    /// <summary>
-    /// Presents the markup pad modally and returns both the flattened PNG path and
-    /// the structured <see cref="PhotoAnnotationOverlay"/>, or <see langword="null"/>
-    /// if the user cancelled or drew nothing.
-    /// </summary>
-    /// <param name="navigation">The navigation stack to present on.</param>
-    /// <param name="sourceImagePath">Path to the photo to annotate.</param>
-    /// <returns>The result, or null.</returns>
     public static async Task<PhotoAnnotationResult?> CaptureResultAsync(
         INavigation navigation, string sourceImagePath)
     {
@@ -212,10 +185,6 @@ public partial class PhotoAnnotationPage : ContentPage
         }
     }
 
-    /// <summary>
-    /// Draws the background photo and the in-progress strokes for the on-screen
-    /// preview, and accumulates strokes (with their color) for the overlay.
-    /// </summary>
     private sealed class AnnotationDrawable : IDrawable
     {
         private readonly List<Stroke> _strokes = [];
@@ -260,10 +229,6 @@ public partial class PhotoAnnotationPage : ContentPage
             }
         }
 
-        /// <summary>
-        /// Maps the accumulated display-space strokes into a normalized overlay,
-        /// preserving each stroke's color. Empty strokes are dropped.
-        /// </summary>
         public PhotoAnnotationOverlay BuildOverlay(double displayWidth, double displayHeight)
         {
             var overlay = new PhotoAnnotationOverlay();
@@ -335,10 +300,4 @@ public partial class PhotoAnnotationPage : ContentPage
     }
 }
 
-/// <summary>
-/// The outcome of a <see cref="PhotoAnnotationPage"/> session: the flattened
-/// evidence PNG and the structured markup overlay (normalized coordinates).
-/// </summary>
-/// <param name="ImagePath">Path to the flattened annotated PNG.</param>
-/// <param name="Overlay">The structured markup, in normalized image coordinates.</param>
 public sealed record PhotoAnnotationResult(string ImagePath, PhotoAnnotationOverlay Overlay);

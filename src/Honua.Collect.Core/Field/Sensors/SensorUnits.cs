@@ -5,12 +5,6 @@ using System.Globalization;
 
 namespace Honua.Collect.Core.Field.Sensors;
 
-/// <summary>
-/// Platform-neutral unit conversion for the handful of dimensions sensors in the
-/// field commonly emit (temperature, length, pressure). A <see cref="SensorFieldBinding"/>
-/// uses this to convert a reading's unit to the unit the form field expects, so a
-/// probe reporting <c>degF</c> can drive a field authored in <c>degC</c>.
-/// </summary>
 public static class SensorUnits
 {
     // Canonical unit per dimension, with each known unit's (toCanonical, fromCanonical) affine pair.
@@ -40,20 +34,8 @@ public static class SensorUnits
             ["bar"] = ("pressure", x => x * 100000.0, x => x / 100000.0),
         };
 
-    /// <summary>Whether a unit string is one this converter understands.</summary>
-    /// <param name="unit">Unit symbol (case-insensitive).</param>
     public static bool IsKnown(string? unit) => unit is not null && Map.ContainsKey(Normalize(unit));
 
-    /// <summary>
-    /// Attempts to convert a value between two units of the same dimension.
-    /// Treats a <see langword="null"/>/empty <paramref name="from"/> or
-    /// <paramref name="to"/> as "no unit": the value passes through unchanged.
-    /// </summary>
-    /// <param name="value">The value in <paramref name="from"/> units.</param>
-    /// <param name="from">Source unit, or null/empty for dimensionless.</param>
-    /// <param name="to">Target unit, or null/empty for dimensionless.</param>
-    /// <param name="converted">The converted value when successful.</param>
-    /// <returns><see langword="true"/> on success; <see langword="false"/> when the units are incompatible.</returns>
     public static bool TryConvert(double value, string? from, string? to, out double converted)
     {
         converted = value;

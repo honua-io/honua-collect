@@ -13,21 +13,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Export;
 
-/// <summary>
-/// Exports captured records to a Microsoft Excel <c>.xlsx</c> workbook (BACKLOG R2),
-/// the structured tabular format spreadsheet users expect alongside CSV. A
-/// <c>.xlsx</c> is an Open Packaging zip of SpreadsheetML XML parts; this writes the
-/// minimal valid set (content types, package + workbook relationships, the workbook,
-/// and a single worksheet) with no third-party rendering library — the same
-/// dependency-free OpenXML-over-zip approach as <see cref="Reports.DocxReportWriter"/>.
-/// </summary>
-/// <remarks>
-/// Cells are typed: numeric and boolean field values become real number/boolean cells
-/// (so Excel sums/filters them), and everything else is written as an inline string,
-/// reusing <see cref="RecordExporter.CellText"/> for non-scalar/media values so the
-/// text matches the CSV/GeoJSON/KML exports. Like CSV, columns are driven by the
-/// <see cref="FormDefinition"/> so every record exports a stable, complete column set.
-/// </remarks>
 public static class ExcelExporter
 {
     private const string SpreadsheetMlNamespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -35,11 +20,6 @@ public static class ExcelExporter
 
     private static readonly string[] FixedColumns = ["record_id", "status", "latitude", "longitude"];
 
-    /// <summary>Exports records to an .xlsx workbook as a byte array.</summary>
-    /// <param name="form">Form whose fields define the columns after the fixed record columns.</param>
-    /// <param name="records">Records to export, one row each (plus a header row).</param>
-    /// <param name="sheetName">The worksheet name (trimmed to Excel's 31-char limit).</param>
-    /// <returns>The .xlsx file bytes.</returns>
     public static byte[] Export(FormDefinition form, IEnumerable<FieldRecord> records, string sheetName = "Records")
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -167,12 +147,6 @@ public static class ExcelExporter
         writer.WriteEndElement(); // row
     }
 
-    /// <summary>
-    /// Builds a typed cell from a record's field value, mirroring the type handling in
-    /// <see cref="RecordExporter"/>'s GeoJSON writer: numbers and booleans keep their
-    /// type; everything else (text, choices, dates, media, collections) becomes an
-    /// inline string via the shared <see cref="RecordExporter.CellText"/>.
-    /// </summary>
     private static Cell CellFor(FieldRecord record, FormField field)
     {
         if (record.Values.TryGetValue(field.FieldId, out var value) && value is not null && !FormFieldTypes.IsMedia(field.Type))
@@ -213,7 +187,6 @@ public static class ExcelExporter
         return cleaned.Length <= 31 ? cleaned : cleaned[..31];
     }
 
-    /// <summary>Excel column letters: 0 -> A, 25 -> Z, 26 -> AA, ...</summary>
     private static string ColumnName(int index)
     {
         var name = string.Empty;
@@ -236,7 +209,6 @@ public static class ExcelExporter
     private static XmlWriterSettings Settings()
         => new() { OmitXmlDeclaration = true, ConformanceLevel = ConformanceLevel.Fragment, Indent = false };
 
-    /// <summary>A single worksheet cell: its SpreadsheetML type and serialized value.</summary>
     private readonly struct Cell
     {
         private readonly string? _type;     // null = numeric (the default), "str", "b"

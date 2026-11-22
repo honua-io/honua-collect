@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Honua.Collect.Core.Export;
-using Honua.Collect.Core.Reports;
 using Honua.Collect.Presentation.Export;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -71,7 +70,6 @@ public class ExportViewModelTests
 
         var csv = vm.ExportCsv();
         Assert.Equal(expected, csv);
-        // Sanity: header columns and both rows are present.
         Assert.Contains("site_name", csv);
         Assert.Contains("Alpha", csv);
         Assert.Contains("Beta", csv);
@@ -92,22 +90,11 @@ public class ExportViewModelTests
     }
 
     [Fact]
-    public void Report_renders_markdown_for_latest_record()
+    public void Latest_record_returns_most_recently_created()
     {
-        var form = Form();
-        var records = TwoRecords();
-        var vm = new ExportViewModel(form, records);
+        var vm = new ExportViewModel(Form(), TwoRecords());
 
-        // The latest record (r2 / "Beta") is the one created most recently.
         Assert.Equal("r2", vm.LatestRecord!.RecordId);
-
-        var markdown = vm.RenderLatestReport();
-        var expected = new RecordReportRenderer()
-            .RenderMarkdown(form, records[1]);
-
-        Assert.Equal(expected, markdown);
-        Assert.Contains("Beta", markdown);
-        Assert.DoesNotContain("Alpha", markdown);
     }
 
     [Fact]
@@ -118,6 +105,5 @@ public class ExportViewModelTests
         Assert.Equal(0, vm.RecordCount);
         Assert.False(vm.HasRecords);
         Assert.Null(vm.LatestRecord);
-        Assert.Throws<InvalidOperationException>(() => vm.RenderLatestReport());
     }
 }

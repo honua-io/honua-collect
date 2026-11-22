@@ -3,41 +3,23 @@
 
 using Honua.Collect.App.Capture;
 using Honua.Collect.App.Services;
-using Honua.Collect.Core.Ai;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Core.Field.Related;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Presentation.Forms;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// The dynamic form-capture page. It is a thin host: all behaviour lives in the
-/// bound <see cref="FormPageViewModel"/> (unit-tested in
-/// <c>Honua.Collect.Presentation.Tests</c>), and the XAML renders each field via
-/// the <see cref="FieldWidgetTemplateSelector"/>. Media widgets dispatch to the
-/// device capture pipelines below by their <see cref="FieldViewModel.Widget"/>.
-/// </summary>
 public partial class FormPage : ContentPage
 {
-    private readonly HttpClient _aiHttp;
     private readonly IRelatedRecordStore? _relatedStore;
     private readonly RecordBook? _book;
 
-    /// <summary>Creates the page for a form view-model.</summary>
-    /// <param name="viewModel">The form to capture.</param>
-    /// <param name="httpClientFactory">Factory supplying the configured AI HTTP client.</param>
-    /// <param name="relatedStore">Optional durable store for record-link relationships (BACKLOG F4).</param>
-    /// <param name="book">Optional record book used to persist newly created related child drafts.</param>
     public FormPage(
         FormPageViewModel viewModel,
-        IHttpClientFactory httpClientFactory,
         IRelatedRecordStore? relatedStore = null,
         RecordBook? book = null)
     {
-        ArgumentNullException.ThrowIfNull(httpClientFactory);
-        _aiHttp = httpClientFactory.CreateClient(MauiProgram.AnthropicHttpClient);
         _relatedStore = relatedStore;
         _book = book;
         InitializeComponent();
@@ -152,49 +134,6 @@ public partial class FormPage : ContentPage
         await Navigation.PushAsync(new RelatedRecordsPage(relatedVm));
     }
 
-    private async void OnAiFill(object? sender, EventArgs e)
-    {
-        if (BindingContext is not FormPageViewModel vm)
-        {
-            return;
-        }
-
-        var apiKey = await SecureStorage.Default.GetAsync("anthropic_api_key");
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            await DisplayAlert("AI fill", "Set an Anthropic API key first (secure storage 'anthropic_api_key').", "OK");
-            return;
-        }
-
-        try
-        {
-            var photo = MediaPicker.Default.IsCaptureSupported
-                ? await MediaPicker.Default.CapturePhotoAsync()
-                : await MediaPicker.Default.PickPhotoAsync();
-            if (photo is null)
-            {
-                return;
-            }
-
-            var path = await CaptureFiles.ImportAsync(photo);
-            var provider = new AnthropicPhotoToFieldsProvider(_aiHttp, new AnthropicPhotoToFieldsOptions { ApiKey = apiKey });
-            var result = await provider.ExtractAsync(path, vm.Session.Form);
-            TryDelete(path);
-
-            var outcome = new AiCaptureService().Apply(vm.Session, result);
-            vm.RefreshFields();
-            await DisplayAlert("AI fill",
-                outcome.Applied.Count > 0
-                    ? $"Filled {outcome.Applied.Count} field(s) from the photo."
-                    : $"No fields filled. {result.Unmapped}",
-                "OK");
-        }
-        catch (Exception ex)
-        {
-            await DisplayAlert("AI fill", $"AI fill failed: {ex.Message}", "OK");
-        }
-    }
-
     private async Task CapturePhotoAsync(FieldViewModel field)
     {
         var action = await DisplayActionSheet("Add photo", "Cancel", null, "Take photo", "Choose from gallery");
@@ -212,12 +151,12 @@ public partial class FormPage : ContentPage
             return;
         }
 
-        // Land the original, downscale + re-encode (C8), and keep only the small copy.
+        // Land the original, downscale + re-encode, and keep only the small copy.
         var imported = await CaptureFiles.ImportAsync(photo);
         var compressed = await ImageCompressor.CompressAsync(imported);
         TryDelete(imported);
 
-        // Offer markup/annotation (C7) — keep the flattened image if the user draws.
+        // Offer markup/annotation — keep the flattened image if the user draws.
         if (await DisplayAlert("Photo", "Add markup to this photo?", "Annotate", "Skip"))
         {
             var annotated = await PhotoAnnotationPage.CaptureAsync(Navigation, compressed);

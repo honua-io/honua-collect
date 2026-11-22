@@ -5,11 +5,6 @@ using Honua.Collect.Core.Assignments;
 
 namespace Honua.Collect.Core.Tests.Assignments;
 
-/// <summary>
-/// In-memory <see cref="IAssignmentSyncClient"/> standing in for the server: pull
-/// returns whatever snapshots were seeded for a user; push records every batch it
-/// received so a test can assert the dispatcher saw the operator's progress.
-/// </summary>
 internal sealed class FakeAssignmentSyncClient : IAssignmentSyncClient
 {
     private readonly Dictionary<string, List<AssignmentSnapshot>> _serverByUser = new(StringComparer.Ordinal);

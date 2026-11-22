@@ -129,7 +129,7 @@ public class SyncCenterPullTests
     [Fact]
     public async Task Resolving_a_conflict_persists_the_merge_and_requeues_for_upload()
     {
-        // Regression for #98: the review screen must APPLY and PERSIST the user's
+        // The review screen must apply and persist the user's
         // resolution, not silently discard it. ApplyResolutionAsync is the call the
         // ConflictReviewPage now makes; it must mutate the entry AND hand it to the
         // durable persister so the merge survives a restart and re-uploads.

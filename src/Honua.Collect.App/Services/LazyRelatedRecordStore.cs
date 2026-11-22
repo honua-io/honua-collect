@@ -6,10 +6,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.App.Services;
 
-/// <summary>
-/// Lazily initializes an <see cref="IRelatedRecordStore"/> through an async factory
-/// so the encryption key is fetched from secure storage off the startup thread.
-/// </summary>
 internal sealed class LazyRelatedRecordStore : IRelatedRecordStore
 {
     private readonly Func<CancellationToken, Task<IRelatedRecordStore>> _factory;

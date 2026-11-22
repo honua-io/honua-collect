@@ -11,14 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// Geometry capture over a live OpenStreetMap basemap (BACKLOG G1/G2/G4): pan by
-/// dragging, zoom with the +/– buttons, and tap to drop a vertex for a point,
-/// line, or polygon. Screen taps are projected to lat/lon through
-/// <see cref="WebMercator"/> (unit-tested in Core), so the captured vertices —
-/// and the resulting GeoJSON from the tested <see cref="MapCaptureViewModel"/> —
-/// are real coordinates registered to the basemap.
-/// </summary>
 public partial class GeometryCapturePage : ContentPage
 {
     private const double TapThreshold = 12.0; // DIPs of movement under which a gesture is a tap

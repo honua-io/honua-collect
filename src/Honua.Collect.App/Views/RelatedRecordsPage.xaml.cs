@@ -5,17 +5,10 @@ using Honua.Collect.Presentation.Forms;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// Related-records (F4) capture screen: lists child records linked from a parent
-/// record's record-link field and lets the worker create new child records, link
-/// existing ones, or unlink them.
-/// </summary>
 public partial class RelatedRecordsPage : ContentPage
 {
     private readonly RelatedRecordsViewModel _viewModel;
 
-    /// <summary>Creates the related-records screen over its tested view-model.</summary>
-    /// <param name="viewModel">View-model bound to the parent record's link field.</param>
     public RelatedRecordsPage(RelatedRecordsViewModel viewModel)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));

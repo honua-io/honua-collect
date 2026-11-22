@@ -15,17 +15,10 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.App;
 
-/// <summary>
-/// Home screen. Starts a capture session over the active form, navigates to the
-/// dynamic <see cref="FormPage"/>, and on submit pushes the record (and any
-/// captured media) to the server via <see cref="GeoServicesFeatureSync"/> over the
-/// shared, auth-aware HTTP client. Collaborators come from DI.
-/// </summary>
 public partial class MainPage : ContentPage
 {
     private readonly AppSettings _settings;
     private readonly RecordBook _book;
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly HttpClient _http;
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
     private readonly IRelatedRecordStore _relatedStore;
@@ -42,8 +35,8 @@ public partial class MainPage : ContentPage
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _book = book ?? throw new ArgumentNullException(nameof(book));
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _http = _httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        _http = httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
         _relatedStore = relatedStore ?? throw new ArgumentNullException(nameof(relatedStore));
         InitializeComponent();
@@ -54,7 +47,7 @@ public partial class MainPage : ContentPage
         _session = FormSession.CreateForNewRecord(_activeForm, Guid.NewGuid().ToString("n"));
         var viewModel = new FormPageViewModel(_session);
         viewModel.SubmitSucceeded += OnSubmitted;
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
+        await Navigation.PushAsync(new FormPage(viewModel, _relatedStore, _book));
     }
 
     private async void OnCaptureKitClicked(object? sender, EventArgs e)
@@ -63,7 +56,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Capture kit: {record.Media.Count} attachment(s), asset tag “{record.Values.GetValueOrDefault("asset_tag")}”.";
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
+        await Navigation.PushAsync(new FormPage(viewModel, _relatedStore, _book));
     }
 
     private async void OnSmartFormClicked(object? sender, EventArgs e)
@@ -72,7 +65,7 @@ public partial class MainPage : ContentPage
         var viewModel = new FormPageViewModel(session);
         viewModel.SubmitSucceeded += (_, record) =>
             StatusLabel.Text = $"Smart form submitted — total {record.Values.GetValueOrDefault("total")}.";
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
+        await Navigation.PushAsync(new FormPage(viewModel, _relatedStore, _book));
     }
 
     private async void OnDownloadFormClicked(object? sender, EventArgs e)
@@ -80,7 +73,7 @@ public partial class MainPage : ContentPage
         StatusLabel.Text = "Downloading latest form…";
         try
         {
-            var form = await new FormPackageClient(_http).DownloadAsync(_settings.ServiceId, "field_site");
+            var form = await new FormPackageClient(_http).DownloadAsync("field_site");
             _activeForm = form;
             StatusLabel.Text = $"Loaded form “{form.Name}” ({form.Sections.Count} section(s)). Start a new inspection.";
         }

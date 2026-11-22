@@ -8,15 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
-/// <summary>
-/// Client-side at-most-once guarantees for the upload path (#102 / AUD-215). Each
-/// <c>add</c> carries a stable, client-generated GlobalID derived from the record's
-/// <see cref="FieldRecord.RecordId"/> and is sent with <c>useGlobalIds=true</c>, so
-/// a server that dedupes on GlobalID collapses a re-sent add (after a lost
-/// response, an app restart, or a re-queue) into the original feature instead of
-/// inserting a duplicate. The fake server here models that server-side dedupe — the
-/// matching honua-server work is the out-of-scope follow-up.
-/// </summary>
 public class GeoServicesFeatureSyncIdempotencyTests
 {
     private static readonly GeoServicesTarget Target = new("https://example.test", "svc", 0);
@@ -28,19 +19,12 @@ public class GeoServicesFeatureSyncIdempotencyTests
         return r;
     }
 
-    /// <summary>
-    /// A feature server that keys features on the client-supplied GlobalID. A re-add
-    /// of a GlobalID it already holds is a no-op that echoes the original object id
-    /// rather than creating a second feature. Optionally drops the response to the
-    /// first add <em>after</em> committing it, simulating a lost-response window.
-    /// </summary>
     private sealed class DedupingFeatureServer(bool dropFirstResponse = false) : HttpMessageHandler
     {
         private readonly Dictionary<string, long> _features = new(StringComparer.OrdinalIgnoreCase);
         private long _nextObjectId = 1000;
         private bool _dropNext = dropFirstResponse;
 
-        /// <summary>Number of distinct features the server is holding.</summary>
         public int FeatureCount => _features.Count;
 
         protected override async Task<HttpResponseMessage> SendAsync(

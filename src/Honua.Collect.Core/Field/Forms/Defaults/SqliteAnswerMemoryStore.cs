@@ -7,14 +7,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Field.Forms.Defaults;
 
-/// <summary>
-/// An <see cref="IAnswerMemoryStore"/> backed by the same on-device SQLite engine
-/// as <see cref="Storage.SqliteRecordStore"/> — it reuses the device database file
-/// rather than introducing a new store. "Last answers" live in one row per form;
-/// favorites live one row per (form, name). Values are JSON, round-tripping back
-/// as <see cref="JsonElement"/> exactly like captured record values, so the
-/// defaults the form layer reads are shaped identically to loaded record values.
-/// </summary>
 public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStore
 {
     private const string LastTable = "collect_answer_last";
@@ -22,26 +14,13 @@ public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStor
 
     private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
 
-    /// <summary>
-    /// Creates a store over the given connection string or database file path —
-    /// pass the same value used for <see cref="Storage.SqliteRecordStore"/> so
-    /// remembered answers share the device database.
-    /// </summary>
-    /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    /// <param name="encryptionKey">
-    /// Optional SQLCipher key, applied as the connection <c>Password</c> (PRAGMA
-    /// key) when non-empty — supply the same key as the record store so the whole
-    /// device database is encrypted at rest.
-    /// </param>
     public SqliteAnswerMemoryStore(string connectionStringOrPath, string? encryptionKey = null)
         : base(connectionStringOrPath, encryptionKey)
     {
     }
 
-    /// <inheritdoc />
     protected override string StoreDescription => "remembered-answers database";
 
-    /// <inheritdoc />
     public async Task RememberLastAsync(string formId, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(formId);
@@ -59,7 +38,6 @@ public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStor
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, object?>> GetLastAsync(string formId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(formId);
@@ -73,7 +51,6 @@ public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStor
         return json is null ? EmptyValues : Deserialize(json);
     }
 
-    /// <inheritdoc />
     public async Task SaveFavoriteAsync(string formId, FavoriteAnswerSet favorite, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(formId);
@@ -92,7 +69,6 @@ public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStor
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async Task<FavoriteAnswerSet?> GetFavoriteAsync(string formId, string name, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(formId);
@@ -113,7 +89,6 @@ public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStor
         return new FavoriteAnswerSet(reader.GetString(0), Deserialize(reader.GetString(1)));
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<FavoriteAnswerSet>> ListFavoritesAsync(string formId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(formId);
@@ -143,7 +118,6 @@ public sealed class SqliteAnswerMemoryStore : SqliteStoreBase, IAnswerMemoryStor
         => JsonSerializer.Deserialize<Dictionary<string, object?>>(json, ValuesJsonOptions)
             ?? new Dictionary<string, object?>();
 
-    /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();

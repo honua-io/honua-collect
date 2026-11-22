@@ -10,13 +10,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Export;
 
-/// <summary>
-/// Exports captured records to a Shapefile (BACKLOG R2), bundled as a zip of
-/// the <c>.shp</c> (point geometry), <c>.shx</c> (index) and <c>.dbf</c>
-/// (attributes) members. Shapefile is still the lingua franca of government and
-/// utility GIS, so first-class export lowers switching cost. Records without a
-/// location are written as null shapes so none are dropped.
-/// </summary>
 public static class ShapefileExporter
 {
     private const int FileCode = 9994;
@@ -24,11 +17,6 @@ public static class ShapefileExporter
     private const int PointShapeType = 1;
     private const int NullShapeType = 0;
 
-    /// <summary>Exports records to a zipped Shapefile (.shp/.shx/.dbf).</summary>
-    /// <param name="form">Form whose fields define the dBASE attribute columns.</param>
-    /// <param name="records">Records to export.</param>
-    /// <param name="layerName">Base name for the member files inside the zip.</param>
-    /// <returns>Zip archive bytes containing the Shapefile members.</returns>
     public static byte[] Export(FormDefinition form, IEnumerable<FieldRecord> records, string layerName = "records")
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -59,7 +47,7 @@ public static class ShapefileExporter
         stream.Write(content);
     }
 
-    // --- .shp main file -------------------------------------------------------
+    // ---.shp main file -------------------------------------------------------
 
     private static byte[] BuildShp(IReadOnlyList<FieldRecord> records)
     {
@@ -104,7 +92,7 @@ public static class ShapefileExporter
         return file;
     }
 
-    // --- .shx index file ------------------------------------------------------
+    // ---.shx index file ------------------------------------------------------
 
     private static byte[] BuildShx(IReadOnlyList<FieldRecord> records)
     {
@@ -124,7 +112,7 @@ public static class ShapefileExporter
         return file;
     }
 
-    // The 100-byte header shared by .shp and .shx. Length is the total file length in 16-bit words.
+    // The 100-byte header shared by.shp and.shx. Length is the total file length in 16-bit words.
     private static void WriteMainHeader(byte[] file, int fileLengthBytes, (double MinX, double MinY, double MaxX, double MaxY) bounds)
     {
         BinaryPrimitives.WriteInt32BigEndian(file.AsSpan(0, 4), FileCode);
@@ -146,7 +134,7 @@ public static class ShapefileExporter
             : (points.Min(p => p.Longitude), points.Min(p => p.Latitude), points.Max(p => p.Longitude), points.Max(p => p.Latitude));
     }
 
-    // --- .dbf attribute file (dBASE III) --------------------------------------
+    // ---.dbf attribute file (dBASE III) --------------------------------------
 
     private static byte[] BuildDbf(IReadOnlyList<FormField> fields, IReadOnlyList<FieldRecord> records)
     {

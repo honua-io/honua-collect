@@ -1,30 +1,14 @@
 <Project>
-  <!--
-    Central Package Management: every package version is declared here once, so
-    PackageReference items in the csproj files carry no Version. This is the
-    lockfile-compatible configuration (it replaces the MSBuild property-valued
-    PackageReference versions that previously blocked RestorePackagesWithLockFile
-    with NU1015). The SDK-train properties below come from Directory.Build.props,
-    which is imported before this file — keep bumping the train there (see #31).
-  -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
-  <!--
-    SDK-train versions. These live HERE (not Directory.Build.props) because this
-    file is imported before Directory.Build.props, so a property defined there is
-    empty when the PackageVersion items below evaluate. Bump the Honua train in
-    lockstep with honua-mobile's Directory.Build.props (this is the one-line bump
-    in #31), then re-run restore to refresh the lockfiles.
-  -->
   <PropertyGroup>
     <HonuaSdkDotNetTrainVersion>2.2.0</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>10.0.130</MauiVersion>
   </PropertyGroup>
 
-  <!-- First-party Honua platform packages (private github-honua feed). -->
   <ItemGroup>
     <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
@@ -32,14 +16,6 @@
     <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
   </ItemGroup>
 
-  <!--
-    Imaging. SkiaSharp gives Core a platform-neutral, headless image codec
-    (decode/encode/transform) so the C8 resize+compress EXECUTION — not just the
-    ImageResizePlan maths — runs and is unit-tested in Core without MAUI or a
-    device. SkiaSharp's managed assembly targets net10.0; the bundled native
-    binaries cover the test/CI hosts, so the Core test suite exercises real bytes.
-    The App layer keeps its MAUI-Graphics path for on-device capture.
-  -->
   <ItemGroup>
     <PackageVersion Include="SkiaSharp" Version="4.156.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.156.1" />
@@ -49,7 +25,6 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="11.0.0" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
-    <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
   </ItemGroup>
 
   <!-- App / MAUI runtime. -->

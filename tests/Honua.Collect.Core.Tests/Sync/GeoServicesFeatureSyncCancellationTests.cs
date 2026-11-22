@@ -7,10 +7,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
-/// <summary>
-/// Verifies that the feature-sync client honours an already-cancelled token on
-/// its submit and query paths rather than performing the network round-trip.
-/// </summary>
 public class GeoServicesFeatureSyncCancellationTests
 {
     private static readonly GeoServicesTarget Target = new("https://example.test", "svc", 0);

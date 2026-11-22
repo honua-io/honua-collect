@@ -14,67 +14,18 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Honua.Collect.Presentation.Sync;
 
-/// <summary>
-/// Uploads a single record to the server. Implemented by the app over the
-/// platform transport; injected so the sync center is testable.
-/// </summary>
-/// <param name="entry">The record to upload.</param>
-/// <param name="cancellationToken">Cancellation token.</param>
-/// <returns>
-/// The <see cref="FeatureSyncResult"/> describing the outcome — success with the
-/// server-assigned object id, or failure carrying the server error message and
-/// code. The sync center threads this straight through to
-/// <see cref="CollectRecordEntry.MarkFailed"/>, so a permissions/token error is
-/// surfaced verbatim instead of being collapsed to a generic "rejected" sentinel.
-/// </returns>
 public delegate Task<FeatureSyncResult> RecordUploader(CollectRecordEntry entry, CancellationToken cancellationToken);
 
-/// <summary>
-/// Uploads a batch of records to the server in one round-trip (a GeoServices
-/// <c>applyEdits</c> with a multi-feature <c>adds</c> array). Implemented by the
-/// app; injected so the sync center is testable. When supplied, the sync center
-/// uses this for new-record adds instead of one HTTP request per record.
-/// </summary>
-/// <param name="entries">The records to upload together, in order.</param>
-/// <param name="cancellationToken">Cancellation token.</param>
-/// <returns>
-/// One <see cref="FeatureSyncResult"/> per input entry, aligned by index. A short
-/// list is treated as a failure for the unreported tail entries.
-/// </returns>
 public delegate Task<IReadOnlyList<FeatureSyncResult>> BatchRecordUploader(
     IReadOnlyList<CollectRecordEntry> entries,
     CancellationToken cancellationToken);
 
-/// <summary>
-/// Durably persists an entry's transport state after the sync center mutates it.
-/// Implemented by the host over the record store (typically
-/// <see cref="Core.Storage.RecordBook.SaveAsync"/>); injected so the sync path is
-/// testable without a store. Persisting the post-upload state is what stops an
-/// already-synced record from re-uploading (and duplicating the server feature)
-/// after an app restart.
-/// </summary>
-/// <param name="entry">The entry whose current state should be persisted.</param>
-/// <returns>A task that completes when the state is durably written.</returns>
 public delegate Task RecordStatePersister(CollectRecordEntry entry);
 
-/// <summary>
-/// Pulls the server's current features for the sync center. Implemented by the app
-/// over the platform transport (typically wrapping
-/// <see cref="GeoServicesFeatureSync.QueryAsync"/>); injected so the pull path is
-/// testable without a live server.
-/// </summary>
-/// <param name="cancellationToken">Cancellation token.</param>
-/// <returns>The query result carrying the decoded server features.</returns>
 public delegate Task<FeatureQueryResult> FeaturePuller(CancellationToken cancellationToken);
 
-/// <summary>
-/// View-model for the sync status center (BACKLOG S3): the Drafts/Outbox/Sent
-/// counts, the list of records waiting to upload, and a command that pushes the
-/// outbox to the server, driving each record through its sync lifecycle.
-/// </summary>
 public sealed class SyncCenterViewModel : ObservableObject
 {
-    /// <summary>Default number of records sent in one batch <c>applyEdits</c> round-trip.</summary>
     public const int DefaultBatchSize = 100;
 
     private readonly List<CollectRecordEntry> _entries;
@@ -90,35 +41,11 @@ public sealed class SyncCenterViewModel : ObservableObject
     private bool _isSyncing;
     private bool _isPulling;
 
-    /// <summary>Creates the sync center over a set of records and an uploader.</summary>
-    /// <param name="entries">Tracked records.</param>
-    /// <param name="uploader">Uploads a single record.</param>
     public SyncCenterViewModel(IEnumerable<CollectRecordEntry> entries, RecordUploader uploader)
         : this(entries, uploader, null, null)
     {
     }
 
-    /// <summary>
-    /// Creates the sync center with a pull path so the outbox can both push edits
-    /// and pull the server's current features, feeding real conflicts into review.
-    /// </summary>
-    /// <param name="entries">Tracked records.</param>
-    /// <param name="uploader">Uploads a single record.</param>
-    /// <param name="puller">Pulls the server's current features.</param>
-    /// <param name="form">Form definition used to diff local vs server records.</param>
-    /// <param name="persist">
-    /// Optional sink that durably persists an entry's transport state after each
-    /// upload, so a synced record is not re-uploaded (and duplicated) after a
-    /// restart. When null, state changes are in-memory only.
-    /// </param>
-    /// <param name="batchUploader">
-    /// Optional bulk uploader; when supplied, new-record adds are sent in batched
-    /// <c>applyEdits</c> round-trips (chunked at <paramref name="batchSize"/>) instead
-    /// of one HTTP request per record. Server updates still go one-at-a-time through
-    /// <paramref name="uploader"/>. When null, every record uses <paramref name="uploader"/>.
-    /// </param>
-    /// <param name="batchSize">Maximum records per batch round-trip (defaults to <see cref="DefaultBatchSize"/>).</param>
-    /// <param name="logger">Optional structured logger.</param>
     public SyncCenterViewModel(
         IEnumerable<CollectRecordEntry> entries,
         RecordUploader uploader,
@@ -147,7 +74,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         PullCommand = new RelayCommand(() => _ = PullAsync(), () => CanPull);
     }
 
-    /// <summary>Aggregate counts for the status header.</summary>
     public SyncSummary Summary
     {
         get => _summary;
@@ -160,13 +86,10 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>A formatted one-line status: "Outbox 1 · Conflicts 0 · Sent 0 · Failed 1".</summary>
     public string Header => $"Outbox {Summary.Outbox} · Conflicts {Summary.Conflicts} · Sent {Summary.Sent} · Failed {Summary.Failed}";
 
-    /// <summary>Records currently waiting to upload or retry.</summary>
     public ObservableCollection<CollectRecordEntry> Pending { get; }
 
-    /// <summary>Whether a sync run is in progress.</summary>
     public bool IsSyncing
     {
         get => _isSyncing;
@@ -179,13 +102,10 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>Pushes the outbox to the server.</summary>
     public ICommand SyncCommand { get; }
 
-    /// <summary>Pulls the server's current features and builds the conflict list.</summary>
     public ICommand PullCommand { get; }
 
-    /// <summary>Whether a pull run is in progress.</summary>
     public bool IsPulling
     {
         get => _isPulling;
@@ -198,28 +118,12 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the pull path is configured and idle.</summary>
     public bool CanPull => _puller is not null && _form is not null && !IsPulling;
 
-    /// <summary>
-    /// Conflicts produced by the most recent pull, ready for the review screen to
-    /// resolve. A <see cref="ConflictReviewViewModel"/> binds to each entry.
-    /// </summary>
     public ObservableCollection<ConflictReviewViewModel> Conflicts { get; }
 
-    /// <summary>
-    /// Server features the device had not seen before, surfaced by the most recent
-    /// pull so the host can insert them into the local store.
-    /// </summary>
     public ObservableCollection<PullClassification> NewFromServer { get; }
 
-    /// <summary>
-    /// Pulls the server's current features, classifies them against the local
-    /// records, and exposes the resulting conflicts (as
-    /// <see cref="ConflictReviewViewModel"/>s) and new-from-server records.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The structured merge result, or <see langword="null"/> if no pull path is configured or the query failed.</returns>
     public async Task<PullMergeResult?> PullAsync(CancellationToken cancellationToken = default)
     {
         if (_puller is null || _form is null || IsPulling)
@@ -282,12 +186,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Indexes the local records by the server object id they were synced as. Only
-    /// records carrying a numeric <see cref="CollectRecordEntry.RemoteId"/>
-    /// participate; an unsynced (local-only) record has no server counterpart, so a
-    /// matching server feature is correctly treated as new-from-server.
-    /// </summary>
     private CollectRecordEntry? FindEntry(string? recordId)
     {
         if (string.IsNullOrEmpty(recordId))
@@ -314,9 +212,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         return index;
     }
 
-    /// <summary>Runs a sync pass over all pending records.</summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The number of records successfully synced.</returns>
     public async Task<int> SyncAsync(CancellationToken cancellationToken = default)
     {
         if (IsSyncing)
@@ -448,11 +343,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         return synced;
     }
 
-    /// <summary>
-    /// Applies an upload outcome to an entry, threading the server's error message
-    /// and code through to <see cref="CollectRecordEntry.MarkFailed"/> (no null
-    /// sentinel). Returns whether the upload succeeded.
-    /// </summary>
     private static bool ApplyResult(CollectRecordEntry entry, FeatureSyncResult result)
     {
         if (result.Success)

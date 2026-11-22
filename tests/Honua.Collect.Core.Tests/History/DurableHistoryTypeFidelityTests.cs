@@ -5,13 +5,6 @@ using Honua.Collect.Core.History;
 
 namespace Honua.Collect.Core.Tests.History;
 
-/// <summary>
-/// Pins the dominant #38 bug shut: the durable history must persist each value
-/// PRESERVING its type, not flatten it to text. A long stays a long, a double a
-/// double, a bool a bool, a date string a string, and an empty/missing value stays
-/// missing — so a revert restores the original typed value and re-diffing sees no
-/// spurious type-flip change.
-/// </summary>
 public sealed class DurableHistoryTypeFidelityTests : IDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 14, 8, 0, 0, TimeSpan.Zero);

@@ -8,39 +8,19 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Storage;
 
-/// <summary>
-/// A <see cref="IRecordStore"/> backed by a single SQLite database file via
-/// <c>Microsoft.Data.Sqlite</c>. The schema is created lazily on first use, so a
-/// fresh device file is usable immediately. Captured field values are serialized
-/// to JSON; on load they round-trip back as <see cref="JsonElement"/> values,
-/// which the form layer reads positionally.
-/// </summary>
 public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 {
     private const string TableName = "collect_records";
 
     private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
 
-    /// <summary>
-    /// Creates a store over the given connection string or database file path.
-    /// A bare path (one that is not already a <c>Data Source=</c> connection
-    /// string) is treated as the SQLite file location.
-    /// </summary>
-    /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    /// <param name="encryptionKey">
-    /// Optional SQLCipher key. When non-empty, the database is encrypted at rest
-    /// (the key is applied as the connection <c>Password</c>, i.e. SQLCipher's
-    /// <c>PRAGMA key</c>). Null/empty opens an unencrypted database.
-    /// </param>
     public SqliteRecordStore(string connectionStringOrPath, string? encryptionKey = null)
         : base(connectionStringOrPath, encryptionKey)
     {
     }
 
-    /// <inheritdoc />
     protected override string StoreDescription => "field database";
 
-    /// <inheritdoc />
     public async Task SaveAsync(CollectRecordEntry entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -99,7 +79,6 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<CollectRecordEntry>> LoadAllAsync(CancellationToken ct = default)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
@@ -121,7 +100,6 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         return entries;
     }
 
-    /// <inheritdoc />
     public async Task DeleteAsync(string recordId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -175,11 +153,6 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         return entry;
     }
 
-    /// <summary>
-    /// Reconstructs an entry and drives it through the lifecycle Mark* methods so
-    /// its internal bookkeeping (error, retry count, timestamps) is consistent with
-    /// the stored transport state, rather than fabricated by direct assignment.
-    /// </summary>
     private static CollectRecordEntry Rehydrate(
         FieldRecord record,
         RecordSyncState syncState,
@@ -241,7 +214,6 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         return entry;
     }
 
-    /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();
@@ -270,13 +242,6 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         await EnsureVersionColumnAsync(connection, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Adds the <c>version</c> column to a database created before edit-history
-    /// tracking existed (BACKLOG #38). The <c>CREATE TABLE IF NOT EXISTS</c> above
-    /// only applies to brand-new databases, so an existing field device's table is
-    /// migrated here. SQLite has no <c>ADD COLUMN IF NOT EXISTS</c>, so the column
-    /// is probed first and added only when missing.
-    /// </summary>
     private static async Task EnsureVersionColumnAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using (var probe = connection.CreateCommand())

@@ -145,7 +145,7 @@ public class SelectiveSyncPlanTests
         Assert.Equal("1=1", plan.WhereClauseFor("unlisted"));
     }
 
-    // --- S2: projected-CRS extent (the #302 lesson) ---
+    // Projected-CRS extent tests.
 
     [Fact]
     public void Projected_extent_filters_in_layer_crs_units_not_latlon()

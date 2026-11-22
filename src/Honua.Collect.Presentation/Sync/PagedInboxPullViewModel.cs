@@ -10,18 +10,8 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Sync;
 
-/// <summary>Fetches one server page at the requested offset for <see cref="PagedInboxPullViewModel"/>.</summary>
-/// <param name="offset">Zero-based feature offset to request.</param>
-/// <param name="cancellationToken">Cancellation token.</param>
-/// <returns>The decoded page and paging continuation metadata.</returns>
 public delegate Task<InboxPage> PagedInboxPageFetcher(int offset, CancellationToken cancellationToken);
 
-/// <summary>
-/// View-model for the resilient paged inbox pull UI (BACKLOG #38 / #101). Wraps
-/// <see cref="PagedInboxPull"/> over a durable <see cref="IInboxPullProgressStore"/>
-/// so interrupted large-dataset pulls surface exact cursor progress and resume from
-/// the last persisted offset without re-pulling earlier pages.
-/// </summary>
 public sealed class PagedInboxPullViewModel : ObservableObject
 {
     private readonly PagedInboxPull _pull;
@@ -36,11 +26,6 @@ public sealed class PagedInboxPullViewModel : ObservableObject
     private long _newCount;
     private long _conflictCount;
 
-    /// <summary>Creates the paged inbox pull view-model.</summary>
-    /// <param name="progressStore">Durable cursor/progress store.</param>
-    /// <param name="form">Form definition supplying field metadata for merge classification.</param>
-    /// <param name="localIndexProvider">Supplies local records keyed by server object id.</param>
-    /// <param name="fetchPageAsync">Fetches one server page at a given offset.</param>
     public PagedInboxPullViewModel(
         IInboxPullProgressStore progressStore,
         FormDefinition form,
@@ -59,7 +44,6 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         PullFromStartCommand = new RelayCommand(() => _ = RunCommandAsync(() => PullFromStartAsync()), () => !IsPulling);
     }
 
-    /// <summary>Current durable paging cursor.</summary>
     public InboxPullCursor Cursor
     {
         get => _cursor;
@@ -75,16 +59,12 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>Total features pulled across all completed pages.</summary>
     public long PulledCount => Cursor.PulledCount;
 
-    /// <summary>Whether an interrupted pull has persisted progress ready to resume.</summary>
     public bool HasResumableProgress => !Cursor.Completed && Cursor.NextOffset > 0;
 
-    /// <summary>Whether the server signalled no more pages remain.</summary>
     public bool IsComplete => Cursor.Completed;
 
-    /// <summary>Whether a pull run is currently active.</summary>
     public bool IsPulling
     {
         get => _isPulling;
@@ -99,7 +79,6 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the most recent pull run stopped on a page fetch fault.</summary>
     public bool IsFaulted
     {
         get => _isFaulted;
@@ -112,14 +91,12 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>Error message from the most recent faulted fetch, if any.</summary>
     public string? LastError
     {
         get => _lastError;
         private set => SetProperty(ref _lastError, value);
     }
 
-    /// <summary>New-from-server records discovered in the current session.</summary>
     public long NewCount
     {
         get => _newCount;
@@ -132,7 +109,6 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>Conflicts discovered in the current session.</summary>
     public long ConflictCount
     {
         get => _conflictCount;
@@ -145,7 +121,6 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>Human-readable one-line status for the paged inbox screen.</summary>
     public string StatusSummary
     {
         get
@@ -174,38 +149,22 @@ public sealed class PagedInboxPullViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Classifications from the most recently merged page (kept bounded to O(page)
-    /// memory even on million-row layers; cumulative counts are in
-    /// <see cref="PulledCount"/>, <see cref="NewCount"/>, and <see cref="ConflictCount"/>).
-    /// </summary>
     public ObservableCollection<PullClassification> LatestPageRows { get; }
 
-    /// <summary>Conflicts discovered during the active session.</summary>
     public ObservableCollection<RecordConflict> Conflicts { get; }
 
-    /// <summary>Resumes pulling from the last persisted cursor.</summary>
     public ICommand ResumeCommand { get; }
 
-    /// <summary>Starts a fresh pull from offset 0.</summary>
     public ICommand PullFromStartCommand { get; }
 
-    /// <summary>Loads the persisted cursor from storage so resumable state is shown immediately.</summary>
-    /// <param name="ct">Cancellation token.</param>
     public async Task LoadCursorAsync(CancellationToken ct = default)
     {
         Cursor = await _progressStore.LoadCursorAsync(ct);
     }
 
-    /// <summary>Resumes pulling from the persisted cursor until complete or a page fetch faults.</summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The pull result, or <see langword="null"/> if a pull is already running.</returns>
     public Task<InboxPullResult?> ResumePullAsync(CancellationToken ct = default)
         => RunPullAsync(fromStart: false, ct);
 
-    /// <summary>Clears session rows and pulls from offset 0.</summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The pull result, or <see langword="null"/> if a pull is already running.</returns>
     public Task<InboxPullResult?> PullFromStartAsync(CancellationToken ct = default)
         => RunPullAsync(fromStart: true, ct);
 

@@ -8,11 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Tests;
 
-/// <summary>
-/// Covers <see cref="PagedInboxPullViewModel"/> (BACKLOG #38 / #101): cursor hydration,
-/// multi-page streaming pull, mid-run fault recovery and durable resume without
-/// re-pulling completed pages, and pull-from-start reset.
-/// </summary>
 public sealed class PagedInboxPullViewModelTests
 {
     private sealed class InMemoryProgressStore : IInboxPullProgressStore

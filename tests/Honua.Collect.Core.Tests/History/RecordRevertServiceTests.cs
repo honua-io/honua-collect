@@ -8,13 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.History;
 
-/// <summary>
-/// Revert / undo-last-change (#38) over the DURABLE history. The dominant risk these
-/// tests pin down: reverting a non-string field must restore the original TYPED value
-/// (long/double/bool/date), so a follow-up diff sees no spurious type-flip change. The
-/// history therefore goes through the real <see cref="SqliteRecordHistoryStore"/> so a
-/// type-degrading persist would surface here, not only in a hand-built fake.
-/// </summary>
 public sealed class RecordRevertServiceTests : IDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 14, 8, 0, 0, TimeSpan.Zero);

@@ -12,8 +12,9 @@ What is welcome:
   include the capability key when you know it.
 - **Security findings** through the organization security policy at https://github.com/honua-io/.github/blob/main/SECURITY.md (security@honua.io). Do not open
   public issues for suspected vulnerabilities.
-- **Interoperability reports** from client tooling (QGIS, ArcGIS, GDAL, OWSLib and
-  others) as issues, with the request and response that misbehaved.
+- **Interoperability reports** from geospatial client tooling (GeoServices REST,
+  OGC API, GDAL, and other open-standards clients) as issues, with the request and
+  response that misbehaved.
 - **Questions and design feedback** on the open standards Honua implements, in the
   standards repositories: [geospatial-mcp](https://github.com/honua-io/geospatial-mcp)
   and [geospatial-grpc](https://github.com/honua-io/geospatial-grpc).

@@ -5,7 +5,6 @@ using Microsoft.Maui.Graphics;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>A freehand signature / sketch capture pad backed by a GraphicsView.</summary>
 public partial class SignaturePage : ContentPage
 {
     private readonly InkDrawable _drawable = new();

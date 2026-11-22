@@ -14,7 +14,6 @@ public class ResumableUploadDriverTests
     // No real backoff sleeps in tests.
     private static Task NoDelay(TimeSpan _, CancellationToken __) => Task.CompletedTask;
 
-    /// <summary>An in-memory chunk sink that assembles the file and can be told to fail.</summary>
     private sealed class FakeSink : IChunkSink
     {
         private readonly Func<UploadChunk, int, bool>? _failPredicate;
@@ -216,7 +215,6 @@ public class ResumableUploadDriverTests
             () => driver.UploadAsync(upload, new byte[99], Sha256Hex(new byte[99])));
     }
 
-    /// <summary>A sink that throws a FATAL (non-retryable) exception at a given chunk index.</summary>
     private sealed class FakeSinkThatThrowsFatal : IChunkSink
     {
         private readonly int _failAtIndex;

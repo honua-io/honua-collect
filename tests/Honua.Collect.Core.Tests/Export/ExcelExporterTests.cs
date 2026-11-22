@@ -47,7 +47,6 @@ public class ExcelExporterTests
         return r;
     }
 
-    /// <summary>Opens the workbook bytes and returns the named part's parsed XML.</summary>
     private static XDocument Part(byte[] xlsx, string path)
     {
         using var zip = new ZipArchive(new MemoryStream(xlsx), ZipArchiveMode.Read);
@@ -62,7 +61,6 @@ public class ExcelExporterTests
         return zip.Entries.Select(e => e.FullName).ToArray();
     }
 
-    /// <summary>All cells of a worksheet row, in order, as (type, value) pairs.</summary>
     private static (string? Type, string Value)[] Row(XDocument sheet, int rowIndex)
     {
         var row = sheet.Descendants(Ns + "row")

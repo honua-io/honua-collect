@@ -6,10 +6,6 @@ using Honua.Collect.Core.Records;
 
 namespace Honua.Collect.Core.Tests.History;
 
-/// <summary>
-/// Durable offline edit history (BACKLOG #38): append-only, monotonic, ordered,
-/// and surviving a "restart" (a fresh store over the same database file).
-/// </summary>
 public sealed class SqliteRecordHistoryStoreTests : IDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 14, 8, 0, 0, TimeSpan.Zero);

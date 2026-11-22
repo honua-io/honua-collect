@@ -1,7 +1,6 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-using Honua.Collect.App.Services;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Presentation.Export;
 using Microsoft.Maui.ApplicationModel.DataTransfer;
@@ -9,13 +8,6 @@ using Microsoft.Maui.Storage;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// The reporting + bulk-export screen (BACKLOG R1/R2). Shows the captured
-/// record count and offers CSV / GeoJSON export and a per-record report for the
-/// latest record. Export text is produced by the tested
-/// <see cref="ExportViewModel"/> over the Core exporter/renderer; this page keeps
-/// only the file-writing and native share-sheet glue.
-/// </summary>
 public partial class ExportPage : ContentPage
 {
     private readonly RecordBook _book;
@@ -40,9 +32,6 @@ public partial class ExportPage : ContentPage
 
     private async void OnExportGeoJson(object? sender, EventArgs e) =>
         await ShareTextAsync(vm => vm.ExportGeoJson(), "geojson", "application/geo+json", "GeoJSON export");
-
-    private async void OnReportLatest(object? sender, EventArgs e) =>
-        await ShareTextAsync(vm => vm.RenderLatestReport(), "md", "text/markdown", "Record report");
 
     private async Task ShareTextAsync(Func<ExportViewModel, string> produce, string extension, string contentType, string title)
     {

@@ -10,14 +10,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// The assignment / task inbox (BACKLOG E5). Lists dispatched
-/// <see cref="Honua.Collect.Core.Assignments.FieldAssignment"/>s; tapping one
-/// starts a capture <see cref="FormSession"/> over the assignment's form
-/// (the bundled <see cref="SampleForms"/> for the demo), prefilled with the
-/// assignment context, and pushes the dynamic <see cref="FormPage"/>. On submit
-/// the assignment transitions to in-progress, linked to the new record.
-/// </summary>
 public partial class InboxPage : ContentPage
 {
     // The demo inbox belongs to this worker; assignments capture against the

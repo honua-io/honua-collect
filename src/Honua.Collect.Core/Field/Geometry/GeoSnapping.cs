@@ -5,56 +5,24 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Field.Geometry;
 
-/// <summary>What a captured point snapped to.</summary>
 public enum SnapKind
 {
-    /// <summary>Nothing within tolerance; the original point is kept.</summary>
     None,
 
-    /// <summary>Snapped to an existing vertex.</summary>
     Vertex,
 
-    /// <summary>Snapped to the nearest point on an edge.</summary>
     Edge,
 }
 
-/// <summary>The outcome of a snap attempt.</summary>
-/// <param name="Kind">What was snapped to.</param>
-/// <param name="Point">The resulting point (snapped, or the original when <see cref="SnapKind.None"/>).</param>
-/// <param name="DistanceMeters">Distance from the original point to the snap target.</param>
 public sealed record SnapResult(SnapKind Kind, FieldGeoPoint Point, double DistanceMeters);
 
-/// <summary>
-/// A candidate feature to snap to: its ordered vertices and whether they form a
-/// closed ring (polygon). Lines and points pass <paramref name="Closed"/> as
-/// <see langword="false"/>.
-/// </summary>
-/// <param name="Vertices">Candidate geometry vertices, in order.</param>
-/// <param name="Closed">Whether the candidate is a closed ring (polygon).</param>
 public sealed record SnapTarget(IReadOnlyList<FieldGeoPoint> Vertices, bool Closed = false);
 
-/// <summary>
-/// Snaps a captured point to the vertices and edges of nearby features
-/// (BACKLOG G7 — snap-to-feature / topology assist). This keeps adjacent
-/// geometries coincident — shared boundaries, connected lines — which is what
-/// makes field-captured GIS data topologically clean. Distances use a local
-/// equirectangular projection in metres, accurate at snapping tolerances.
-/// </summary>
 public static class GeoSnapping
 {
     private const double MetersPerDegreeLat = 110_540.0;
     private const double MetersPerDegreeLonEquator = 111_320.0;
 
-    /// <summary>
-    /// Snaps <paramref name="point"/> to the nearest vertex or edge of a candidate
-    /// geometry within <paramref name="toleranceMeters"/>. Vertices win ties so
-    /// captures prefer coincident nodes over mid-edge points.
-    /// </summary>
-    /// <param name="point">Captured point.</param>
-    /// <param name="candidate">Candidate geometry vertices, in order.</param>
-    /// <param name="toleranceMeters">Maximum snap distance.</param>
-    /// <param name="closed">Whether the candidate is a closed ring (polygon).</param>
-    /// <returns>The snap result.</returns>
     public static SnapResult Snap(
         FieldGeoPoint point,
         IReadOnlyList<FieldGeoPoint> candidate,
@@ -127,15 +95,6 @@ public static class GeoSnapping
         return new SnapResult(SnapKind.None, point, Math.Min(bestVertexDist, bestEdgeDist));
     }
 
-    /// <summary>
-    /// Snaps <paramref name="point"/> to the nearest vertex or edge across several
-    /// candidate features within <paramref name="toleranceMeters"/>, returning the
-    /// closest snap found. A vertex hit wins ties with an equally-close edge hit.
-    /// </summary>
-    /// <param name="point">Captured point.</param>
-    /// <param name="targets">Candidate features to snap against.</param>
-    /// <param name="toleranceMeters">Maximum snap distance.</param>
-    /// <returns>The best snap result, or <see cref="SnapKind.None"/> if nothing is within tolerance.</returns>
     public static SnapResult Snap(
         FieldGeoPoint point,
         IEnumerable<SnapTarget> targets,

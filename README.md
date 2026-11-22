@@ -10,30 +10,33 @@ data collection app, built on the [Honua](https://github.com/honua-io) geospatia
 forms (conditional visibility, calculations, validation, repeatable sections),
 encrypted offline storage (SQLCipher), connectivity-aware bidirectional sync
 with field-level conflict review, GPS/geometry capture, photo/signature/barcode
-capture, bulk export (CSV, GeoJSON, KML, Excel, GeoPackage, Shapefile), and
-optional AI-assisted capture. Collect speaks the **GeoServices REST protocol**
-natively (FeatureServer `query`/`applyEdits`, `generateToken`), so it syncs to a
-self-hosted [Honua server](https://github.com/honua-io/honua-server) — or an
+capture, and bulk export (CSV, GeoJSON, KML, Excel, GeoPackage, Shapefile).
+Collect speaks the **GeoServices REST protocol** natively (FeatureServer
+`query`/`applyEdits`, `generateToken`) and downloads published forms from the
+Honua **form-package API** (`/api/v1/forms/packages/{formId}`), so it syncs to
+a self-hosted [Honua server](https://github.com/honua-io/honua-server) — or an
 existing GeoServices REST feature service — with **no third-party license and no vendor cloud** in
 between.
 
 ## Status
 
-🚧 **Early stage, active development — not yet a GA field app.** The honest
-picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
+🚧 **Early stage, active development — not yet a GA field app.** The current
+verification boundary, kept in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 
-- **Solid today:** the platform-neutral `Honua.Collect.Core` logic layer (form
-  runtime, records, sync, conflicts, export, provenance, …) and the
-  `Honua.Collect.Presentation` MVVM layer are implemented and unit-tested, with
-  coverage gates and mutation testing in CI.
-- **Verified on device (Android emulator):** login, form-package download,
+- **Runs on Linux / macOS / Windows (.NET 10 SDK):** `Honua.Collect.Core` (form
+  runtime, records, sync, conflict review, export, assignments, history, storage)
+  and `Honua.Collect.Presentation` (MVVM view-models) build and pass unit tests
+  without mobile toolchains, with coverage gates in CI.
+- **Runs on Android emulator only (x86_64 KVM):** login, form-package download,
   offline capture with live validation and repeats, SQLite persistence,
   GeoServices feature sync, and attachment upload — with captured evidence in
   [`docs/verification/`](docs/verification/).
-- **Still in progress:** several device "last-mile" bindings (camera/GNSS/map
-  polish, background sync, push, external GNSS) and enterprise auth/admin UX. Android
-  is the verified target; the iOS/Windows/Mac Catalyst targets exist in the MAUI
-  project but are unverified.
+- **Has not run on a physical device:** no physical Android or iOS handset run
+  has been executed yet. Camera autofocus/EXIF, hardware GNSS/NMEA, audio
+  recording, cellular/offline handoffs, and battery/background sync behaviour
+  remain unverified on physical hardware.
+- **Unverified targets:** the iOS, Mac Catalyst, and Windows targets exist in
+  `Honua.Collect.App.csproj` but have not been built or run end-to-end.
 
 ## Quick start
 
@@ -188,8 +191,6 @@ Repo docs:
 | [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
 | [Shared offline runtime adoption](docs/mobile-offline-adoption.md) | Migration boundary and weekly Android emulator and hosted iOS simulator acceptance journey (physical phones optional). |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
-| [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
-| [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
 | [Mutation testing](docs/mutation-testing.md) | Stryker.NET setup and how the Core mutation score is measured. |
 
 ## Related Honua repos

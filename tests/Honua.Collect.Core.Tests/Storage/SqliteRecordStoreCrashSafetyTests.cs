@@ -8,12 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Storage;
 
-/// <summary>
-/// Crash-safe write path (#38): property/fuzz tests proving the SQLite store never
-/// leaves a half-written or corrupt record, whatever the op sequence. Writes go
-/// through a single atomic upsert, so an interrupted or concurrent write must always
-/// land the row as a complete prior-or-next value — never a torn mix.
-/// </summary>
 public sealed class SqliteRecordStoreCrashSafetyTests : IDisposable
 {
     private readonly string _dbPath = Path.GetTempFileName();

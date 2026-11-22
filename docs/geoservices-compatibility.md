@@ -42,7 +42,7 @@ Collect reads and writes GeoServices REST feature services, including services h
 | Single/multi-select choice lists | ✅ | form model |
 | Cascading selects | ✅ | [`ChoiceCascade`](../src/Honua.Collect.Core/Field/Forms/Cascade/ChoiceCascade.cs) |
 | Default-from-previous / favorites | ✅ | `FormSession` |
-| XLSForm import | ✅ | [`XlsFormImporter`](../src/Honua.Collect.Core/Field/Forms/Authoring/XlsFormImporter.cs) — see [migration guide](./migration-from-external-forms.md) |
+| XLSForm import | ✅ (SDK) | provided by [`Honua.Sdk.Field`](https://github.com/honua-io/honua-sdk-dotnet) (`Honua.Sdk.Field.Forms.Authoring`) for server-side and authoring tools |
 
 ## Capture
 
@@ -89,8 +89,8 @@ Collect reads and writes GeoServices REST feature services, including services h
 | KML export (OGC 2.2) | ✅ | `RecordExporter.ToKml` |
 | GeoPackage export (OGC) | ✅ | [`GeoPackageExporter`](../src/Honua.Collect.Core/Export/GeoPackageExporter.cs) |
 | Shapefile export | ✅ | [`ShapefileExporter`](../src/Honua.Collect.Core/Export/ShapefileExporter.cs) |
-| Per-record templated PDF/Word report | 🟡 | [`RecordReportRenderer`](../src/Honua.Collect.Core/Reports/RecordReportRenderer.cs); finished templating tracked in [#39](https://github.com/honua-io/honua-collect/issues/39) |
-| Bulk export / reporting | 🟡 | bulk UX tracked in [#39](https://github.com/honua-io/honua-collect/issues/39) |
+| Per-record templated PDF/Word report | — | not offered in Collect |
+| Bulk export | ✅ | CSV, GeoJSON, KML, Excel, GeoPackage, and Shapefile via `RecordExporter` |
 
 ## Authentication & enterprise
 
@@ -117,17 +117,12 @@ Collect runs entirely on infrastructure the customer operates
 | All app features available to every signed-in user | ✅ | no in-app licence check |
 | Authenticates against your own server | ✅ | uses your server's token endpoint |
 
-## Migration & data portability
+## Data portability
 
-For import and export workflows, see the full
-[migration guide](./migration-from-external-forms.md):
-
-- **From XLSForm:** import the survey's **XLSForm** directly
-  ([`XlsFormImporter`](../src/Honua.Collect.Core/Field/Forms/Authoring/XlsFormImporter.cs));
-  pull existing feature-layer records over GeoServices.
-- **From CSV/GeoJSON:** re-express the app's fields onto the same form model; import
-  records from CSV/GeoJSON exports.
-- **Out of Collect:** export to CSV, GeoJSON, KML, GeoPackage, or Shapefile — no
+- **From XLSForm:** import XLSForm definitions using `Honua.Sdk.Field.Forms.Authoring`
+  in [`honua-sdk-dotnet`](https://github.com/honua-io/honua-sdk-dotnet), publish
+  through Honua Server's form-package API, and download via `FormPackageClient`.
+- **Out of Collect:** export to CSV, GeoJSON, KML, Excel, GeoPackage, or Shapefile — no
   lock-in.
 
 ## What is deliberately marked partial / planned (honesty ledger)
@@ -151,7 +146,4 @@ To avoid overstating:
   re-sign-in on expiry today.
 - **SSO / OIDC / SAML (🔭):** the session model exists; the interactive sign-in
   flow is planned ([#7](https://github.com/honua-io/honua-collect/issues/7)).
-- **Bulk + templated PDF/Word reporting (🟡):** exporters and a per-record
-  renderer exist; the finished bulk/report UX is tracked in
-  [#39](https://github.com/honua-io/honua-collect/issues/39).
 - **Background sync / push (🔭):** app-layer, planned ([#35](https://github.com/honua-io/honua-collect/issues/35)).

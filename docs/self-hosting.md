@@ -156,5 +156,3 @@ Paid value lives on Honua Server, which is licensed server-side.
   on GeoServices REST, marked honestly.
 - [Data residency & self-host posture](./data-residency-and-self-host.md) — where
   records live and how the connection is secured.
-- [Importing forms and field data](./migration-from-external-forms.md)
-  — XLSForm import and protocol reuse.

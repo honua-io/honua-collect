@@ -9,11 +9,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Tests;
 
-/// <summary>
-/// Covers the record edit-history view-model (BACKLOG #38 / #101): listing durable
-/// versions newest-first, undoing the last change, reverting to a chosen version or
-/// original capture, and command availability.
-/// </summary>
 public sealed class RecordHistoryViewModelTests : IDisposable
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 14, 8, 0, 0, TimeSpan.Zero);

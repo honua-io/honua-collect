@@ -8,16 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// Sign-in page. A thin host: credential checking lives in the unit-tested
-/// <see cref="ServerCredentialVerifier"/> (wired into the tested
-/// <see cref="LoginViewModel"/>); on success the resulting <see cref="AuthSession"/>
-/// is handed to the <see cref="AuthSessionManager"/>, which makes it live in the
-/// shared <see cref="IAuthSessionStore"/> (so every sync/upload request carries the
-/// token) and persists it to secure storage so it resumes across restarts. The
-/// manager's <see cref="AuthSessionManager.SessionExpired"/> event drives a graceful
-/// re-sign-in prompt instead of a silent failure.
-/// </summary>
 public partial class LoginPage : ContentPage
 {
     private readonly AuthSessionManager _manager;

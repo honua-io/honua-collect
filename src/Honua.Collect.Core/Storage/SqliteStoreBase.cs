@@ -6,29 +6,8 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Storage;
 
-/// <summary>
-/// Shared base for the device's SQLite-backed stores. It owns the connection
-/// boilerplate every store previously copy-pasted — connection-string building,
-/// opening, the <strong>fail-closed at-rest-encryption guard</strong>, the
-/// concurrency pragmas, and the lazy one-time schema gate — so a subclass only has
-/// to declare its tables/migrations in <see cref="CreateSchemaAsync"/>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Centralizing the cipher guard removes the risk that one store, copying the
-/// pattern, omits the check and silently writes plaintext: every store that opens
-/// through this base fails closed unless SQLCipher is actually engaged when a key
-/// was supplied.
-/// </para>
-/// <para>
-/// Each opened connection sets <c>busy_timeout</c> and <c>journal_mode=WAL</c> so a
-/// concurrent reader/writer (sync vs UI) waits briefly for the lock instead of
-/// throwing <c>SQLITE_BUSY</c> immediately, and a writer no longer blocks readers.
-/// </para>
-/// </remarks>
 public abstract class SqliteStoreBase
 {
-    /// <summary>Busy-wait (ms) before SQLite gives up on a contended lock.</summary>
     private const int BusyTimeoutMs = 5000;
 
     private readonly string _connectionString;
@@ -36,17 +15,6 @@ public abstract class SqliteStoreBase
     private readonly SemaphoreSlim _schemaGate = new(1, 1);
     private bool _schemaReady;
 
-    /// <summary>Creates a store over the given connection string or database file path.</summary>
-    /// <param name="connectionStringOrPath">
-    /// A SQLite connection string, or a bare path to the database file. A value that
-    /// is not already a <c>key=value</c> connection string is treated as the file path.
-    /// </param>
-    /// <param name="encryptionKey">
-    /// Optional SQLCipher key. When non-empty (and a file path was supplied), the
-    /// database is encrypted at rest — the key is applied as the connection
-    /// <c>Password</c> (SQLCipher's <c>PRAGMA key</c>) — and the open fails closed
-    /// unless the cipher is actually engaged.
-    /// </param>
     protected SqliteStoreBase(string connectionStringOrPath, string? encryptionKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
@@ -66,27 +34,10 @@ public abstract class SqliteStoreBase
         _connectionString = builder.ToString();
     }
 
-    /// <summary>
-    /// A short human-readable name for this store's database, used in the
-    /// fail-closed encryption error (e.g. "field database", "HTTP outbox database").
-    /// </summary>
     protected abstract string StoreDescription { get; }
 
-    /// <summary>
-    /// Creates the store's tables/indexes/migrations. Called once, under a lock, on
-    /// the first connection. Implementations should use <c>CREATE TABLE IF NOT
-    /// EXISTS</c> (and probe-then-alter for column migrations) so it is idempotent.
-    /// </summary>
-    /// <param name="connection">An open connection (cipher verified, pragmas applied).</param>
-    /// <param name="ct">Cancellation token.</param>
     protected abstract Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct);
 
-    /// <summary>
-    /// Opens a connection, verifies at-rest encryption, applies the concurrency
-    /// pragmas, and ensures the schema exists. The caller owns disposing the result.
-    /// </summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>An open, ready-to-use connection.</returns>
     protected async Task<SqliteConnection> OpenAsync(CancellationToken ct)
     {
         var connection = new SqliteConnection(_connectionString);
@@ -117,13 +68,6 @@ public abstract class SqliteStoreBase
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// When an encryption key was supplied, fails closed unless SQLCipher is actually
-    /// active. Stock <c>Microsoft.Data.Sqlite</c> over the non-SQLCipher native bundle
-    /// silently ignores the <c>Password</c> (no <c>PRAGMA key</c>), so the file would
-    /// be written in plaintext. <c>PRAGMA cipher_version</c> returns the SQLCipher
-    /// version when the cipher is wired in, and nothing otherwise.
-    /// </summary>
     private async Task EnsureCipherEngagedAsync(SqliteConnection connection, CancellationToken ct)
     {
         if (!_encryptionRequested)
@@ -181,28 +125,15 @@ public abstract class SqliteStoreBase
         }
     }
 
-    /// <summary>Formats a timestamp for SQLite TEXT storage in round-trip ISO-8601 form.</summary>
-    /// <param name="value">Timestamp to format.</param>
-    /// <returns>The round-trip formatted timestamp string.</returns>
     protected static string ToStorage(DateTimeOffset value)
         => value.ToString("O", CultureInfo.InvariantCulture);
 
-    /// <summary>Formats a nullable timestamp for SQLite parameter binding, returning <see cref="DBNull.Value"/> when null.</summary>
-    /// <param name="value">Nullable timestamp to format.</param>
-    /// <returns>The formatted string or <see cref="DBNull.Value"/>.</returns>
     protected static object ToStorage(DateTimeOffset? value)
         => value is { } v ? ToStorage(v) : DBNull.Value;
 
-    /// <summary>Parses a round-trip ISO-8601 timestamp read from SQLite TEXT storage.</summary>
-    /// <param name="value">Stored timestamp string.</param>
-    /// <returns>The parsed timestamp.</returns>
     protected static DateTimeOffset FromStorage(string value)
         => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
-    /// <summary>Reads a nullable round-trip ISO-8601 timestamp from a SQLite data reader.</summary>
-    /// <param name="reader">The active data reader.</param>
-    /// <param name="ordinal">Column ordinal.</param>
-    /// <returns>The parsed timestamp, or <see langword="null"/> when the column is SQL NULL.</returns>
     protected static DateTimeOffset? FromStorage(SqliteDataReader reader, int ordinal)
         => reader.IsDBNull(ordinal) ? null : FromStorage(reader.GetString(ordinal));
 

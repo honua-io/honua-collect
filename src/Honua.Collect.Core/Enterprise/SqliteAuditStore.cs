@@ -7,30 +7,17 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Enterprise;
 
-/// <summary>
-/// A durable <see cref="IAuditStore"/> backed by SQLite (BACKLOG E3), reusing the
-/// same on-device database seam as <see cref="Storage.SqliteRecordStore"/> — pass
-/// the field database's connection string to keep the audit trail in the same
-/// (optionally SQLCipher-encrypted) file. The <c>sequence</c> column is the primary
-/// key, so an out-of-order or duplicate sequence is rejected by the database itself,
-/// reinforcing the monotonic ordering the hash chain depends on.
-/// </summary>
 public sealed class SqliteAuditStore : SqliteStoreBase, IAuditStore
 {
     private const string TableName = "collect_audit";
 
-    /// <summary>Creates the store over a connection string or database file path.</summary>
-    /// <param name="connectionStringOrPath">A SQLite connection string, or a path to the database file.</param>
-    /// <param name="encryptionKey">Optional SQLCipher key; applied as the connection password when non-empty.</param>
     public SqliteAuditStore(string connectionStringOrPath, string? encryptionKey = null)
         : base(connectionStringOrPath, encryptionKey)
     {
     }
 
-    /// <inheritdoc />
     protected override string StoreDescription => "audit trail database";
 
-    /// <inheritdoc />
     public async Task<long> HeadSequenceAsync(CancellationToken ct = default)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
@@ -40,7 +27,6 @@ public sealed class SqliteAuditStore : SqliteStoreBase, IAuditStore
         return result is null or DBNull ? -1L : Convert.ToInt64(result, CultureInfo.InvariantCulture);
     }
 
-    /// <inheritdoc />
     public async Task<string> HeadHashAsync(CancellationToken ct = default)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
@@ -50,7 +36,6 @@ public sealed class SqliteAuditStore : SqliteStoreBase, IAuditStore
         return result as string ?? string.Empty;
     }
 
-    /// <inheritdoc />
     public async Task AppendAsync(AuditEntry entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -77,7 +62,6 @@ public sealed class SqliteAuditStore : SqliteStoreBase, IAuditStore
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<AuditEntry>> QueryAsync(AuditQuery? query = null, CancellationToken ct = default)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
@@ -133,7 +117,6 @@ public sealed class SqliteAuditStore : SqliteStoreBase, IAuditStore
         return entries;
     }
 
-    /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await using var command = connection.CreateCommand();

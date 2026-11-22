@@ -8,28 +8,10 @@ using IImage = Microsoft.Maui.Graphics.IImage;
 
 namespace Honua.Collect.App.Maps;
 
-/// <summary>
-/// Fetches OpenStreetMap raster tiles (the XYZ slippy-map scheme) for the
-/// embedded map (BACKLOG G4) with no third-party map SDK or API key. Tiles are
-/// backed by a persistent on-disk <see cref="TileCache"/> so a viewed or
-/// pre-downloaded area keeps working fully offline and survives app restarts;
-/// decoded images are also held in an in-memory cache as a fast layer above
-/// disk. Misses are loaded asynchronously; <see cref="TileLoaded"/> fires when a
-/// fetch completes so the view can redraw. <see cref="PrefetchAreaAsync"/>
-/// downloads a whole geographic area into the disk cache for offline use.
-/// </summary>
 public sealed class OsmTileLoader : IDisposable
 {
-    /// <summary>
-    /// Upper bound on decoded tiles held in memory. Each decoded tile is a full RGBA
-    /// bitmap (~256 KB for a 256px tile), so this caps the memory layer at roughly a
-    /// few tens of MB; the least-recently-used tile is evicted and disposed past it.
-    /// The on-disk <see cref="TileCache"/> remains the (bounded) backing store, so an
-    /// evicted tile is simply re-decoded from disk on the next view.
-    /// </summary>
     private const int MaxCachedTiles = 256;
 
-    /// <summary>Per-tile network deadline so a slow fetch releases its concurrency slot quickly.</summary>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
 
     private readonly HttpClient _http;
@@ -38,37 +20,14 @@ public sealed class OsmTileLoader : IDisposable
     private readonly ConcurrentDictionary<string, byte> _inFlight = new();
     private readonly SemaphoreSlim _gate = new(6); // be polite to the tile server
 
-    /// <summary>Raised on the thread pool when a requested tile finishes loading.</summary>
     public event EventHandler? TileLoaded;
 
-    /// <summary>
-    /// Creates a loader with a descriptive User-Agent (required by the OSM tile
-    /// policy), backed by an on-disk cache rooted at <paramref name="cacheRoot"/>.
-    /// </summary>
-    /// <param name="cacheRoot">
-    /// The directory under which tiles are persisted, e.g.
-    /// <c>Path.Combine(FileSystem.AppDataDirectory, "tiles")</c>.
-    /// </param>
-    /// <param name="http">
-    /// The HTTP client for tile requests, from <c>IHttpClientFactory</c> (the
-    /// caller owns its lifetime, so this type does not dispose it).
-    /// </param>
     public OsmTileLoader(string cacheRoot, HttpClient http)
     {
         _disk = new TileCache(cacheRoot);
         _http = http ?? throw new ArgumentNullException(nameof(http));
     }
 
-    /// <summary>
-    /// Returns the decoded tile if available, otherwise <see langword="null"/>
-    /// and schedules a background load that raises <see cref="TileLoaded"/>. A
-    /// disk-cached tile is decoded and returned without any network access, so
-    /// the map works offline for any area previously viewed or prefetched.
-    /// </summary>
-    /// <param name="zoom">Tile zoom level.</param>
-    /// <param name="x">Tile column.</param>
-    /// <param name="y">Tile row.</param>
-    /// <returns>The cached image, or null while loading.</returns>
     public IImage? Get(int zoom, int x, int y)
     {
         var key = OsmTileUrl.CacheKey(zoom, x, y);
@@ -175,20 +134,6 @@ public sealed class OsmTileLoader : IDisposable
         return await response.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Downloads every tile covering <paramref name="bbox"/> across the inclusive
-    /// zoom range into the on-disk cache, so the area works fully offline. Tiles
-    /// already cached are skipped. Refuses areas larger than
-    /// <paramref name="maxTiles"/> by returning the over-cap plan without
-    /// downloading, so callers can warn and let the user narrow the area.
-    /// </summary>
-    /// <param name="bbox">The geographic area to make available offline.</param>
-    /// <param name="minZoom">The lowest (coarsest) zoom, inclusive.</param>
-    /// <param name="maxZoom">The highest (most detailed) zoom, inclusive.</param>
-    /// <param name="progress">Reports tiles completed out of the total to fetch.</param>
-    /// <param name="maxTiles">The cap on tiles per area.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The plan that was executed (or refused when it exceeds the cap).</returns>
     public async Task<OfflineAreaPlan> PrefetchAreaAsync(
         GeoBoundingBox bbox,
         int minZoom,
@@ -268,7 +213,6 @@ public sealed class OsmTileLoader : IDisposable
         }
     }
 
-    /// <inheritdoc />
     public void Dispose()
     {
         // The HttpClient is owned by IHttpClientFactory, not this type.
@@ -276,11 +220,6 @@ public sealed class OsmTileLoader : IDisposable
         _cache.Dispose();
     }
 
-    /// <summary>
-    /// A small thread-safe LRU cache of decoded tile images bounded by a tile count.
-    /// Reads and writes take a short lock; an entry pushed past the capacity (or a
-    /// value replaced for an existing key) is disposed so decoded bitmaps don't leak.
-    /// </summary>
     private sealed class LruImageCache : IDisposable
     {
         private readonly int _capacity;
@@ -371,11 +310,7 @@ public sealed class OsmTileLoader : IDisposable
     }
 }
 
-/// <summary>Progress for an offline-area prefetch: tiles completed out of the total.</summary>
-/// <param name="Completed">Tiles finished so far.</param>
-/// <param name="Total">Total tiles in the area.</param>
 public readonly record struct TilePrefetchProgress(int Completed, int Total)
 {
-    /// <summary>Completion fraction in [0, 1]; 1 when there is nothing to fetch.</summary>
     public double Fraction => Total <= 0 ? 1.0 : (double)Completed / Total;
 }

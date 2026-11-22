@@ -143,7 +143,6 @@
       "honua.collect.core": {
         "type": "Project",
         "dependencies": {
-          "BouncyCastle.Cryptography": "[2.7.0, )",
           "Honua.Mobile.Offline": "[0.1.0-alpha.1, )",
           "Honua.Mobile.Sdk": "[0.1.0-alpha.1, )",
           "Honua.Sdk.Field": "[2.2.0, )",
@@ -151,12 +150,6 @@
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
           "SkiaSharp": "[4.156.1, )"
         }
-      },
-      "BouncyCastle.Cryptography": {
-        "type": "CentralTransitive",
-        "requested": "[2.7.0, )",
-        "resolved": "2.7.0",
-        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
       },
       "Honua.Mobile.Offline": {
         "type": "CentralTransitive",

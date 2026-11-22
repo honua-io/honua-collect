@@ -8,12 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
-/// <summary>
-/// Robust large-dataset paged inbox pull (#38). Pins the four known pitfalls shut:
-/// bounded memory (no unbounded seen-set), incremental durability (a mid-run throw
-/// keeps merged pages and resumes without re-pulling), the forward-progress guard
-/// (non-advancing offset terminates), and an honest multi-run result contract.
-/// </summary>
 public sealed class PagedInboxPullTests
 {
     private static FormDefinition Form() => new()
@@ -34,8 +28,6 @@ public sealed class PagedInboxPullTests
     private static PulledRecord Pulled(long objectId)
         => new(objectId, FieldRecords.WithValues($"r{objectId}", ("name", $"n{objectId}")));
 
-    /// <summary>An in-memory progress store that records every save so the test can
-    /// assert incremental persistence and bounded cursor size.</summary>
     private sealed class FakeProgress : IInboxPullProgressStore
     {
         public InboxPullCursor Cursor { get; private set; } = InboxPullCursor.Start;

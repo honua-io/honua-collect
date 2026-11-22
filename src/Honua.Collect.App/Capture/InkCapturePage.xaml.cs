@@ -6,18 +6,11 @@ using Microsoft.Maui.Graphics.Platform;
 
 namespace Honua.Collect.App.Capture;
 
-/// <summary>
-/// A freehand ink pad used for both signature (C4) and sketch (C5) capture. The
-/// strokes are rasterized to a white-background PNG and the file path is returned
-/// to the caller, so the captured ink is stored and uploaded as ordinary image
-/// media. Shown modally via <see cref="CaptureAsync"/>.
-/// </summary>
 public partial class InkCapturePage : ContentPage
 {
     private readonly InkDrawable _drawable = new();
     private readonly TaskCompletionSource<string?> _result = new();
 
-    /// <summary>The page heading (e.g. "Signature" or "Sketch").</summary>
     public string Title { get; }
 
     private InkCapturePage(string title)
@@ -28,13 +21,6 @@ public partial class InkCapturePage : ContentPage
         Canvas.Drawable = _drawable;
     }
 
-    /// <summary>
-    /// Presents the ink pad modally and returns the saved PNG path, or
-    /// <see langword="null"/> if the user cancelled or drew nothing.
-    /// </summary>
-    /// <param name="navigation">The navigation stack to present on.</param>
-    /// <param name="title">The page heading.</param>
-    /// <returns>The captured image path, or null.</returns>
     public static async Task<string?> CaptureAsync(INavigation navigation, string title)
     {
         ArgumentNullException.ThrowIfNull(navigation);
@@ -100,7 +86,6 @@ public partial class InkCapturePage : ContentPage
         await Navigation.PopModalAsync();
     }
 
-    /// <summary>Accumulates freehand strokes and draws them on a white background.</summary>
     private sealed class InkDrawable : IDrawable
     {
         private readonly List<List<PointF>> _strokes = [];

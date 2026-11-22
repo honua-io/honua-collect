@@ -11,57 +11,75 @@ namespace Honua.Collect.Core.Tests.Forms;
 
 public class FormPackageClientTests
 {
-    private const string SamplePackage = """
+    private const string SampleEnvelope = """
         {
           "formId": "inspection",
-          "title": "Site Inspection",
-          "version": "3",
-          "sections": [
-            { "sectionId": "main", "label": "Main", "repeatable": false,
-              "minInstances": null, "maxInstances": null,
-              "fieldIds": ["name", "status", "pic"] },
-            { "sectionId": "samples", "label": "Samples", "repeatable": true,
-              "minInstances": 0, "maxInstances": null,
-              "fieldIds": ["depth"] }
-          ],
-          "fields": [
-            { "fieldId": "name", "label": "Name", "type": "text",
-              "required": true, "sectionId": "main" },
-            { "fieldId": "status", "label": "Status", "type": "select_one",
-              "required": true, "sectionId": "main",
-              "domain": { "choices": [
-                { "code": "new", "label": "New" },
-                { "code": "done", "label": "Done" } ] } },
-            { "fieldId": "pic", "label": "Photo", "type": "photo",
-              "required": false, "sectionId": "main" },
-            { "fieldId": "depth", "label": "Depth", "type": "decimal",
-              "required": false, "sectionId": "samples" }
-          ]
+          "version": 3,
+          "status": "published",
+          "package": {
+            "schemaVersion": "honua.form-package.v1",
+            "formId": "inspection",
+            "title": "Site Inspection",
+            "sections": [
+              { "sectionId": "main", "label": "Main", "repeatable": false,
+                "minInstances": null, "maxInstances": null,
+                "fieldIds": ["name", "status", "pic"] },
+              { "sectionId": "samples", "label": "Samples", "repeatable": true,
+                "minInstances": 0, "maxInstances": null,
+                "fieldIds": ["depth"] }
+            ],
+            "fields": [
+              { "fieldId": "name", "label": "Name", "type": "text",
+                "required": true, "sectionId": "main" },
+              { "fieldId": "status", "label": "Status", "type": "select_one",
+                "required": true, "sectionId": "main",
+                "domain": { "choices": [
+                  { "code": "new", "label": "New" },
+                  { "code": "done", "label": "Done" } ] } },
+              { "fieldId": "pic", "label": "Photo", "type": "photo",
+                "required": false, "sectionId": "main" },
+              { "fieldId": "depth", "label": "Depth", "type": "decimal",
+                "required": false, "sectionId": "samples" }
+            ]
+          }
         }
         """;
 
     [Fact]
-    public async Task DownloadAsync_requests_expected_url()
+    public async Task DownloadAsync_requests_published_form_package_url()
     {
-        var handler = new StubHandler(SamplePackage);
+        var handler = new StubHandler(SampleEnvelope);
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
 
-        await new FormPackageClient(client).DownloadAsync("svc1", "inspection");
+        await new FormPackageClient(client).DownloadAsync("inspection");
 
         Assert.NotNull(handler.LastRequestUri);
         Assert.Equal(
-            "https://server.example/rest/services/svc1/FormServer/inspection?f=json",
+            "https://server.example/api/v1/forms/packages/inspection",
             handler.LastRequestUri!.ToString());
         Assert.Equal(HttpMethod.Get, handler.LastMethod);
     }
 
     [Fact]
-    public async Task DownloadAsync_maps_package_to_form_definition()
+    public async Task DownloadAsync_requests_specific_published_version_url()
     {
-        var handler = new StubHandler(SamplePackage);
+        var handler = new StubHandler(SampleEnvelope);
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
 
-        var form = await new FormPackageClient(client).DownloadAsync("svc1", "inspection");
+        await new FormPackageClient(client).DownloadAsync("inspection", packageVersion: 3);
+
+        Assert.Equal(
+            "https://server.example/api/v1/forms/packages/inspection/versions/3",
+            handler.LastRequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task DownloadAsync_maps_envelope_to_form_definition()
+    {
+        var handler = new StubHandler(SampleEnvelope);
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
+
+        var form = await new FormPackageClient(client).DownloadAsync("inspection");
 
         Assert.Equal("inspection", form.FormId);
         Assert.Equal("Site Inspection", form.Name);
@@ -85,21 +103,18 @@ public class FormPackageClientTests
         Assert.False(fields["pic"].Required);
         Assert.Equal(FormFieldType.Numeric, fields["depth"].Type);
 
-        // select_one choices map code -> Value, label -> Label, in order.
         Assert.Equal(["new", "done"], fields["status"].Choices.Select(c => c.Value));
         Assert.Equal(["New", "Done"], fields["status"].Choices.Select(c => c.Label));
-
-        // Field order within a section is preserved.
         Assert.Equal(["name", "status", "pic"], main.Fields.Select(f => f.FieldId));
     }
 
     [Fact]
     public async Task DownloadAsync_result_drives_a_submittable_form_session()
     {
-        var handler = new StubHandler(SamplePackage);
+        var handler = new StubHandler(SampleEnvelope);
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
 
-        var form = await new FormPackageClient(client).DownloadAsync("svc1", "inspection");
+        var form = await new FormPackageClient(client).DownloadAsync("inspection");
 
         var session = FormSession.CreateForNewRecord(form, "r1");
         Assert.False(session.CanSubmit);
@@ -121,7 +136,7 @@ public class FormPackageClientTests
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
 
         await Assert.ThrowsAsync<FormPackageException>(
-            () => new FormPackageClient(client).DownloadAsync("svc1", "inspection"));
+            () => new FormPackageClient(client).DownloadAsync("inspection"));
     }
 
     [Fact]
@@ -131,22 +146,18 @@ public class FormPackageClientTests
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
 
         await Assert.ThrowsAsync<HttpRequestException>(
-            () => new FormPackageClient(client).DownloadAsync("svc1", "inspection"));
+            () => new FormPackageClient(client).DownloadAsync("inspection"));
     }
 
     [Fact]
-    public async Task DownloadAsync_surfaces_a_geoservices_error_body_returned_with_http_200()
+    public async Task DownloadAsync_surfaces_error_envelope_returned_with_http_200()
     {
-        // GeoServices surfaces auth/token/permission failures as an HTTP 200 with a
-        // root {"error":{...}} body. It must read as a distinct, code-carrying error
-        // (not a malformed/empty package), so operators can tell a permissions
-        // problem from a corrupt package.
         const string errorBody = """{"error":{"code":403,"message":"Token required.","details":[]}}""";
-        var handler = new StubHandler(errorBody); // HTTP 200
+        var handler = new StubHandler(errorBody);
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
 
         var ex = await Assert.ThrowsAsync<FormPackageException>(
-            () => new FormPackageClient(client).DownloadAsync("svc1", "inspection"));
+            () => new FormPackageClient(client).DownloadAsync("inspection"));
 
         Assert.Equal(403, ex.ErrorCode);
         Assert.Contains("Token required", ex.Message);
@@ -156,14 +167,25 @@ public class FormPackageClientTests
     [InlineData("")]
     [InlineData("  ")]
     [InlineData(null)]
-    public async Task DownloadAsync_validates_arguments(string? bad)
+    public async Task DownloadAsync_validates_form_id(string? bad)
     {
-        var handler = new StubHandler(SamplePackage);
+        var handler = new StubHandler(SampleEnvelope);
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
-        var client2 = new FormPackageClient(client);
+        var packageClient = new FormPackageClient(client);
 
-        await Assert.ThrowsAnyAsync<ArgumentException>(() => client2.DownloadAsync(bad!, "form"));
-        await Assert.ThrowsAnyAsync<ArgumentException>(() => client2.DownloadAsync("svc", bad!));
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => packageClient.DownloadAsync(bad!));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task DownloadAsync_validates_package_version(int badVersion)
+    {
+        var handler = new StubHandler(SampleEnvelope);
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
+        var packageClient = new FormPackageClient(client);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => packageClient.DownloadAsync("inspection", badVersion));
     }
 
     [Fact]
@@ -196,7 +218,7 @@ public class FormPackageClientTests
     [InlineData("location", FormFieldType.Location)]
     [InlineData("calculate", FormFieldType.Calculated)]
     [InlineData("file", FormFieldType.File)]
-    [InlineData("  TEXT  ", FormFieldType.Text)] // trimmed + case-insensitive
+    [InlineData("  TEXT  ", FormFieldType.Text)]
     public async Task Map_maps_each_known_type_token(string token, FormFieldType expected)
     {
         var json = $$"""
@@ -237,7 +259,7 @@ public class FormPackageClientTests
     }
 
     [Fact]
-    public async Task Map_skips_fields_without_a_field_id_and_choices_without_a_code()
+    public async Task Map_skips_fields_without_a_field_id_and_handles_typed_choice_codes()
     {
         const string json = """
             { "formId": "f",
@@ -245,15 +267,19 @@ public class FormPackageClientTests
               "fields": [
                 { "label": "no field id", "type": "text", "sectionId": "s" },
                 { "fieldId": "keep", "type": "select_one", "sectionId": "s",
-                  "domain": { "choices": [ { "label": "blank code" }, { "code": "a", "label": "A" } ] } }
+                  "domain": { "choices": [
+                    { "label": "blank code" },
+                    { "code": "a", "label": "A" },
+                    { "code": 2, "label": "Two" },
+                    { "code": true, "label": "Yes" }
+                  ] } }
               ] }
             """;
 
         var form = await MapAsync(json);
         var field = Assert.Single(form.Sections.Single().Fields);
         Assert.Equal("keep", field.FieldId);
-        // Choice with no code is dropped; only "a" survives.
-        Assert.Equal(["a"], field.Choices.Select(c => c.Value));
+        Assert.Equal(["a", "2", "true"], field.Choices.Select(c => c.Value));
     }
 
     [Fact]
@@ -266,9 +292,9 @@ public class FormPackageClientTests
             """;
 
         var form = await MapAsync(json);
-        Assert.Equal("form-7", form.Name);   // falls back to form id
-        Assert.Null(form.Version);            // whitespace version -> null
-        Assert.Equal("sec", form.Sections.Single().Label); // label falls back to section id
+        Assert.Equal("form-7", form.Name);
+        Assert.Null(form.Version);
+        Assert.Equal("sec", form.Sections.Single().Label);
     }
 
     [Fact]
@@ -281,21 +307,9 @@ public class FormPackageClientTests
         Assert.Empty(form.Sections);
     }
 
-    /// <summary>Maps a package JSON by routing it through the real download path.</summary>
-    private static async Task<FormDefinition> MapAsync(string json)
-    {
-        var handler = new StubHandler(json);
-        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
-        return await new FormPackageClient(client).DownloadAsync("svc", "form");
-    }
-
     [Fact]
     public async Task Map_honors_section_fieldIds_for_membership_and_order()
     {
-        // fieldIds is authoritative: it sets which fields belong to the section and
-        // the order they render — independent of each field's own sectionId and of
-        // the order fields appear in the package. "c" is excluded (not listed); "b"
-        // is included (listed) despite a different sectionId; order follows fieldIds.
         const string package = """
             {
               "formId": "f",
@@ -309,10 +323,17 @@ public class FormPackageClientTests
             """;
         using var client = new HttpClient(new StubHandler(package)) { BaseAddress = new Uri("https://s.example") };
 
-        var form = await new FormPackageClient(client).DownloadAsync("svc", "f");
+        var form = await new FormPackageClient(client).DownloadAsync("f");
 
         var section = Assert.Single(form.Sections);
         Assert.Equal(["b", "a"], section.Fields.Select(f => f.FieldId));
+    }
+
+    private static async Task<FormDefinition> MapAsync(string json)
+    {
+        var handler = new StubHandler(json);
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://server.example") };
+        return await new FormPackageClient(client).DownloadAsync("form");
     }
 
     private sealed class StubHandler(string body, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler

@@ -7,48 +7,17 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.History;
 
-/// <summary>
-/// The outcome of a revert: the entry whose values were restored, the new edit that
-/// records the revert (so the change log stays a complete, append-only audit), and
-/// the reconstructed values that were applied.
-/// </summary>
-/// <param name="Entry">The reverted entry (its <see cref="CollectRecordEntry.Record"/> now holds the restored values).</param>
-/// <param name="RevertEdit">
-/// The edit appended to record the revert, or <see langword="null"/> when the target
-/// version already matched the current values (nothing to undo).
-/// </param>
-/// <param name="RestoredValues">The field values as they were at the target version.</param>
 public sealed record RecordRevertResult(
     CollectRecordEntry Entry,
     RecordEdit? RevertEdit,
     IReadOnlyDictionary<string, object?> RestoredValues);
 
-/// <summary>
-/// "Undo last sync'd change" / revert-to-previous-version (#38), built on the durable
-/// edit history. A revert is itself a forward edit: it reconstructs an earlier
-/// version by reverse-applying the durable history, writes those values onto the live
-/// record, and records the restoration as a <em>new</em> pending edit. So the record
-/// stays fully editable (no rewind that loses the audit trail) and the next sync ships
-/// the restored values as an ordinary update.
-/// </summary>
-/// <remarks>
-/// Type fidelity is the whole game here. The durable history persists each value
-/// preserving its type (see <see cref="SqliteRecordHistoryStore"/>), so reverting a
-/// numeric/boolean/date field restores the original <em>typed</em> value rather than
-/// a stringified copy — a follow-up diff against the restored record therefore sees no
-/// spurious change. Reverse-apply is the single shared
-/// <see cref="RecordEditHistory.ReverseApplyAfter"/> implementation, so the durable
-/// and in-memory paths can never drift.
-/// </remarks>
 public sealed class RecordRevertService
 {
     private readonly IRecordStore _records;
     private readonly IRecordHistoryStore _history;
     private readonly RecordEditLog _log;
 
-    /// <summary>Creates the revert service over the durable record and history stores.</summary>
-    /// <param name="records">Where the live record/entry is persisted.</param>
-    /// <param name="history">The append-only edit history the revert reconstructs from and appends to.</param>
     public RecordRevertService(IRecordStore records, IRecordHistoryStore history)
     {
         _records = records ?? throw new ArgumentNullException(nameof(records));
@@ -56,20 +25,6 @@ public sealed class RecordRevertService
         _log = new RecordEditLog(history);
     }
 
-    /// <summary>
-    /// Reverts the record to the values it held immediately after the edit at
-    /// <paramref name="toSequence"/> (pass -1 for the original capture), restoring
-    /// each field's original typed value. The restoration is written onto
-    /// <paramref name="entry"/>, recorded as a new edit, and both the record and its
-    /// history are persisted.
-    /// </summary>
-    /// <param name="entry">The entry to revert (mutated in place; its record keeps its id).</param>
-    /// <param name="toSequence">The history sequence to revert to (inclusive); -1 for the original.</param>
-    /// <param name="editorUserId">Who is performing the revert (audited on the new edit).</param>
-    /// <param name="timestampUtc">Revert timestamp; defaults to now.</param>
-    /// <param name="note">Optional human note; defaults to a revert marker.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The revert outcome; <see cref="RecordRevertResult.RevertEdit"/> is null when nothing changed.</returns>
     public async Task<RecordRevertResult> RevertToVersionAsync(
         CollectRecordEntry entry,
         long toSequence,
@@ -96,17 +51,6 @@ public sealed class RecordRevertService
             .ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Undoes the most recent recorded edit, restoring the values from immediately
-    /// before it. A no-op (returns a null <see cref="RecordRevertResult.RevertEdit"/>)
-    /// when the record has no history.
-    /// </summary>
-    /// <param name="entry">The entry to undo the last change on.</param>
-    /// <param name="editorUserId">Who is performing the undo.</param>
-    /// <param name="timestampUtc">Undo timestamp; defaults to now.</param>
-    /// <param name="note">Optional human note.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The revert outcome.</returns>
     public async Task<RecordRevertResult> UndoLastChangeAsync(
         CollectRecordEntry entry,
         string editorUserId,

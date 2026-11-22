@@ -12,21 +12,10 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Export;
 
-/// <summary>
-/// Bulk-exports captured <see cref="FieldRecord"/> values to portable formats
-/// (BACKLOG R2). Columns/properties are driven by the <see cref="FormDefinition"/>
-/// so every record exports a stable, complete column set even when individual
-/// records leave fields blank.
-/// </summary>
 public static class RecordExporter
 {
     private static readonly string[] FixedColumns = ["record_id", "status", "latitude", "longitude"];
 
-    /// <summary>Exports records in the requested format.</summary>
-    /// <param name="form">Form whose fields define the columns.</param>
-    /// <param name="records">Records to export.</param>
-    /// <param name="format">Target format.</param>
-    /// <returns>The serialized export as a string.</returns>
     public static string Export(FormDefinition form, IEnumerable<FieldRecord> records, ExportFormat format) => format switch
     {
         ExportFormat.Csv => ToCsv(form, records),
@@ -38,29 +27,14 @@ public static class RecordExporter
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unsupported export format."),
     };
 
-    /// <summary>
-    /// Whether a format produces binary bytes (<see cref="ExportBinary"/>) rather than
-    /// the text returned by <see cref="Export(FormDefinition, IEnumerable{FieldRecord}, ExportFormat)"/>.
-    /// </summary>
-    /// <param name="format">The format to classify.</param>
-    /// <returns><see langword="true"/> for binary formats such as <see cref="ExportFormat.Xlsx"/>.</returns>
     public static bool IsBinary(ExportFormat format) => format is ExportFormat.Xlsx;
 
-    /// <summary>Exports records to a binary format's file bytes.</summary>
-    /// <param name="form">Form whose fields define the columns.</param>
-    /// <param name="records">Records to export.</param>
-    /// <param name="format">A binary target format (currently <see cref="ExportFormat.Xlsx"/>).</param>
-    /// <returns>The serialized export as a byte array.</returns>
     public static byte[] ExportBinary(FormDefinition form, IEnumerable<FieldRecord> records, ExportFormat format) => format switch
     {
         ExportFormat.Xlsx => ExcelExporter.Export(form, records),
         _ => throw new ArgumentException($"{format} is not a binary export format; call {nameof(Export)}.", nameof(format)),
     };
 
-    /// <summary>Exports records to CSV with one row per record.</summary>
-    /// <param name="form">Form whose fields define the columns.</param>
-    /// <param name="records">Records to export.</param>
-    /// <returns>CSV text including a header row.</returns>
     public static string ToCsv(FormDefinition form, IEnumerable<FieldRecord> records)
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -93,16 +67,6 @@ public static class RecordExporter
         return builder.ToString();
     }
 
-    /// <summary>
-    /// Exports records to CSV under a field mapping (epic #39): only the mapped
-    /// columns are emitted, in the mapping's order, under the mapped headers. Sources
-    /// may be form field ids or the fixed record columns
-    /// (<c>record_id</c>/<c>status</c>/<c>latitude</c>/<c>longitude</c>).
-    /// </summary>
-    /// <param name="form">Form whose fields are addressable as mapping sources.</param>
-    /// <param name="records">Records to export.</param>
-    /// <param name="mapping">The column mapping; must list at least one column.</param>
-    /// <returns>CSV text including the mapped header row.</returns>
     public static string ToMappedCsv(FormDefinition form, IEnumerable<FieldRecord> records, ExportFieldMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -146,10 +110,6 @@ public static class RecordExporter
         return fieldsById.TryGetValue(source, out var field) ? CellText(record, field) : string.Empty;
     }
 
-    /// <summary>Exports records to an RFC 7946 GeoJSON <c>FeatureCollection</c>.</summary>
-    /// <param name="form">Form whose fields define the feature properties.</param>
-    /// <param name="records">Records to export.</param>
-    /// <returns>GeoJSON text.</returns>
     public static string ToGeoJson(FormDefinition form, IEnumerable<FieldRecord> records)
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -175,10 +135,6 @@ public static class RecordExporter
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    /// <summary>Exports records to an OGC KML 2.2 document of placemarks.</summary>
-    /// <param name="form">Form whose fields define the placemark extended data.</param>
-    /// <param name="records">Records to export.</param>
-    /// <returns>KML text. Records with a location carry a <c>Point</c>; all carry their values as <c>ExtendedData</c>.</returns>
     public static string ToKml(FormDefinition form, IEnumerable<FieldRecord> records)
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -328,7 +284,6 @@ public static class RecordExporter
         }
     }
 
-    /// <summary>Renders a field's value to its canonical export string (shared across exporters).</summary>
     internal static string CellText(FieldRecord record, FormField field)
     {
         if (FormFieldTypes.IsMedia(field.Type))
@@ -375,18 +330,6 @@ public static class RecordExporter
         return $"\"{safe.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     }
 
-    /// <summary>
-    /// Neutralizes spreadsheet formula injection (CWE-1236) in an exported cell.
-    /// Field-collected and migrated values are untrusted, and a value whose first
-    /// character is <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, or a leading control
-    /// character (tab/CR/LF) is evaluated as a formula when the export is opened in
-    /// Excel/Google Sheets — enabling exfiltration via <c>HYPERLINK</c>/
-    /// <c>WEBSERVICE</c>/DDE. Per OWASP guidance the cell is prefixed with a single
-    /// quote so the spreadsheet renders it as literal text. Shared by the CSV and
-    /// XLSX exporters so both hand-offs are safe.
-    /// </summary>
-    /// <param name="value">The raw cell text.</param>
-    /// <returns>The cell text, prefixed with <c>'</c> when it starts with a risky character.</returns>
     internal static string NeutralizeFormula(string value)
     {
         if (string.IsNullOrEmpty(value))

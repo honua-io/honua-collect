@@ -5,16 +5,8 @@ using Honua.Sdk.Field.Forms;
 
 namespace Honua.Collect.App;
 
-/// <summary>
-/// Built-in sample forms so the app launches into a working capture experience.
-/// In production these come from the server's form-package service; this keeps
-/// the app self-contained for a first run / demo. Field ids map 1:1 to the
-/// server's "Offline Field Sites" feature layer so a submission applies cleanly
-/// via GeoServices applyEdits.
-/// </summary>
 public static class SampleForms
 {
-    /// <summary>A field-site inspection matching the server's editable layer schema.</summary>
     public static FormDefinition FieldSite() => new()
     {
         FormId = "field-site",
@@ -59,11 +51,6 @@ public static class SampleForms
         ],
     };
 
-    /// <summary>
-    /// A demo form exercising every capture widget (barcode, photo, video, audio,
-    /// signature, sketch). Used to verify the on-device capture pipelines; it is
-    /// not tied to a server layer.
-    /// </summary>
     public static FormDefinition CaptureKit() => new()
     {
         FormId = "capture-kit",
@@ -87,11 +74,6 @@ public static class SampleForms
         ],
     };
 
-    /// <summary>
-    /// A demo form exercising the expression engine (SDK 1.2.0): an arithmetic
-    /// calculated field, a constraint expression, and a boolean relevance rule
-    /// that reacts to the calculated total.
-    /// </summary>
     public static FormDefinition SmartForm() => new()
     {
         FormId = "smart-form",

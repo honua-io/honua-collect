@@ -5,12 +5,6 @@ using System.Text;
 
 namespace Honua.Collect.Core.Field.Sensors.Nfc;
 
-/// <summary>
-/// A minimal, platform-neutral NDEF message parser (BACKLOG I2, read side). It
-/// decodes the two NFC Forum well-known record types a data-collection app cares
-/// about — Text (RTD "T") and URI (RTD "U") — from the raw NDEF byte message a
-/// platform reader pulls off a tag. Parse-only: no radio, no I/O.
-/// </summary>
 public static class NdefParser
 {
     // NFC Forum URI Record Type Definition: identifier-code -> prefix (subset of the standard table).
@@ -30,15 +24,6 @@ public static class NdefParser
     private const byte TypeNameMask = 0x07; // TNF
     private const byte TnfWellKnown = 0x01;
 
-    /// <summary>
-    /// Parses an NDEF message into records. Unknown / non-well-known records are
-    /// surfaced as <see cref="NfcRecordKind.Other"/> rather than dropped, so the
-    /// payload still reflects the tag. Returns an empty payload for empty input.
-    /// </summary>
-    /// <param name="message">The raw NDEF message bytes.</param>
-    /// <param name="tagId">Optional tag UID to attach.</param>
-    /// <returns>The parsed payload.</returns>
-    /// <exception cref="FormatException">The bytes are not a well-formed NDEF message.</exception>
     public static NfcTagPayload Parse(ReadOnlySpan<byte> message, string? tagId = null)
     {
         var records = new List<NfcRecord>();

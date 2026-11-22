@@ -7,10 +7,6 @@ using Honua.Collect.Core.Sync;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
-/// <summary>
-/// Covers <see cref="GeoServicesFeatureSync.QueryPageAsync"/>: single-page offset/count
-/// parameters, continuation cursor advancement, and error surfacing for resumable pulls.
-/// </summary>
 public sealed class GeoServicesFeatureSyncPageTests
 {
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler

@@ -8,7 +8,6 @@ using Honua.Collect.Presentation.Mvvm;
 
 namespace Honua.Collect.Presentation.Forms;
 
-/// <summary>View-model for one captured row of a repeatable section.</summary>
 public sealed class RepeatInstanceViewModel : ObservableObject
 {
     internal RepeatInstanceViewModel(RepeatInstance instance, Action onChanged)
@@ -19,13 +18,10 @@ public sealed class RepeatInstanceViewModel : ObservableObject
             .ToList();
     }
 
-    /// <summary>Stable row identifier.</summary>
     public string InstanceId { get; }
 
-    /// <summary>Field view-models for the row.</summary>
     public IReadOnlyList<FieldViewModel> Fields { get; }
 
-    /// <summary>Refreshes every field in the row.</summary>
     public void Refresh()
     {
         foreach (var field in Fields)
@@ -35,10 +31,6 @@ public sealed class RepeatInstanceViewModel : ObservableObject
     }
 }
 
-/// <summary>
-/// View-model for a repeatable section on a capture screen: the list of captured
-/// rows plus add/remove commands.
-/// </summary>
 public sealed class RepeatGroupViewModel : ObservableObject
 {
     private readonly RepeatGroup _group;
@@ -53,20 +45,14 @@ public sealed class RepeatGroupViewModel : ObservableObject
         AddCommand = new RelayCommand(Add);
     }
 
-    /// <summary>Section label.</summary>
     public string Label => _group.Label;
 
-    /// <summary>Section identifier.</summary>
     public string SectionId => _group.SectionId;
 
-    /// <summary>Captured rows.</summary>
     public ObservableCollection<RepeatInstanceViewModel> Instances { get; }
 
-    /// <summary>Adds a new, empty row.</summary>
     public ICommand AddCommand { get; }
 
-    /// <summary>Removes a row.</summary>
-    /// <param name="instanceId">Row identifier.</param>
     public void Remove(string instanceId)
     {
         if (_group.RemoveInstance(instanceId))
@@ -88,7 +74,6 @@ public sealed class RepeatGroupViewModel : ObservableObject
         _onChanged();
     }
 
-    /// <summary>Refreshes every row's fields.</summary>
     public void Refresh()
     {
         foreach (var instance in Instances)

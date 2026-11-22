@@ -6,10 +6,6 @@ using Plugin.Maui.Audio;
 
 namespace Honua.Collect.App.Capture;
 
-/// <summary>
-/// Records an audio clip (BACKLOG C2) using Plugin.Maui.Audio and returns the
-/// saved file path to the caller. Shown modally via <see cref="CaptureAsync"/>.
-/// </summary>
 public partial class AudioRecorderPage : ContentPage
 {
     private readonly IAudioManager _audioManager;
@@ -26,12 +22,6 @@ public partial class AudioRecorderPage : ContentPage
         InitializeComponent();
     }
 
-    /// <summary>
-    /// Presents the recorder modally and returns the recorded audio path, or
-    /// <see langword="null"/> if cancelled / nothing was recorded.
-    /// </summary>
-    /// <param name="navigation">The navigation stack to present on.</param>
-    /// <returns>The recorded clip path, or null.</returns>
     public static async Task<string?> CaptureAsync(INavigation navigation)
     {
         ArgumentNullException.ThrowIfNull(navigation);

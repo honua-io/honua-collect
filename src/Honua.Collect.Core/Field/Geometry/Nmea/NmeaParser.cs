@@ -5,19 +5,8 @@ using System.Globalization;
 
 namespace Honua.Collect.Core.Field.Geometry.Nmea;
 
-/// <summary>
-/// Low-level NMEA 0183 parsing: checksum validation and the field conversions used
-/// by <see cref="NmeaFixAssembler"/>. Kept separate (and public) so the checksum
-/// and coordinate maths are unit-tested directly.
-/// </summary>
 public static class NmeaParser
 {
-    /// <summary>
-    /// Validates a sentence's <c>*HH</c> checksum (XOR of the bytes between <c>$</c>
-    /// and <c>*</c>). Returns false for any structurally invalid sentence.
-    /// </summary>
-    /// <param name="sentence">A raw NMEA sentence, optionally with a trailing newline.</param>
-    /// <returns><see langword="true"/> when the checksum is present and correct.</returns>
     public static bool ValidateChecksum(string? sentence)
     {
         if (string.IsNullOrEmpty(sentence))
@@ -52,9 +41,6 @@ public static class NmeaParser
         return actual == expected;
     }
 
-    /// <summary>Returns the comma-separated fields of a checksum-valid sentence (the part between <c>$</c> and <c>*</c>).</summary>
-    /// <param name="sentence">A raw NMEA sentence.</param>
-    /// <returns>The fields, or null when the sentence is invalid.</returns>
     internal static string[]? SplitFields(string sentence)
     {
         if (!ValidateChecksum(sentence))
@@ -67,17 +53,9 @@ public static class NmeaParser
         return line.Substring(1, star - 1).Split(',');
     }
 
-    /// <summary>Parses an NMEA <c>ddmm.mmmm</c> latitude with an N/S hemisphere into decimal degrees.</summary>
-    /// <param name="value">The <c>ddmm.mmmm</c> field.</param>
-    /// <param name="hemisphere">"N" or "S".</param>
-    /// <returns>Decimal degrees (north positive), or null when unparseable / out of range.</returns>
     public static double? ParseLatitude(string? value, string? hemisphere)
         => ParseCoordinate(value, hemisphere, degreeDigits: 2, maxDegrees: 90, negative: "S", positive: "N");
 
-    /// <summary>Parses an NMEA <c>dddmm.mmmm</c> longitude with an E/W hemisphere into decimal degrees.</summary>
-    /// <param name="value">The <c>dddmm.mmmm</c> field.</param>
-    /// <param name="hemisphere">"E" or "W".</param>
-    /// <returns>Decimal degrees (east positive), or null when unparseable / out of range.</returns>
     public static double? ParseLongitude(string? value, string? hemisphere)
         => ParseCoordinate(value, hemisphere, degreeDigits: 3, maxDegrees: 180, negative: "W", positive: "E");
 
@@ -115,9 +93,6 @@ public static class NmeaParser
         return string.Equals(hemisphere, positive, StringComparison.OrdinalIgnoreCase) ? result : (double?)null;
     }
 
-    /// <summary>Parses an NMEA <c>hhmmss(.sss)</c> time-of-day field into a <see cref="TimeSpan"/>.</summary>
-    /// <param name="value">The time field.</param>
-    /// <returns>The UTC time-of-day, or null when unparseable.</returns>
     public static TimeSpan? ParseTime(string? value)
     {
         if (string.IsNullOrEmpty(value) || value.Length < 6)
@@ -140,12 +115,6 @@ public static class NmeaParser
         return new TimeSpan(0, hours, minutes, 0) + TimeSpan.FromSeconds(seconds);
     }
 
-    /// <summary>
-    /// Parses an NMEA RMC <c>ddmmyy</c> date field. The two-digit year follows the NMEA
-    /// convention: 70–99 → 1970–1999, 00–69 → 2000–2069.
-    /// </summary>
-    /// <param name="value">The <c>ddmmyy</c> field.</param>
-    /// <returns>The calendar date, or null when unparseable / out of range.</returns>
     public static DateOnly? ParseDate(string? value)
     {
         if (string.IsNullOrEmpty(value) || value.Length != 6)
@@ -169,11 +138,9 @@ public static class NmeaParser
         return new DateOnly(year, month, day);
     }
 
-    /// <summary>Parses an invariant-culture double field, returning null for an empty/invalid field.</summary>
     internal static double? ParseDouble(string? value)
         => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : null;
 
-    /// <summary>Parses an invariant-culture integer field, returning null for an empty/invalid field.</summary>
     internal static int? ParseInt(string? value)
         => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : null;
 }

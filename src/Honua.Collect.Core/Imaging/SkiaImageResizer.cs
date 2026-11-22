@@ -5,19 +5,8 @@ using SkiaSharp;
 
 namespace Honua.Collect.Core.Imaging;
 
-/// <summary>
-/// The headless, SkiaSharp-backed <see cref="IImageResizer"/> that runs the C8
-/// resize/compress budget on real bytes (BACKLOG C8). It decodes the source,
-/// normalises EXIF orientation so a phone-rotated photo lands upright, downscales
-/// the longest edge to <see cref="ImageResizeOptions.MaxEdge"/> with high-quality
-/// sampling, and re-encodes at the target codec/quality. When the source is already
-/// within the dimension budget, already in the target format, and
-/// <see cref="ImageResizeOptions.SkipWhenWithinBudget"/> is set, the source bytes are
-/// returned verbatim to avoid a needless re-encode.
-/// </summary>
 public sealed class SkiaImageResizer : IImageResizer
 {
-    /// <inheritdoc />
     public ImageResizeResult Resize(byte[] source, ImageResizeOptions options)
     {
         ArgumentNullException.ThrowIfNull(source);

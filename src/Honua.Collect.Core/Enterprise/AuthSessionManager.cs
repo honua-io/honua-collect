@@ -6,36 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Honua.Collect.Core.Enterprise;
 
-/// <summary>
-/// Attempts to refresh a session whose access token is at/near expiry, exchanging
-/// its refresh token for a fresh session. Returns the refreshed session, or null
-/// when the refresh is refused (which forces a re-authentication).
-/// </summary>
-/// <remarks>
-/// Injected so the lifecycle is testable without a live server, and because the
-/// wire contract depends on server support: the current token endpoint
-/// (<c>generateToken</c>) issues no refresh token, so no refresher is wired in
-/// production yet. <see cref="AuthSessionManager"/> simply skips the refresh step
-/// when no refresher is supplied or the session holds no refresh token.
-/// </remarks>
-/// <param name="expiring">The session that is at/near expiry.</param>
-/// <param name="cancellationToken">Cancellation token.</param>
-/// <returns>A refreshed session, or null when refresh is unavailable/refused.</returns>
 public delegate Task<AuthSession?> SessionRefresher(AuthSession expiring, CancellationToken cancellationToken);
 
-/// <summary>
-/// Owns the auth session lifecycle on top of <see cref="IAuthSessionStore"/>:
-/// <list type="bullet">
-/// <item>resumes a persisted session on startup, honoring expiry (a stale token is
-/// discarded, never presented);</item>
-/// <item>persists a sign-in to platform secure storage only (never the record DB or
-/// plain config), so the at-rest posture is unchanged;</item>
-/// <item>proactively refreshes a near-expiry session when a <see cref="SessionRefresher"/>
-/// and a refresh token are both available;</item>
-/// <item>raises <see cref="SessionExpired"/> when a session lapses unrecoverably, so
-/// the host can prompt a graceful re-sign-in instead of failing silently.</item>
-/// </list>
-/// </summary>
 public sealed class AuthSessionManager
 {
     private readonly IAuthSessionStore _store;
@@ -51,13 +23,6 @@ public sealed class AuthSessionManager
     // reuse the freshly stored session instead of refreshing again.
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
-    /// <summary>Creates the lifecycle manager.</summary>
-    /// <param name="store">The shared session store the transport reads from.</param>
-    /// <param name="persistence">Secure-storage persistence for cross-restart resume.</param>
-    /// <param name="refresher">Optional refresh-token exchange; null when the server issues no refresh token.</param>
-    /// <param name="clock">Time source (defaults to system); injectable for tests.</param>
-    /// <param name="refreshSkew">How far ahead of expiry to refresh proactively (default 5 minutes).</param>
-    /// <param name="logger">Optional structured logger.</param>
     public AuthSessionManager(
         IAuthSessionStore store,
         ISessionPersistence persistence,
@@ -74,18 +39,10 @@ public sealed class AuthSessionManager
         _logger = logger ?? NullLogger<AuthSessionManager>.Instance;
     }
 
-    /// <summary>Raised when a session has expired and could not be refreshed.</summary>
     public event EventHandler? SessionExpired;
 
     private DateTimeOffset Now => _clock.GetUtcNow();
 
-    /// <summary>
-    /// Restores a persisted session on startup. A session that has already expired
-    /// (or fails to load) is discarded — never presented — and the store is left
-    /// signed out.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The resumed live session, or null when none is available.</returns>
     public async Task<AuthSession?> RestoreAsync(CancellationToken cancellationToken = default)
     {
         var saved = await _persistence.LoadAsync(cancellationToken).ConfigureAwait(false);
@@ -107,9 +64,6 @@ public sealed class AuthSessionManager
         return saved;
     }
 
-    /// <summary>Establishes a session: makes it live and persists it to secure storage.</summary>
-    /// <param name="session">The newly authenticated session.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     public async Task SignInAsync(AuthSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -118,8 +72,6 @@ public sealed class AuthSessionManager
         _logger.LogInformation("Signed in user {UserId}.", session.UserId);
     }
 
-    /// <summary>Clears the live session and removes any persisted copy.</summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
         var previousUser = _store.Current?.UserId;
@@ -128,15 +80,6 @@ public sealed class AuthSessionManager
         _logger.LogInformation("Signed out user {UserId}.", previousUser ?? "(none)");
     }
 
-    /// <summary>
-    /// Returns the current session, proactively refreshing it first when it is near
-    /// expiry and a refresh is possible. A session that is merely <em>expiring</em>
-    /// but couldn't be refreshed early is still returned (it remains valid until it
-    /// actually expires). A session that has <em>expired</em> and cannot be refreshed
-    /// signs out, raises <see cref="SessionExpired"/>, and returns null.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A usable session, or null when re-authentication is required.</returns>
     public async Task<AuthSession?> EnsureValidAsync(CancellationToken cancellationToken = default)
     {
         var current = _store.Current;
@@ -180,14 +123,6 @@ public sealed class AuthSessionManager
         return null;
     }
 
-    /// <summary>
-    /// Refreshes the session under a single-flight lock: only one refresh runs at a
-    /// time, and a caller that finds the stored session already refreshed (Active)
-    /// while it waited reuses it rather than calling the endpoint again.
-    /// </summary>
-    /// <param name="seen">The expiring/expired session the caller observed.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A usable refreshed session, or null when refresh was unavailable/refused.</returns>
     private async Task<AuthSession?> RefreshSingleFlightAsync(AuthSession seen, CancellationToken cancellationToken)
     {
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);

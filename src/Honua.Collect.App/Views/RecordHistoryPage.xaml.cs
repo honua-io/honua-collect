@@ -5,17 +5,10 @@ using Honua.Collect.Presentation.History;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>
-/// Edit-history and undo/revert screen (BACKLOG #38 / #101). Displays durable edit
-/// versions newest-first and triggers undo-last-change or revert-to-version via
-/// <see cref="RecordHistoryViewModel"/>.
-/// </summary>
 public partial class RecordHistoryPage : ContentPage
 {
     private readonly RecordHistoryViewModel _viewModel;
 
-    /// <summary>Creates the edit-history page over its tested view-model.</summary>
-    /// <param name="viewModel">History and revert view-model for the selected record.</param>
     public RecordHistoryPage(RecordHistoryViewModel viewModel)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));

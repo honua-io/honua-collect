@@ -16,53 +16,17 @@ namespace Honua.Collect.App;
 
 public static class MauiProgram
 {
-	/// <summary>The named HTTP client configured with the server base address and auth handler.</summary>
 	public const string ServerHttpClient = "honua";
 
-	/// <summary>
-	/// Named HTTP client for the server token endpoint (sign-in / token refresh). Points
-	/// at the server but carries NO <see cref="AuthHeaderHandler"/>, so a token refresh
-	/// can't recurse through the handler that triggers it.
-	/// </summary>
 	public const string TokenHttpClient = "honua-token";
 
-	/// <summary>
-	/// Named HTTP client for large attachment/media uploads to the server. Same
-	/// base address, auth handler, and certificate pinning as <see cref="ServerHttpClient"/>,
-	/// but with an effectively-infinite <see cref="HttpClient.Timeout"/>: the upload
-	/// is bounded by a per-request, file-size-derived deadline inside
-	/// GeoServicesFeatureSync instead, so a multi-hundred-MB attachment on a slow
-	/// field uplink isn't aborted by the short total timeout the small query/edit
-	/// requests use.
-	/// </summary>
 	public const string UploadHttpClient = "honua-upload";
 
-	/// <summary>Named HTTP client for OpenStreetMap tile requests (no server auth).</summary>
 	public const string TileHttpClient = "osm";
 
-	/// <summary>Named HTTP client for the Anthropic API (no server auth).</summary>
-	public const string AnthropicHttpClient = "anthropic";
-
-	/// <summary>
-	/// Per-request deadline for server/token calls. Replaces the 100s HttpClient
-	/// default, which is far too long for interactive field use on flaky networks —
-	/// a hung sync would otherwise block ~100s per attempt.
-	/// </summary>
 	private static readonly TimeSpan ServerRequestTimeout = TimeSpan.FromSeconds(30);
 
-	/// <summary>
-	/// Per-request deadline for OSM tile fetches. Kept short so a slow tile releases
-	/// the loader's concurrency slot quickly instead of holding it for the 100s
-	/// default and stalling the whole map (head-of-line blocking).
-	/// </summary>
 	private static readonly TimeSpan TileRequestTimeout = TimeSpan.FromSeconds(20);
-
-	/// <summary>
-	/// Per-request deadline for the Anthropic API. More generous than the server
-	/// timeout because vision/extraction responses are slower, but still bounded so a
-	/// hung request fails instead of inheriting the 100s default indefinitely.
-	/// </summary>
-	private static readonly TimeSpan AiRequestTimeout = TimeSpan.FromSeconds(90);
 
 	public static MauiApp CreateMauiApp()
 	{
@@ -115,7 +79,7 @@ public static class MauiProgram
 				manager.EnsureValidAsync);
 		});
 
-		// Audit trail (BACKLOG E3): security- and data-relevant events are appended to
+		// Audit trail: security- and data-relevant events are appended to
 		// a durable, tamper-evident SQLite trail in the same encrypted at-rest posture
 		// as the record store. Secrets are scrubbed before persisting; the trail can be
 		// queried/exported off-device for SIEM/audit.
@@ -125,7 +89,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton(sp => new AuditTrail(sp.GetRequiredService<IAuditStore>()));
 		builder.Services.AddSingleton<IAuditSink>(sp => sp.GetRequiredService<AuditTrail>());
 
-		// On-device authorization (BACKLOG E2): the IdP's role claims on the session map
+		// On-device authorization: the IdP's role claims on the session map
 		// to capabilities via a data-driven capability map; the Presentation layer queries
 		// IDeviceAuthorization.Can(action, resource) and authorization fails closed when no
 		// session (or no granting role) is present. Denials are recorded to the audit trail.
@@ -227,13 +191,11 @@ public static class MauiProgram
 				return handler;
 			});
 
-		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
 		builder.Services.AddHttpClient(TileHttpClient, client =>
 		{
 			client.DefaultRequestHeaders.UserAgent.ParseAdd("HonuaCollect/1.0 (+https://honua.io)");
 			client.Timeout = TileRequestTimeout;
 		});
-		builder.Services.AddHttpClient(AnthropicHttpClient, client => client.Timeout = AiRequestTimeout);
 
 		// The feature-sync transport over the auth-aware server client, with a
 		// dedicated unbounded-timeout client for large attachment uploads.
@@ -277,29 +239,8 @@ public static class MauiProgram
 		return builder.Build();
 	}
 
-	/// <summary>
-	/// SQLite primary result code for "file is not a database" (SQLITE_NOTADB). This is
-	/// what SQLCipher reports when the on-disk bytes are a legacy *unencrypted* cache or
-	/// cannot be decrypted with the current key — i.e. the only case where recreating
-	/// the store is the right self-heal.
-	/// </summary>
 	private const int SqliteNotADatabase = 26;
 
-	/// <summary>
-	/// Opens the SQLCipher-encrypted record store, self-healing past a legacy
-	/// unencrypted or undecryptable local cache by quarantining it and starting fresh.
-	/// </summary>
-	/// <remarks>
-	/// The self-heal is deliberately narrow. The local DB holds field captures that may
-	/// not yet have synced to the server, so it must NOT be wiped on a transient or
-	/// environmental fault — a locked/busy DB, an I/O error, low disk, or a rotated key
-	/// would all otherwise permanently destroy un-uploaded data (those records do not
-	/// "re-sync from the server"). We therefore only recreate on SQLITE_NOTADB (the
-	/// legacy-unencrypted / undecryptable case, whose bytes are unreadable with our key
-	/// regardless); every other <see cref="Microsoft.Data.Sqlite.SqliteException"/> is
-	/// surfaced to the caller instead of silently dropping the store. Even in the
-	/// recreate case the old file is moved aside, not deleted, so it can be recovered.
-	/// </remarks>
 	private static async Task<IRecordStore> OpenEncryptedStoreAsync(string dbPath)
 	{
 		var key = await DbKeyProvider.GetOrCreateKeyAsync();
@@ -318,12 +259,6 @@ public static class MauiProgram
 		}
 	}
 
-	/// <summary>
-	/// Moves an unreadable record DB aside (rather than deleting it) so a fresh store can
-	/// be created while the old bytes remain available for manual/forensic recovery. If
-	/// the file can't be renamed, it is deleted as a last resort — it is already
-	/// undecryptable with our key, so nothing the app can read is lost.
-	/// </summary>
 	private static void QuarantineUnreadableStore(string dbPath)
 	{
 		if (!File.Exists(dbPath))

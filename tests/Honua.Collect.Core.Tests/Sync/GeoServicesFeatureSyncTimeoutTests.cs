@@ -6,21 +6,10 @@ using Honua.Collect.Core.Sync;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
-/// <summary>
-/// Verifies that an HttpClient request <em>timeout</em> (a TaskCanceledException
-/// whose token is NOT the caller's) is converted into a failed result on every
-/// transport path, rather than escaping as an OperationCanceledException the
-/// caller would mistake for a deliberate user cancel.
-/// </summary>
 public class GeoServicesFeatureSyncTimeoutTests
 {
     private static readonly GeoServicesTarget Target = new("https://example.test", "svc", 0);
 
-    /// <summary>
-    /// Simulates an HttpClient request timeout: the client cancels the send with
-    /// its OWN internal token (not the caller's), surfacing as a TaskCanceledException
-    /// even though the caller never cancelled.
-    /// </summary>
     private sealed class TimeoutHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(

@@ -6,29 +6,8 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Field.Forms;
 
-/// <summary>
-/// Optional row-count bounds for a repeatable section (BACKLOG F-depth). The SDK <see cref="FormSection"/> in
-/// package 1.1.0 does not carry these, so they are supplied product-side (the
-/// form package wire format already declares <c>minInstances</c>/<c>maxInstances</c>)
-/// and enforced by <see cref="FormSession.Validate"/>.
-/// </summary>
-/// <param name="Min">Minimum required rows, or <see langword="null"/> for no lower bound.</param>
-/// <param name="Max">Maximum allowed rows, or <see langword="null"/> for no upper bound.</param>
 public sealed record RepeatBounds(int? Min = null, int? Max = null);
 
-/// <summary>
-/// A repeatable section and the rows captured against it. The group owns the list of
-/// <see cref="RepeatInstance"/> rows, lets the UI add and remove them, and
-/// persists them back into the parent record so they travel with it through
-/// validation, export, and sync.
-/// </summary>
-/// <remarks>
-/// Rows are stored on the parent record's native <see cref="FieldRecord.Repeats"/>
-/// (keyed by section id, each row a <see cref="FieldRepeatInstance"/>), so repeats
-/// are part of the portable SDK record contract and round-trip through
-/// serialization, sync, and export rather than relying on a product-side
-/// convention in the flat <see cref="FieldRecord.Values"/> bag.
-/// </remarks>
 public sealed class RepeatGroup
 {
     private readonly FormSection _section;
@@ -59,28 +38,18 @@ public sealed class RepeatGroup
         }
     }
 
-    /// <summary>Section identifier this group repeats.</summary>
     public string SectionId => _section.SectionId;
 
-    /// <summary>Section label for the UI.</summary>
     public string Label => _section.Label;
 
-    /// <summary>Optional row-count bounds enforced by <see cref="FormSession.Validate"/>; <see langword="null"/> when unbounded.</summary>
     public RepeatBounds? Bounds { get; }
 
-    /// <summary>The captured rows, in order.</summary>
     public IReadOnlyList<RepeatInstance> Instances => _instances;
 
-    /// <summary>Number of captured rows.</summary>
     public int Count => _instances.Count;
 
-    /// <summary>Adds a new, empty row and returns it.</summary>
-    /// <returns>The new row.</returns>
     public RepeatInstance AddInstance() => Add(seed: null);
 
-    /// <summary>Removes a row by its instance id.</summary>
-    /// <param name="instanceId">Row identifier.</param>
-    /// <returns><see langword="true"/> if a row was removed.</returns>
     public bool RemoveInstance(string instanceId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
@@ -105,8 +74,6 @@ public sealed class RepeatGroup
         return instance;
     }
 
-    /// <summary>Writes the rows back into the parent record's native repeat store.</summary>
-    /// <param name="parent">Parent record to persist into.</param>
     internal void PersistInto(FieldRecord parent)
     {
         // Retire any value left by the former flat-Values storage convention.
@@ -126,10 +93,6 @@ public sealed class RepeatGroup
             .ToList<FieldRepeatInstance>();
     }
 
-    /// <summary>Reads previously-persisted rows for a section from a parent record.</summary>
-    /// <param name="parent">Parent record.</param>
-    /// <param name="sectionId">Repeatable section id.</param>
-    /// <returns>The stored rows, or an empty sequence.</returns>
     internal static IEnumerable<IReadOnlyDictionary<string, object?>> ReadRows(FieldRecord parent, string sectionId)
     {
         if (parent.Repeats.TryGetValue(sectionId, out var rows) && rows is not null)

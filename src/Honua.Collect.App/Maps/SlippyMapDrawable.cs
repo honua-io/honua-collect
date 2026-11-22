@@ -6,35 +6,20 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.App.Maps;
 
-/// <summary>
-/// Renders an OSM slippy-map basemap for the current <see cref="Center"/> /
-/// <see cref="Zoom"/> viewport and draws the captured geometry overlay on top
-/// (vertices + the connecting line/ring). All screen↔geographic mapping goes
-/// through <see cref="WebMercator"/>, so the overlay stays registered to the
-/// basemap as the user pans and zooms. The tile/image work lives in the app
-/// layer; the projection math it relies on is unit-tested in Core.
-/// </summary>
 public sealed class SlippyMapDrawable : IDrawable
 {
     private readonly OsmTileLoader _tiles;
 
-    /// <summary>Creates the drawable over a tile loader.</summary>
-    /// <param name="tiles">The tile source.</param>
     public SlippyMapDrawable(OsmTileLoader tiles) => _tiles = tiles;
 
-    /// <summary>The geographic point shown at the centre of the viewport.</summary>
     public FieldGeoPoint Center { get; set; } = new(21.31, -157.81);
 
-    /// <summary>The integer tile zoom level.</summary>
     public int Zoom { get; set; } = 12;
 
-    /// <summary>The captured geometry vertices, in geographic coordinates.</summary>
     public IReadOnlyList<FieldGeoPoint> Vertices { get; set; } = [];
 
-    /// <summary>Whether the overlay should close into a ring (polygon capture).</summary>
     public bool IsPolygon { get; set; }
 
-    /// <inheritdoc />
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         var w = dirtyRect.Width;

@@ -7,45 +7,22 @@ using Honua.Collect.Core.Sync;
 
 namespace Honua.Collect.App.Services;
 
-/// <summary>
-/// Strongly-typed app configuration loaded from the bundled <c>appsettings.json</c>
-/// asset — server endpoint and the (development-only) fallback credential. Keeps
-/// connection details and keys out of compiled code so they live in configuration
-/// and can be overridden per environment.
-/// </summary>
 public sealed record AppSettings
 {
-    /// <summary>Base URL of the Honua server.</summary>
     public required string ServerBaseUrl { get; init; }
 
-    /// <summary>Feature service id of the editable layer.</summary>
     public required string ServiceId { get; init; }
 
-    /// <summary>Layer id within the feature service.</summary>
     public required int LayerId { get; init; }
 
-    /// <summary>Development fallback credential used until the user signs in; null in production.</summary>
     public string? DemoApiKey { get; init; }
 
-    /// <summary>
-    /// Optional Base64 SPKI pins for the server certificate. When non-empty, the
-    /// server TLS handshake is additionally pinned to these public keys (see
-    /// <see cref="CertificatePinning"/>); empty means standard platform validation.
-    /// </summary>
     public IReadOnlyList<string> PinnedCertificateSpki { get; init; } = Array.Empty<string>();
 
-    /// <summary>The server base address.</summary>
     public Uri BaseUri => new(ServerBaseUrl);
 
-    /// <summary>The GeoServices feature-layer target derived from settings.</summary>
     public GeoServicesTarget Target => new(ServerBaseUrl, ServiceId, LayerId);
 
-    /// <summary>
-    /// Loads settings from the embedded <c>appsettings.json</c> resource. Fully
-    /// synchronous so it is safe to call during MAUI startup without blocking on an
-    /// async file API (which deadlocks the UI thread).
-    /// </summary>
-    /// <returns>The parsed settings.</returns>
     public static AppSettings Load()
     {
         var assembly = typeof(AppSettings).Assembly;
@@ -92,11 +69,6 @@ public sealed record AppSettings
             ? key.GetString()
             : null;
 
-    /// <summary>
-    /// Overlays an optional, gitignored <c>appsettings.local.json</c> from the app
-    /// data directory (a local-dev credential convenience). Read with synchronous
-    /// file IO so startup never blocks on an async API; absent in normal/CI builds.
-    /// </summary>
     private static AppSettings ApplyLocalOverride(AppSettings settings)
     {
         try

@@ -5,7 +5,6 @@ using Honua.Collect.Core.Assignments;
 
 namespace Honua.Collect.Core.Tests.Assignments;
 
-/// <summary>In-memory <see cref="IAssignmentStore"/> for fast service-logic tests.</summary>
 internal sealed class InMemoryAssignmentStore : IAssignmentStore
 {
     private readonly Dictionary<string, FieldAssignment> _byId = new(StringComparer.Ordinal);

@@ -8,14 +8,6 @@ using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Core.Tests.Sync;
 
-/// <summary>
-/// Comprehensive end-to-end tests against a real running Honua server. Opt-in:
-/// every test no-ops unless <c>HONUA_E2E_SERVER</c> is set (e.g.
-/// <c>http://localhost:18080</c>); <c>HONUA_E2E_APIKEY</c> supplies the write
-/// credential. Exercises the full capture → applyEdits → server → database path
-/// the app uses, including update/delete, error cases, and write collisions.
-/// Bring a server up with <c>scripts/e2e/up.sh</c>.
-/// </summary>
 [Collection("e2e")]
 public class FeatureSyncE2ETests
 {
@@ -49,7 +41,6 @@ public class FeatureSyncE2ETests
 
     private static string Marker() => "e2e-" + Guid.NewGuid().ToString("n")[..12];
 
-    /// <summary>Returns the features (cloned) matching a site_name.</summary>
     private static async Task<JsonElement> QueryByNameAsync(HttpClient http, string name)
     {
         var url = $"/rest/services/{ServiceId}/FeatureServer/{LayerId}/query?where=site_name%3D%27{name}%27&outFields=*&f=json";
@@ -60,7 +51,6 @@ public class FeatureSyncE2ETests
     private static async Task<int> CountByNameAsync(HttpClient http, string name)
         => (await QueryByNameAsync(http, name)).GetArrayLength();
 
-    /// <summary>Reads an attribute as a long whether returned as a JSON number or numeric string.</summary>
     private static long ReadLong(JsonElement attrs, string name)
     {
         var v = attrs.GetProperty(name);
@@ -73,7 +63,6 @@ public class FeatureSyncE2ETests
     public async Task Add_persists_and_round_trips_geometry_and_typed_attributes()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
-
 
         using var http = Authed();
         var marker = Marker();
@@ -103,7 +92,6 @@ public class FeatureSyncE2ETests
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
-
         using var http = Authed();
         var sync = new GeoServicesFeatureSync(http);
         var marker = Marker();
@@ -125,7 +113,6 @@ public class FeatureSyncE2ETests
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
-
         using var http = Authed();
         var sync = new GeoServicesFeatureSync(http);
         var marker = Marker();
@@ -145,7 +132,6 @@ public class FeatureSyncE2ETests
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
-
         using var http = Authed();
         var result = await new GeoServicesFeatureSync(http).UpdateAsync(999_000_111, Site(Marker()), Target);
 
@@ -158,7 +144,6 @@ public class FeatureSyncE2ETests
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
-
         using var http = Authed();
         var result = await new GeoServicesFeatureSync(http).DeleteAsync(999_000_222, Target);
 
@@ -170,7 +155,6 @@ public class FeatureSyncE2ETests
     public async Task Submit_without_credentials_fails_gracefully()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
-
 
         using var anon = new HttpClient { BaseAddress = new Uri(ServerUrl!) }; // no X-API-Key
         var marker = Marker();
@@ -190,7 +174,6 @@ public class FeatureSyncE2ETests
     public async Task Concurrent_adds_all_persist_with_distinct_object_ids()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
-
 
         const int n = 12;
         using var http = Authed();
@@ -215,7 +198,6 @@ public class FeatureSyncE2ETests
     public async Task Concurrent_updates_to_same_feature_all_succeed_via_retry()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
-
 
         const int n = 10;
         using var http = Authed();
@@ -247,7 +229,6 @@ public class FeatureSyncE2ETests
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
-
         using var http = Authed();
         var sync = new GeoServicesFeatureSync(http);
         var marker = Marker();
@@ -264,6 +245,5 @@ public class FeatureSyncE2ETests
     }
 }
 
-/// <summary>Serializes the e2e tests so concurrent classes don't fight over the server.</summary>
 [CollectionDefinition("e2e", DisableParallelization = true)]
 public sealed class E2ECollection;

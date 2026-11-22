@@ -3,43 +3,15 @@
 
 namespace Honua.Collect.Core.Field.Geometry;
 
-/// <summary>What a candidate point snapped to.</summary>
 public enum PlanarSnapKind
 {
-    /// <summary>Nothing within tolerance; the original point is kept.</summary>
     None,
 
-    /// <summary>Snapped to an existing vertex.</summary>
     Vertex,
 
-    /// <summary>Snapped to the foot of the perpendicular on an edge (segment).</summary>
     Edge,
 }
 
-/// <summary>
-/// The outcome of a planar snap attempt, in the candidate features' CRS.
-/// </summary>
-/// <param name="Kind">What, if anything, was snapped to.</param>
-/// <param name="Point">
-/// The resulting coordinate: the snap target when <see cref="Kind"/> is
-/// <see cref="PlanarSnapKind.Vertex"/> or <see cref="PlanarSnapKind.Edge"/>,
-/// otherwise the original candidate.
-/// </param>
-/// <param name="Distance">
-/// Distance from the original candidate to the snap target, in CRS units; positive
-/// infinity when there is nothing to snap to.
-/// </param>
-/// <param name="FeatureIndex">
-/// Index of the feature in the supplied set that owns the snap target, or -1 when
-/// nothing snapped.
-/// </param>
-/// <param name="SegmentIndex">
-/// For an edge snap, the index of the segment (its start-vertex index within the
-/// feature) the foot lies on; -1 otherwise.
-/// </param>
-/// <param name="VertexIndex">
-/// For a vertex snap, the index of the vertex within the feature; -1 otherwise.
-/// </param>
 public sealed record PlanarSnapResult(
     PlanarSnapKind Kind,
     PlanarPoint Point,
@@ -48,61 +20,16 @@ public sealed record PlanarSnapResult(
     int SegmentIndex = -1,
     int VertexIndex = -1);
 
-/// <summary>
-/// An existing feature to snap or assist against: its ordered vertices and whether
-/// they form a closed ring (polygon). Lines and points pass <see cref="Closed"/> as
-/// <see langword="false"/>. Coordinates are in the layer's CRS.
-/// </summary>
-/// <param name="Vertices">The feature's vertices, in order.</param>
-/// <param name="Closed">Whether the feature is a closed ring (polygon boundary).</param>
 public sealed record PlanarFeature(IReadOnlyList<PlanarPoint> Vertices, bool Closed = false);
 
-/// <summary>
-/// Platform-neutral, CRS-neutral snap-to-feature and topology assists (BACKLOG G7).
-/// </summary>
-/// <remarks>
-/// <para>
-/// Everything here is pure planar geometry in the <em>layer's own CRS</em>: distances
-/// and tolerances are Euclidean in that CRS's units (metres for a projected CRS).
-/// Coordinates are never re-projected, so — unlike a lat/lon-only snapper — these
-/// helpers are correct for projected data without the equirectangular approximation
-/// that degrades away from the equator. Callers pass coordinates already in the
-/// feature CRS; tolerances are in the same units.
-/// </para>
-/// <para>
-/// Operations: nearest-vertex snap, nearest-edge snap (foot of the perpendicular),
-/// nearest-of-many across a feature set, shared-vertex insertion onto a coincident
-/// edge, close-ring snapping, self-intersection detection, and a minimum
-/// segment-length gate. All are deterministic.
-/// </para>
-/// </remarks>
 public static class PlanarTopology
 {
-    /// <summary>
-    /// Snaps <paramref name="point"/> to the nearest vertex or edge of a single
-    /// candidate <paramref name="feature"/> within <paramref name="tolerance"/>.
-    /// Vertices win ties so captures prefer coincident nodes over mid-edge points.
-    /// </summary>
-    /// <param name="point">The candidate coordinate, in the feature CRS.</param>
-    /// <param name="feature">The feature to snap to.</param>
-    /// <param name="tolerance">Maximum snap distance, in CRS units (must be &gt; 0).</param>
-    /// <returns>The snap result.</returns>
     public static PlanarSnapResult Snap(PlanarPoint point, PlanarFeature feature, double tolerance)
     {
         ArgumentNullException.ThrowIfNull(feature);
         return SnapToFeature(point, feature, tolerance, featureIndex: 0);
     }
 
-    /// <summary>
-    /// Snaps <paramref name="point"/> to the nearest vertex or edge across several
-    /// candidate <paramref name="features"/>, returning the closest hit within
-    /// <paramref name="tolerance"/>. A vertex hit wins ties against an equally-close
-    /// edge hit.
-    /// </summary>
-    /// <param name="point">The candidate coordinate, in the feature CRS.</param>
-    /// <param name="features">The features to snap against.</param>
-    /// <param name="tolerance">Maximum snap distance, in CRS units (must be &gt; 0).</param>
-    /// <returns>The best snap result, or <see cref="PlanarSnapKind.None"/> when nothing is in tolerance.</returns>
     public static PlanarSnapResult Snap(
         PlanarPoint point,
         IReadOnlyList<PlanarFeature> features,
@@ -138,20 +65,6 @@ public static class PlanarTopology
         return best;
     }
 
-    /// <summary>
-    /// Inserts <paramref name="point"/> as a shared vertex on the segment of
-    /// <paramref name="feature"/> whose foot-of-perpendicular it falls within
-    /// <paramref name="tolerance"/> of, returning the feature's new vertex list. This
-    /// is the topology assist that makes a new vertex coincident with a neighbour's
-    /// edge (splitting that edge) so the boundary stays shared. When the point is
-    /// closest to an existing vertex (within tolerance) no insertion is made —
-    /// the caller should snap to that vertex instead. Returns <see langword="null"/>
-    /// when nothing is within tolerance.
-    /// </summary>
-    /// <param name="point">The new coordinate, in the feature CRS.</param>
-    /// <param name="feature">The feature whose edge should gain the shared vertex.</param>
-    /// <param name="tolerance">Maximum distance from an edge, in CRS units (must be &gt; 0).</param>
-    /// <returns>The feature's vertices with the point inserted, or <see langword="null"/>.</returns>
     public static IReadOnlyList<PlanarPoint>? InsertSharedVertex(
         PlanarPoint point,
         PlanarFeature feature,
@@ -172,18 +85,6 @@ public static class PlanarTopology
         return vertices;
     }
 
-    /// <summary>
-    /// Close-ring snapping: when an open vertex list's last vertex is within
-    /// <paramref name="tolerance"/> of its first, returns the ring closed by
-    /// replacing that last vertex with an exact copy of the first (so the ring is
-    /// numerically closed). Returns the input unchanged when it is already closed, has
-    /// fewer than three distinct vertices, or its ends are farther apart than the
-    /// tolerance.
-    /// </summary>
-    /// <param name="vertices">The ring's vertices, in order, in the layer CRS.</param>
-    /// <param name="tolerance">Maximum end-to-end gap to close, in CRS units (must be &gt; 0).</param>
-    /// <param name="closed">Set to whether the returned ring is closed.</param>
-    /// <returns>The (possibly) closed vertex list.</returns>
     public static IReadOnlyList<PlanarPoint> CloseRing(
         IReadOnlyList<PlanarPoint> vertices,
         double tolerance,
@@ -218,15 +119,6 @@ public static class PlanarTopology
         return ring;
     }
 
-    /// <summary>
-    /// Whether the polyline/ring defined by <paramref name="vertices"/> is simple
-    /// (has no self-intersection). Adjacent segments may share their common endpoint;
-    /// for a closed ring the first and last segments may share the ring's closing
-    /// point. Any other crossing or overlap counts as a self-intersection.
-    /// </summary>
-    /// <param name="vertices">The ordered vertices, in the layer CRS.</param>
-    /// <param name="closed">Whether the vertices form a closed ring.</param>
-    /// <returns><see langword="true"/> when the geometry intersects itself.</returns>
     public static bool HasSelfIntersection(IReadOnlyList<PlanarPoint> vertices, bool closed = false)
     {
         ArgumentNullException.ThrowIfNull(vertices);
@@ -261,15 +153,6 @@ public static class PlanarTopology
         return false;
     }
 
-    /// <summary>
-    /// The index of the first segment shorter than <paramref name="minLength"/>, or
-    /// -1 when every segment meets the minimum. Use this to reject near-duplicate
-    /// vertices (a sliver edge) before committing a capture.
-    /// </summary>
-    /// <param name="vertices">The ordered vertices, in the layer CRS.</param>
-    /// <param name="minLength">Minimum acceptable segment length, in CRS units (must be &gt;= 0).</param>
-    /// <param name="closed">Whether the vertices form a closed ring (includes the closing segment).</param>
-    /// <returns>The offending segment's start-vertex index, or -1.</returns>
     public static int FirstSegmentShorterThan(
         IReadOnlyList<PlanarPoint> vertices,
         double minLength,
@@ -294,14 +177,6 @@ public static class PlanarTopology
         return -1;
     }
 
-    /// <summary>
-    /// Whether every segment of the geometry is at least <paramref name="minLength"/>
-    /// long. Convenience over <see cref="FirstSegmentShorterThan"/>.
-    /// </summary>
-    /// <param name="vertices">The ordered vertices, in the layer CRS.</param>
-    /// <param name="minLength">Minimum acceptable segment length, in CRS units.</param>
-    /// <param name="closed">Whether the vertices form a closed ring.</param>
-    /// <returns><see langword="true"/> when all segments meet the minimum.</returns>
     public static bool MeetsMinimumSegmentLength(
         IReadOnlyList<PlanarPoint> vertices,
         double minLength,

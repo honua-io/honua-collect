@@ -9,18 +9,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Export;
 
-/// <summary>
-/// Exports captured records to an OGC GeoPackage (BACKLOG R2) — a single-file
-/// OGC SQLite format supported by compatible GIS software. A
-/// point feature table holds each record's location as GeoPackageBinary geometry
-/// with its field values as attribute columns; records without a location are
-/// written with null geometry so none are dropped.
-/// </summary>
-/// <remarks>
-/// Binary output (a <see cref="byte"/> array), unlike the text formats on
-/// <see cref="RecordExporter"/>; it reuses that type's shared value formatting so
-/// attribute strings match the CSV/GeoJSON/KML exports.
-/// </remarks>
 public static class GeoPackageExporter
 {
     private const int Wgs84 = 4326;
@@ -30,11 +18,6 @@ public static class GeoPackageExporter
     private const int ApplicationId = 0x47504B47;
     private const int UserVersion = 10300; // GeoPackage 1.3
 
-    /// <summary>Exports records to a GeoPackage file as a byte array.</summary>
-    /// <param name="form">Form whose fields define the attribute columns.</param>
-    /// <param name="records">Records to export.</param>
-    /// <param name="tableName">The feature table name.</param>
-    /// <returns>The GeoPackage (.gpkg) file bytes.</returns>
     public static byte[] Export(FormDefinition form, IEnumerable<FieldRecord> records, string tableName = "records")
     {
         ArgumentNullException.ThrowIfNull(form);
@@ -172,10 +155,6 @@ public static class GeoPackageExporter
         transaction.Commit();
     }
 
-    /// <summary>
-    /// Encodes a point as GeoPackageBinary: the GP header (magic, version, flags,
-    /// srs_id) followed by little-endian WKB for a 2D point.
-    /// </summary>
     private static byte[] EncodePoint(double longitude, double latitude)
     {
         var blob = new byte[8 + 21];

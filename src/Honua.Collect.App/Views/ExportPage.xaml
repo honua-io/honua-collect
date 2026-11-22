@@ -9,12 +9,11 @@
 
             <Label Text="{Binding Header}" FontAttributes="Bold" />
 
-            <Label Text="Bulk-export captured records or generate a per-record report."
+            <Label Text="Bulk-export captured records as CSV or GeoJSON."
                    FontSize="13" TextColor="Gray" />
 
             <Button Text="Export CSV" Clicked="OnExportCsv" />
             <Button Text="Export GeoJSON" Clicked="OnExportGeoJson" />
-            <Button Text="Report (latest record)" Clicked="OnReportLatest" />
 
             <Label x:Name="StatusLabel" FontSize="13" TextColor="Gray" />
 

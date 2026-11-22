@@ -9,7 +9,6 @@ The .NET package table is verified against `Directory.Packages.props` and `src/*
 <!-- nuget-table:start (verified by scripts/check-license-hygiene.py) -->
 | Package | Version | License | Project |
 |---|---|---|---|
-| BouncyCastle.Cryptography | 2.7.0 | MIT | https://www.bouncycastle.org/stable/nuget/csharp/website |
 | Honua.Mobile.Maui | 0.1.0-alpha.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
 | Honua.Mobile.Offline | 0.1.0-alpha.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
 | Honua.Mobile.Sdk | 0.1.0-alpha.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |

@@ -3,14 +3,6 @@
 
 namespace Honua.Collect.Core.Field.Geometry.Nmea;
 
-/// <summary>
-/// Assembles a live <see cref="NmeaFix"/> from a receiver's stream of NMEA
-/// sentences, merging the complementary signals each one carries: GGA gives the
-/// position, fix quality, HDOP, altitude and satellite count; GST refines the
-/// horizontal accuracy estimate; RMC supplies the time and a validity flag. Feed
-/// it sentences as they arrive and read <see cref="Current"/>. Talker id is
-/// ignored, so GPS/GLONASS/Galileo/multi-constellation (GP/GL/GA/GN…) all work.
-/// </summary>
 public sealed class NmeaFixAssembler
 {
     private NmeaFixQuality _quality = NmeaFixQuality.None;
@@ -26,7 +18,6 @@ public sealed class NmeaFixAssembler
     private TimeSpan? _time;
     private DateOnly? _date;
 
-    /// <summary>The fix assembled from everything seen so far.</summary>
     public NmeaFix Current => new()
     {
         Quality = _quality,
@@ -58,16 +49,8 @@ public sealed class NmeaFixAssembler
         return null;
     }
 
-    /// <summary>Whether a usable positional fix has been assembled.</summary>
     public bool HasFix => Current.HasPosition;
 
-    /// <summary>
-    /// Processes one NMEA sentence, updating <see cref="Current"/>. Returns true when
-    /// the sentence was checksum-valid and a recognized type (GGA/RMC/GST); false for
-    /// a corrupt or unsupported sentence (which leaves the state unchanged).
-    /// </summary>
-    /// <param name="sentence">A raw NMEA sentence.</param>
-    /// <returns>Whether the sentence was understood.</returns>
     public bool Process(string? sentence)
     {
         if (sentence is null)
@@ -92,7 +75,6 @@ public sealed class NmeaFixAssembler
         };
     }
 
-    /// <summary>Resets the assembler to begin a fresh fix.</summary>
     public void Reset()
     {
         _quality = NmeaFixQuality.None;

@@ -9,15 +9,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Honua.Collect.Core.Tests.Storage;
 
-/// <summary>
-/// Schema / persistence-format guard. These tests pin the on-disk shape of
-/// <see cref="SqliteRecordStore"/>: a record with every value shape (nulls,
-/// numbers, booleans, nested repeat groups, media descriptors, location) is
-/// written, the store is reopened as a fresh instance over the SAME file, and
-/// everything is asserted to round-trip. A future schema change that drops a
-/// column or alters serialization will break here rather than silently in the
-/// field.
-/// </summary>
 public sealed class SqliteRecordStoreSchemaTests : IDisposable
 {
     private readonly string _dbPath;

@@ -6,11 +6,6 @@ using Honua.Collect.Core.Storage;
 
 namespace Honua.Collect.App.Services;
 
-/// <summary>
-/// Lazily initializes an <see cref="IRecordStore"/> through an async factory so both
-/// <see cref="RecordBook"/> and <see cref="Core.History.RecordRevertService"/> share
-/// one encrypted SQLite store without blocking startup.
-/// </summary>
 internal sealed class LazyRecordStore : IRecordStore
 {
     private readonly Func<Task<IRecordStore>> _factory;

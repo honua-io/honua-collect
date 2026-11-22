@@ -10,7 +10,6 @@ using Honua.Collect.Presentation.Records;
 
 namespace Honua.Collect.App.Views;
 
-/// <summary>The Drafts/Outbox/Sent records screen, rebuilt from the record book on view.</summary>
 public partial class RecordsPage : ContentPage
 {
     private readonly RecordBook _book;
