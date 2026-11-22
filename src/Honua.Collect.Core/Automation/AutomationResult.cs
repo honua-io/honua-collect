@@ -51,6 +51,20 @@ public sealed record ScheduledFollowUp(string Description, int DueInDays, string
 public sealed record AiActionInvocation(string ActionId, bool Handled, string RuleName);
 
 /// <summary>
+/// A webhook dispatch requested by a <see cref="DispatchWebhookAction"/> during an
+/// automation run, resolved and enqueued by <see cref="Webhooks.RecordAutomationRouter"/>.
+/// </summary>
+/// <param name="TargetId">Identifier of the configured webhook target.</param>
+/// <param name="EventType">Optional override for the webhook event name.</param>
+/// <param name="ExtraMetadata">Optional metadata merged into the webhook payload.</param>
+/// <param name="RuleName">The rule that requested the dispatch.</param>
+public sealed record QueuedWebhookDispatch(
+    string TargetId,
+    string? EventType,
+    IReadOnlyDictionary<string, string> ExtraMetadata,
+    string RuleName);
+
+/// <summary>
 /// The outcome of running automation rules for one event: the field values after
 /// any set-field/compute/AI actions, plus the alerts, validation errors, tags,
 /// offline-queued requests/notifications, scheduled follow-ups, and AI-action
@@ -87,6 +101,9 @@ public sealed record AutomationResult
 
     /// <summary>AI-action invocations, in order — observable even with the no-op stub.</summary>
     public IReadOnlyList<AiActionInvocation> AiInvocations { get; init; } = [];
+
+    /// <summary>Webhook target dispatches requested by matching rules, in order.</summary>
+    public IReadOnlyList<QueuedWebhookDispatch> WebhookDispatches { get; init; } = [];
 
     /// <summary>Names of the rules that fired, in order.</summary>
     public IReadOnlyList<string> FiredRules { get; init; } = [];
