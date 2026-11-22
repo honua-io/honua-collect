@@ -109,4 +109,63 @@ public class PhotoAnnotationMapperTests
 
         Assert.Empty(PhotoAnnotationMapper.ToPixels(annotation, 800, 400));
     }
+
+    [Fact]
+    public void ToArrow_ToRectangle_ToEllipse_and_ToText_normalize_all_shapes()
+    {
+        var arrow = PhotoAnnotationMapper.ToArrow((20, 10), (180, 90), 200, 100, "#00FF00", 0.01);
+        Assert.Equal(AnnotationShape.Arrow, arrow.Shape);
+        Assert.Equal(2, arrow.Points.Count);
+        Assert.Equal(new AnnotationPoint(0.1, 0.1), arrow.Points[0]);
+        Assert.Equal(new AnnotationPoint(0.9, 0.9), arrow.Points[1]);
+        Assert.Equal("#00FF00", arrow.Color);
+
+        var rect = PhotoAnnotationMapper.ToRectangle((180, 90), (20, 10), 200, 100);
+        Assert.Equal(AnnotationShape.Rectangle, rect.Shape);
+        var bounds = PhotoAnnotationMapper.ToBoundsRect(rect, 400, 200);
+        Assert.Equal(40, bounds.X, 6);
+        Assert.Equal(20, bounds.Y, 6);
+        Assert.Equal(320, bounds.Width, 6);
+        Assert.Equal(160, bounds.Height, 6);
+
+        var ellipse = PhotoAnnotationMapper.ToEllipse((50, 25), (150, 75), 200, 100);
+        Assert.Equal(AnnotationShape.Ellipse, ellipse.Shape);
+
+        var text = PhotoAnnotationMapper.ToText((100, 50), "  Crack  ", 200, 100, "#FFCC00");
+        Assert.Equal(AnnotationShape.Text, text.Shape);
+        Assert.Equal("Crack", text.Text);
+        Assert.Equal(new AnnotationPoint(0.5, 0.5), text.Points[0]);
+        Assert.Throws<ArgumentException>(() => PhotoAnnotationMapper.ToText((10, 10), "   ", 200, 100));
+    }
+
+    [Fact]
+    public void Text_size_survives_persistence_and_scales_from_preview_to_export()
+    {
+        var text = PhotoAnnotationMapper.ToText((100, 150), "Crack", 300, 400);
+        var restored = Assert.Single(PhotoAnnotationOverlay.FromJson(new PhotoAnnotationOverlay([text]).ToJson()).Annotations);
+
+        Assert.Equal(14, restored.TextSizePixels(300, 400), 6);
+        Assert.Equal(56, restored.TextSizePixels(1200, 1600), 6);
+        Assert.Equal(14, restored.TextSizePixels(1200, 1600) / 4, 6);
+    }
+
+    [Fact]
+    public void ToBoundsRect_returns_zero_when_fewer_than_two_points()
+    {
+        var single = new PhotoAnnotation { Shape = AnnotationShape.Rectangle, Points = [new(0.5, 0.5)] };
+        Assert.Equal((0, 0, 0, 0), PhotoAnnotationMapper.ToBoundsRect(single, 100, 100));
+    }
+
+    [Fact]
+    public void ComputeArrowHead_returns_symmetric_wings_and_null_for_degenerate_arrows()
+    {
+        var wings = PhotoAnnotationMapper.ComputeArrowHead((0, 0), (100, 0), headLengthPx: 20);
+        Assert.NotNull(wings);
+        Assert.True(wings!.Value.Left.X < 100 && wings.Value.Right.X < 100);
+        Assert.Equal(wings.Value.Left.X, wings.Value.Right.X, 6);
+        Assert.Equal(-wings.Value.Left.Y, wings.Value.Right.Y, 6);
+
+        Assert.Null(PhotoAnnotationMapper.ComputeArrowHead((10, 10), (10, 10), 20));
+        Assert.Null(PhotoAnnotationMapper.ComputeArrowHead((0, 0), (100, 0), 0));
+    }
 }

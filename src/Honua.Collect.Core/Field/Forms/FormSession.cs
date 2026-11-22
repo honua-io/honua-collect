@@ -372,6 +372,28 @@ public sealed class FormSession : ICaptureHost
         return true;
     }
 
+    /// <summary>Replaces an existing captured media attachment in place.</summary>
+    /// <param name="attachment">Updated attachment with matching <see cref="CapturedMediaAttachment.AttachmentId"/>.</param>
+    /// <returns><see langword="true"/> if a matching attachment was replaced.</returns>
+    public bool ReplaceMedia(CapturedMediaAttachment attachment)
+    {
+        ArgumentNullException.ThrowIfNull(attachment);
+
+        var fieldId = attachment.FieldId
+            ?? throw new ArgumentException("Attachment must specify a FieldId to bind to a field.", nameof(attachment));
+
+        var state = GetField(fieldId);
+        if (!state.ReplaceMedia(attachment))
+        {
+            return false;
+        }
+
+        SyncMediaIntoRecord();
+        RecomputeScalar();
+        FieldChanged?.Invoke(this, new FieldChangedEventArgs(fieldId));
+        return true;
+    }
+
     /// <summary>Adds a new, empty row to a repeatable section.</summary>
     /// <param name="sectionId">Repeatable section id.</param>
     /// <returns>The new row.</returns>

@@ -30,4 +30,13 @@ public interface ICaptureHost
     /// <param name="attachmentId">Attachment identifier.</param>
     /// <returns><see langword="true"/> if an attachment was removed.</returns>
     bool RemoveMedia(string fieldId, string attachmentId);
+
+    /// <summary>
+    /// Replaces an existing captured media attachment (matching by
+    /// <see cref="CapturedMediaAttachment.AttachmentId"/>) in place, preserving
+    /// order and syncing changes into the underlying record.
+    /// </summary>
+    /// <param name="attachment">Updated attachment (must specify its field and existing id).</param>
+    /// <returns><see langword="true"/> if a matching attachment was replaced.</returns>
+    bool ReplaceMedia(CapturedMediaAttachment attachment);
 }

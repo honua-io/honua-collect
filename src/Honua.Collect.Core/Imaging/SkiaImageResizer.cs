@@ -80,7 +80,7 @@ public sealed class SkiaImageResizer : IImageResizer
         return codec?.EncodedOrigin ?? SKEncodedOrigin.TopLeft;
     }
 
-    private static SKBitmap ApplyOrientation(SKBitmap source, SKEncodedOrigin origin)
+    internal static SKBitmap ApplyOrientation(SKBitmap source, SKEncodedOrigin origin)
     {
         if (origin is SKEncodedOrigin.TopLeft or SKEncodedOrigin.Default)
         {

@@ -4,10 +4,12 @@
 using Honua.Collect.App.Capture;
 using Honua.Collect.App.Services;
 using Honua.Collect.Core.Ai;
+using Honua.Collect.Core.Field.Annotation;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Core.Field.Related;
 using Honua.Collect.Core.Storage;
 using Honua.Collect.Presentation.Forms;
+using Honua.Sdk.Field.Records;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Honua.Collect.App.Views;
@@ -82,6 +84,10 @@ public partial class FormPage : ContentPage
         catch (PermissionException)
         {
             await DisplayAlert("Capture", "Permission to capture was denied.", "OK");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            await DisplayAlert(field.Label, ex.Message, "OK");
         }
     }
 
@@ -198,9 +204,13 @@ public partial class FormPage : ContentPage
     private async Task CapturePhotoAsync(FieldViewModel field)
     {
         var action = await DisplayActionSheet("Add photo", "Cancel", null, "Take photo", "Choose from gallery");
+
+        // Only a photo taken now is geotagged with the device position; a gallery
+        // pick may have been taken elsewhere and earlier.
+        var capturedNow = action == "Take photo" && MediaPicker.Default.IsCaptureSupported;
         var photo = action switch
         {
-            "Take photo" => MediaPicker.Default.IsCaptureSupported
+            "Take photo" => capturedNow
                 ? await MediaPicker.Default.CapturePhotoAsync()
                 : await MediaPicker.Default.PickPhotoAsync(),
             "Choose from gallery" => await MediaPicker.Default.PickPhotoAsync(),
@@ -212,23 +222,42 @@ public partial class FormPage : ContentPage
             return;
         }
 
+        var (geotag, geoMeta) = capturedNow ? await TryCaptureGeotagAsync(field) : (null, null);
+
         // Land the original, downscale + re-encode (C8), and keep only the small copy.
         var imported = await CaptureFiles.ImportAsync(photo);
         var compressed = await ImageCompressor.CompressAsync(imported);
         TryDelete(imported);
 
-        // Offer markup/annotation (C7) — keep the flattened image if the user draws.
+        var finalPath = compressed;
+        var contentType = "image/jpeg";
+        PhotoAnnotationOverlay? overlay = null;
+        var metadata = geoMeta ?? new MediaCaptureMetadata();
+
+        // Offer markup/annotation (C7) — keep the original path in metadata so
+        // annotations remain re-editable alongside the flattened evidence JPEG.
         if (await DisplayAlert("Photo", "Add markup to this photo?", "Annotate", "Skip"))
         {
-            var annotated = await PhotoAnnotationPage.CaptureAsync(Navigation, compressed);
+            var annotated = await PhotoAnnotationPage.CaptureResultAsync(Navigation, compressed);
             if (annotated is not null)
             {
-                TryDelete(compressed);
-                compressed = annotated;
+                finalPath = annotated.ImagePath;
+                contentType = "image/jpeg";
+                overlay = annotated.Overlay;
+                metadata = metadata with { OriginalLocalPath = compressed };
             }
         }
 
-        field.CaptureMedia(compressed, "image/jpeg");
+        CaptureOrDiscard(
+            () => field.CaptureMedia(
+                finalPath,
+                contentType: contentType,
+                sizeBytes: TryGetFileSize(finalPath),
+                location: geotag,
+                metadata: metadata,
+                annotationOverlay: overlay),
+            finalPath,
+            compressed);
     }
 
     private async Task CaptureVideoAsync(FieldViewModel field)
@@ -246,8 +275,17 @@ public partial class FormPage : ContentPage
             return;
         }
 
+        // As for photos, only a video recorded now gets the device position.
+        var (geotag, geoMeta) = action == "Record video" ? await TryCaptureGeotagAsync(field) : (null, null);
         var imported = await CaptureFiles.ImportAsync(video);
-        field.CaptureMedia(imported, video.ContentType ?? "video/mp4");
+        CaptureOrDiscard(
+            () => field.CaptureMedia(
+                imported,
+                contentType: video.ContentType ?? "video/mp4",
+                sizeBytes: TryGetFileSize(imported),
+                location: geotag,
+                metadata: geoMeta),
+            imported);
     }
 
     private async Task CaptureInkAsync(FieldViewModel field, string title)
@@ -255,16 +293,254 @@ public partial class FormPage : ContentPage
         var path = await InkCapturePage.CaptureAsync(Navigation, title);
         if (path is not null)
         {
-            field.CaptureMedia(path, "image/png");
+            var (geotag, geoMeta) = await TryCaptureGeotagAsync(field);
+            CaptureOrDiscard(
+                () => field.CaptureMedia(
+                    path,
+                    contentType: "image/png",
+                    sizeBytes: TryGetFileSize(path),
+                    location: geotag,
+                    metadata: geoMeta),
+                path);
         }
     }
 
     private async Task CaptureAudioAsync(FieldViewModel field)
     {
-        var path = await AudioRecorderPage.CaptureAsync(Navigation);
-        if (path is not null)
+        var result = await AudioRecorderPage.CaptureResultAsync(Navigation);
+        if (result is not null)
         {
-            field.CaptureMedia(path, "audio/wav");
+            var (geotag, geoMeta) = await TryCaptureGeotagAsync(field);
+            var metadata = (geoMeta ?? new MediaCaptureMetadata()) with
+            {
+                DurationSeconds = result.Duration.TotalSeconds,
+            };
+            CaptureOrDiscard(
+                () => field.CaptureMedia(
+                    result.AudioPath,
+                    contentType: "audio/wav",
+                    sizeBytes: TryGetFileSize(result.AudioPath),
+                    location: geotag,
+                    metadata: metadata),
+                result.AudioPath);
+        }
+    }
+
+    private async void OnAnnotateMediaItem(object? sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: MediaAttachmentItemViewModel item }
+            || FindFieldForAttachment(item.AttachmentId) is not { } field)
+        {
+            return;
+        }
+
+        var sourcePath = item.Metadata?.OriginalLocalPath ?? item.LocalPath;
+        if (!File.Exists(sourcePath))
+        {
+            await DisplayAlert("Markup", "The source image file could not be found.", "OK");
+            return;
+        }
+
+        var result = await PhotoAnnotationPage.CaptureResultAsync(Navigation, sourcePath, item.AnnotationOverlay);
+        if (result is null)
+        {
+            return;
+        }
+
+        var previousPath = item.LocalPath;
+        try
+        {
+            field.AnnotateMedia(
+                item.AttachmentId,
+                result.Overlay,
+                annotatedLocalPath: result.ImagePath,
+                annotatedContentType: "image/jpeg",
+                annotatedSizeBytes: TryGetFileSize(result.ImagePath));
+
+            if (!string.Equals(previousPath, sourcePath, StringComparison.Ordinal)
+                && !string.Equals(previousPath, result.ImagePath, StringComparison.Ordinal))
+            {
+                TryDelete(previousPath);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException or IOException)
+        {
+            TryDelete(result.ImagePath);
+            await DisplayAlert(field.Label, ex.Message, "OK");
+        }
+    }
+
+    private async void OnEditMediaCaption(object? sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: MediaAttachmentItemViewModel item }
+            || FindFieldForAttachment(item.AttachmentId) is not { } field)
+        {
+            return;
+        }
+
+        var caption = await DisplayPromptAsync(
+            "Media note",
+            "Add or edit a caption for this attachment:",
+            "Save",
+            "Cancel",
+            initialValue: item.Caption ?? string.Empty);
+
+        if (caption is null)
+        {
+            return;
+        }
+
+        try
+        {
+            field.UpdateMediaCaption(item.AttachmentId, caption);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        {
+            // The attachment can be removed while the prompt is open.
+            await DisplayAlert(field.Label, ex.Message, "OK");
+        }
+    }
+
+    private async void OnRemoveMediaItem(object? sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: MediaAttachmentItemViewModel item }
+            || FindFieldForAttachment(item.AttachmentId) is not { } field)
+        {
+            return;
+        }
+
+        if (!await DisplayAlert("Remove attachment", $"Remove {item.FileName}?", "Remove", "Cancel"))
+        {
+            return;
+        }
+
+        // A removed attachment is no longer part of the record, so its files
+        // (the evidence copy and any unannotated original) are deleted with it.
+        if (field.RemoveMedia(item.AttachmentId))
+        {
+            TryDelete(item.LocalPath);
+            if (item.Metadata?.OriginalLocalPath is { } original)
+            {
+                TryDelete(original);
+            }
+        }
+    }
+
+    private FieldViewModel? FindFieldForAttachment(string attachmentId)
+    {
+        if (BindingContext is not FormPageViewModel vm)
+        {
+            return null;
+        }
+
+        foreach (var field in vm.Fields)
+        {
+            if (field.HasAttachment(attachmentId))
+            {
+                return field;
+            }
+        }
+
+        foreach (var group in vm.RepeatGroups)
+        {
+            foreach (var instance in group.Instances)
+            {
+                foreach (var field in instance.Fields)
+                {
+                    if (field.HasAttachment(attachmentId))
+                    {
+                        return field;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // A cached fix is used only when it is recent and precise; otherwise the
+    // geotag would record where the device was, not where the media was captured.
+    private static readonly TimeSpan MaxCachedFixAge = TimeSpan.FromSeconds(60);
+    private const double MaxCachedFixAccuracyMeters = 50;
+
+    private static async Task<(FieldGeoPoint? Location, MediaCaptureMetadata? Metadata)> TryCaptureGeotagAsync(
+        FieldViewModel field)
+    {
+        if (!field.CapturesLocation)
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            var location = await Geolocation.Default.GetLastKnownLocationAsync();
+            if (!IsFreshFix(location))
+            {
+                location = await Geolocation.Default.GetLocationAsync(
+                    new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(5)));
+            }
+
+            return location is null ? (null, null) : ToGeotag(location);
+        }
+        catch (Exception ex)
+        {
+            // Geotagging is best-effort; missing GPS hardware, disabled location
+            // services or a denied permission must never block media capture.
+            System.Diagnostics.Debug.WriteLine($"Geotag unavailable: {ex.GetType().Name}: {ex.Message}");
+            return (null, null);
+        }
+    }
+
+    private static bool IsFreshFix(Location? location) =>
+        location is { Accuracy: { } accuracy }
+        && accuracy is >= 0 and <= MaxCachedFixAccuracyMeters
+        && DateTimeOffset.UtcNow - location.Timestamp <= MaxCachedFixAge;
+
+    private static (FieldGeoPoint Location, MediaCaptureMetadata Metadata) ToGeotag(Location location)
+    {
+        // Devices report an unknown accuracy or altitude as a negative or non-finite
+        // value; Core metadata validation rejects those, so they are dropped here.
+        // Course is the direction of travel, not the camera heading, so it is not
+        // recorded as BearingDegrees.
+        var accuracy = location.Accuracy is { } a && double.IsFinite(a) && a >= 0 ? a : (double?)null;
+        var altitude = location.Altitude is { } alt && double.IsFinite(alt) ? alt : (double?)null;
+        var geoPoint = new FieldGeoPoint(location.Latitude, location.Longitude, accuracy);
+        var metadata = new MediaCaptureMetadata
+        {
+            AltitudeMeters = altitude,
+            AccuracyMeters = accuracy,
+        };
+        return (geoPoint, metadata);
+    }
+
+    private static void CaptureOrDiscard(Action capture, params string[] producedFiles)
+    {
+        try
+        {
+            capture();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            // The field's policy rejected the capture (count, content type, size or
+            // metadata); the files made for it would otherwise stay on the device.
+            foreach (var path in producedFiles.Distinct(StringComparer.Ordinal))
+            {
+                TryDelete(path);
+            }
+
+            throw;
+        }
+    }
+
+    private static long? TryGetFileSize(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : null;
+        }
+        catch (IOException)
+        {
+            return null;
         }
     }
 
