@@ -128,8 +128,10 @@ Paid value lives on Honua Server, which is licensed server-side.
    reference stack (Honua server + PostGIS with an editable layer):
 
    ```bash
-   scripts/e2e/up.sh
+   HONUA_SERVER_IMAGE=<your-honua-server-image> scripts/e2e/up.sh
    ```
+
+   Set `HONUA_SERVER_REPO` if your `honua-server` checkout is not a sibling `../honua-server` directory.
 
    This serves a GeoServices FeatureServer the emulator reaches at
    `10.0.2.2:18080` (see [`docs/verification/e2e/`](./verification/e2e/)). For a
