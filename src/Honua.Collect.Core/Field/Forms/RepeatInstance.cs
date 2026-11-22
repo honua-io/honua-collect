@@ -55,6 +55,11 @@ public sealed class RepeatInstance : ICaptureHost
     /// <returns><see langword="true"/> if an attachment was removed.</returns>
     public bool RemoveMedia(string fieldId, string attachmentId) => _session.RemoveMedia(fieldId, attachmentId);
 
+    /// <summary>Replaces an existing captured media attachment in the row.</summary>
+    /// <param name="attachment">Updated attachment.</param>
+    /// <returns><see langword="true"/> if a matching attachment was replaced.</returns>
+    public bool ReplaceMedia(CapturedMediaAttachment attachment) => _session.ReplaceMedia(attachment);
+
     /// <summary>Validates the row in isolation.</summary>
     /// <returns>The row's validation result.</returns>
     public FormValidationResult Validate() => _session.Validate();

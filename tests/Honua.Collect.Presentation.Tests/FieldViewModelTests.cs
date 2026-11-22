@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.ComponentModel;
+using Honua.Collect.Core.Field.Annotation;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Collect.Presentation.Forms;
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Records;
 
 namespace Honua.Collect.Presentation.Tests;
 
@@ -45,6 +47,8 @@ public class FieldViewModelTests
                         ],
                     },
                     new FormField { FieldId = "photo", Label = "Photo", Type = FormFieldType.Photo },
+                    new FormField { FieldId = "video", Label = "Video", Type = FormFieldType.Video },
+                    new FormField { FieldId = "audio", Label = "Audio", Type = FormFieldType.Audio },
                     new FormField { FieldId = "sig", Label = "Sign", Type = FormFieldType.Signature },
                     new FormField { FieldId = "code", Label = "Code", Type = FormFieldType.Barcode },
                     new FormField
@@ -220,5 +224,87 @@ public class FieldViewModelTests
         var page = NewPage();
         var host = FormSession.CreateForNewRecord(Form(), "r2");
         Assert.Throws<ArgumentNullException>(() => new FieldViewModel(host, "name", null!));
+    }
+
+    [Fact]
+    public void CaptureMedia_stamps_media_type_geotag_metadata_and_annotations_and_supports_edit_and_remove()
+    {
+        var page = NewPage();
+        var photo = Field(page, "photo");
+        var video = Field(page, "video");
+        var audio = Field(page, "audio");
+
+        Assert.False(photo.HasMedia);
+        Assert.True(photo.CanCaptureMore);
+
+        var initialOverlay = new PhotoAnnotationOverlay([
+            new PhotoAnnotation { Shape = AnnotationShape.Arrow, Points = [new(0.1, 0.1), new(0.9, 0.9)] },
+        ]);
+
+        var capturedPhoto = photo.CaptureMedia(
+            "/tmp/site.png",
+            contentType: "image/png",
+            sizeBytes: 4096,
+            location: new FieldGeoPoint(21.31, -157.81, 3.5),
+            metadata: new MediaCaptureMetadata { Caption = "Front gate", WidthPixels = 1600, HeightPixels = 1200, AltitudeMeters = 15, BearingDegrees = 90 },
+            annotationOverlay: initialOverlay);
+
+        Assert.True(photo.HasMedia);
+        var photoItem = Assert.Single(photo.MediaItems);
+        Assert.Equal(FieldMediaType.Photo, photoItem.MediaType);
+        Assert.Equal("site.png", photoItem.FileName);
+        Assert.Equal("image/png", photoItem.ContentType);
+        Assert.Equal(4096, photoItem.SizeBytes);
+        Assert.True(photoItem.HasGeotag);
+        Assert.True(photoItem.HasAnnotations);
+        Assert.Equal(1, photoItem.AnnotationCount);
+        Assert.True(photoItem.CanAnnotate);
+        Assert.Equal("1600×1200", photoItem.DimensionsSummary);
+        Assert.Contains("1 markup", photoItem.SummaryLine);
+        Assert.Contains("GPS 21.31000, -157.81000", photoItem.SummaryLine);
+        Assert.Contains("\"Front gate\"", photoItem.SummaryLine);
+
+        // Re-annotate and update caption
+        var updatedOverlay = new PhotoAnnotationOverlay([
+            new PhotoAnnotation { Shape = AnnotationShape.Arrow, Points = [new(0.1, 0.1), new(0.9, 0.9)] },
+            new PhotoAnnotation { Shape = AnnotationShape.Text, Points = [new(0.5, 0.5)], Text = "Crack" },
+        ]);
+        photo.AnnotateMedia(capturedPhoto.AttachmentId, updatedOverlay, "/tmp/site-v2.png", "image/png", 5000);
+        photo.UpdateMediaCaption(capturedPhoto.AttachmentId, "Updated caption");
+
+        var editedItem = Assert.Single(photo.MediaItems);
+        Assert.Equal("/tmp/site-v2.png", editedItem.LocalPath);
+        Assert.Equal(2, editedItem.AnnotationCount);
+        Assert.Contains("2 markups", editedItem.SummaryLine);
+        Assert.Equal("Updated caption", editedItem.Caption);
+
+        // Video and audio capture preserve MediaType, geotag, and duration
+        video.CaptureMedia(
+            "/tmp/walk.mp4",
+            contentType: "video/mp4",
+            sizeBytes: 120_000,
+            location: new FieldGeoPoint(21.31, -157.81),
+            metadata: new MediaCaptureMetadata { DurationSeconds = 3661 });
+        var videoItem = Assert.Single(video.MediaItems);
+        Assert.Equal(FieldMediaType.Video, videoItem.MediaType);
+        Assert.False(videoItem.CanAnnotate);
+        Assert.Equal("1:01:01", videoItem.DurationSummary);
+        Assert.Contains("1:01:01", videoItem.SummaryLine);
+
+        audio.CaptureMedia(
+            "/tmp/memo.wav",
+            contentType: "audio/wav",
+            sizeBytes: 22_000,
+            location: new FieldGeoPoint(21.31, -157.81),
+            metadata: new MediaCaptureMetadata { DurationSeconds = 14 });
+        var audioItem = Assert.Single(audio.MediaItems);
+        Assert.Equal(FieldMediaType.Audio, audioItem.MediaType);
+        Assert.Equal("0:14", audioItem.DurationSummary);
+
+        // Remove media
+        Assert.True(photo.RemoveMedia(capturedPhoto.AttachmentId));
+        Assert.False(photo.RemoveMedia("nonexistent"));
+        Assert.False(photo.HasMedia);
+        Assert.Empty(photo.MediaItems);
     }
 }

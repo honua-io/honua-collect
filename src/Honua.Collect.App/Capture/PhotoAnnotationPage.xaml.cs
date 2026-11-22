@@ -10,13 +10,14 @@ using IImage = Microsoft.Maui.Graphics.IImage;
 namespace Honua.Collect.App.Capture;
 
 /// <summary>
-/// Photo markup pad (BACKLOG C7). Draws a captured photo as
-/// the background of a <see cref="GraphicsView"/> and lets a field worker draw
-/// freehand strokes over it in one of a few markup colors. On save the photo and
-/// the strokes are flattened to a new PNG (the evidence image); the structured
-/// markup is also returned as a <see cref="PhotoAnnotationOverlay"/> in normalized
-/// 0..1 coordinates so the original image is never modified and the markup can be
-/// re-rendered or re-edited. Shown modally via <see cref="CaptureAsync"/>.
+/// Photo markup pad (BACKLOG C7). Draws a captured photo as the background of a
+/// <see cref="GraphicsView"/> and lets a field worker draw freehand strokes,
+/// arrows, rectangles, ellipses, and text callouts in selectable colors. On save
+/// the photo and markup are flattened to a new PNG at native resolution; the
+/// structured markup is also returned as a <see cref="PhotoAnnotationOverlay"/>
+/// in normalized 0..1 coordinates so the original image is never modified and
+/// the markup can be re-edited later. Shown modally via <see cref="CaptureAsync"/>
+/// or <see cref="CaptureResultAsync"/>.
 /// </summary>
 public partial class PhotoAnnotationPage : ContentPage
 {
@@ -28,25 +29,26 @@ public partial class PhotoAnnotationPage : ContentPage
         ("Black", "#000000"),
     ];
 
-    private readonly string _sourceImagePath;
     private readonly AnnotationDrawable _drawable;
+    private readonly bool _hadInitialOverlay;
     private readonly TaskCompletionSource<PhotoAnnotationResult?> _result = new();
     private string _color = Palette[0].Hex;
+    private AnnotationShape _tool = AnnotationShape.Freehand;
 
-    private PhotoAnnotationPage(string sourceImagePath)
+    private PhotoAnnotationPage(string sourceImagePath, PhotoAnnotationOverlay? initialOverlay = null)
     {
-        _sourceImagePath = sourceImagePath;
-        _drawable = new AnnotationDrawable(LoadImage(sourceImagePath));
+        _hadInitialOverlay = initialOverlay is { Count: > 0 };
+        _drawable = new AnnotationDrawable(LoadImage(sourceImagePath), initialOverlay);
         InitializeComponent();
         Canvas.Drawable = _drawable;
-        UpdateColorLabel();
+        UpdateToolLabel();
     }
 
     /// <summary>
     /// Presents the markup pad modally over <paramref name="sourceImagePath"/> and
     /// returns the flattened PNG path, or <see langword="null"/> if the user
-    /// cancelled or drew nothing. Use <see cref="CaptureAsync"/> for the overlay
-    /// metadata as well.
+    /// cancelled or drew nothing. Use <see cref="CaptureResultAsync"/> for the
+    /// overlay metadata as well.
     /// </summary>
     /// <param name="navigation">The navigation stack to present on.</param>
     /// <param name="sourceImagePath">Path to the photo to annotate.</param>
@@ -60,18 +62,22 @@ public partial class PhotoAnnotationPage : ContentPage
     /// <summary>
     /// Presents the markup pad modally and returns both the flattened PNG path and
     /// the structured <see cref="PhotoAnnotationOverlay"/>, or <see langword="null"/>
-    /// if the user cancelled or drew nothing.
+    /// if the user cancelled or drew nothing. Pass <paramref name="initialOverlay"/>
+    /// to re-edit existing markup non-destructively.
     /// </summary>
     /// <param name="navigation">The navigation stack to present on.</param>
     /// <param name="sourceImagePath">Path to the photo to annotate.</param>
+    /// <param name="initialOverlay">Optional existing markup to load for re-editing.</param>
     /// <returns>The result, or null.</returns>
     public static async Task<PhotoAnnotationResult?> CaptureResultAsync(
-        INavigation navigation, string sourceImagePath)
+        INavigation navigation,
+        string sourceImagePath,
+        PhotoAnnotationOverlay? initialOverlay = null)
     {
         ArgumentNullException.ThrowIfNull(navigation);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
 
-        var page = new PhotoAnnotationPage(sourceImagePath);
+        var page = new PhotoAnnotationPage(sourceImagePath, initialOverlay);
         await navigation.PushModalAsync(page);
         return await page._result.Task;
     }
@@ -82,25 +88,59 @@ public partial class PhotoAnnotationPage : ContentPage
         return PlatformImage.FromStream(stream);
     }
 
-    private void OnStart(object? sender, TouchEventArgs e)
+    private async void OnStart(object? sender, TouchEventArgs e)
     {
-        if (e.Touches.Length > 0)
+        if (e.Touches.Length == 0)
         {
-            _drawable.BeginStroke(e.Touches[0]);
-            Canvas.Invalidate();
+            return;
         }
+
+        var point = e.Touches[0];
+        if (_tool == AnnotationShape.Text)
+        {
+            var label = await DisplayPromptAsync("Add label", "Enter callout text:", "Add", "Cancel");
+            if (!string.IsNullOrWhiteSpace(label))
+            {
+                _drawable.AddText(point, label.Trim(), Canvas.Width, Canvas.Height);
+                Canvas.Invalidate();
+                StatusLabel.Text = string.Empty;
+            }
+
+            return;
+        }
+
+        _drawable.BeginShape(_tool, point, Canvas.Width, Canvas.Height);
+        Canvas.Invalidate();
     }
 
     private void OnDrag(object? sender, TouchEventArgs e)
     {
-        if (e.Touches.Length > 0)
+        if (_tool == AnnotationShape.Text || e.Touches.Length == 0)
         {
-            _drawable.Extend(e.Touches[0]);
-            Canvas.Invalidate();
+            return;
         }
+
+        _drawable.ExtendShape(e.Touches[0], Canvas.Width, Canvas.Height);
+        Canvas.Invalidate();
     }
 
-    private void OnEnd(object? sender, TouchEventArgs e) => _drawable.EndStroke();
+    private void OnEnd(object? sender, TouchEventArgs e) => _drawable.EndShape();
+
+    private void OnPickFreehand(object? sender, EventArgs e) => PickTool(AnnotationShape.Freehand);
+
+    private void OnPickArrow(object? sender, EventArgs e) => PickTool(AnnotationShape.Arrow);
+
+    private void OnPickRectangle(object? sender, EventArgs e) => PickTool(AnnotationShape.Rectangle);
+
+    private void OnPickEllipse(object? sender, EventArgs e) => PickTool(AnnotationShape.Ellipse);
+
+    private void OnPickText(object? sender, EventArgs e) => PickTool(AnnotationShape.Text);
+
+    private void PickTool(AnnotationShape tool)
+    {
+        _tool = tool;
+        UpdateToolLabel();
+    }
 
     private void OnPickRed(object? sender, EventArgs e) => PickColor(Palette[0].Hex);
 
@@ -111,14 +151,14 @@ public partial class PhotoAnnotationPage : ContentPage
     private void PickColor(string hex)
     {
         _color = hex;
-        _drawable.StrokeColor = Color.FromArgb(hex);
-        UpdateColorLabel();
+        _drawable.StrokeColorHex = hex;
+        UpdateToolLabel();
     }
 
-    private void UpdateColorLabel()
+    private void UpdateToolLabel()
     {
-        var name = Array.Find(Palette, p => p.Hex == _color).Name;
-        ColorLabel.Text = string.IsNullOrEmpty(name) ? string.Empty : $"Color: {name}";
+        var colorName = Array.Find(Palette, p => p.Hex == _color).Name;
+        ColorLabel.Text = $"{_tool} · {colorName}";
     }
 
     private void OnUndo(object? sender, EventArgs e)
@@ -128,15 +168,23 @@ public partial class PhotoAnnotationPage : ContentPage
         StatusLabel.Text = string.Empty;
     }
 
+    private void OnClear(object? sender, EventArgs e)
+    {
+        _drawable.Clear();
+        Canvas.Invalidate();
+        StatusLabel.Text = string.Empty;
+    }
+
     private async void OnCancel(object? sender, EventArgs e)
     {
+        _drawable.Dispose();
         _result.TrySetResult(null);
         await Navigation.PopModalAsync();
     }
 
     private async void OnSave(object? sender, EventArgs e)
     {
-        if (_drawable.IsEmpty)
+        if (_drawable.IsEmpty && !_hadInitialOverlay)
         {
             StatusLabel.Text = "Nothing to capture.";
             return;
@@ -146,12 +194,7 @@ public partial class PhotoAnnotationPage : ContentPage
         // in at full resolution rather than at the (smaller) on-screen size.
         var width = (int)Math.Max(1, _drawable.ImageWidth);
         var height = (int)Math.Max(1, _drawable.ImageHeight);
-
-        // The strokes were captured in display pixels; convert to a normalized
-        // overlay using the on-screen canvas size, then render at native size.
-        var displayWidth = Math.Max(1, Canvas.Width);
-        var displayHeight = Math.Max(1, Canvas.Height);
-        var overlay = _drawable.BuildOverlay(displayWidth, displayHeight);
+        var overlay = _drawable.BuildOverlay();
 
         var path = CaptureFiles.NewPath(".png");
         using (var context = new PlatformBitmapExportContext(width, height, 1))
@@ -161,6 +204,7 @@ public partial class PhotoAnnotationPage : ContentPage
             context.WriteToStream(stream);
         }
 
+        _drawable.Dispose();
         _result.TrySetResult(new PhotoAnnotationResult(path, overlay));
         await Navigation.PopModalAsync();
     }
@@ -179,10 +223,19 @@ public partial class PhotoAnnotationPage : ContentPage
             canvas.FillRectangle(rect);
         }
 
+        DrawAnnotations(canvas, overlay.Annotations, width, height);
+    }
+
+    private static void DrawAnnotations(
+        ICanvas canvas,
+        IReadOnlyList<PhotoAnnotation> annotations,
+        double width,
+        double height)
+    {
         canvas.StrokeLineCap = LineCap.Round;
         canvas.StrokeLineJoin = LineJoin.Round;
 
-        foreach (var annotation in overlay.Annotations)
+        foreach (var annotation in annotations)
         {
             var pixels = PhotoAnnotationMapper.ToPixels(annotation, width, height);
             if (pixels.Count == 0)
@@ -191,96 +244,209 @@ public partial class PhotoAnnotationPage : ContentPage
             }
 
             var strokeWidth = (float)PhotoAnnotationMapper.StrokeWidthPixels(annotation, width, height);
-            canvas.StrokeColor = Color.FromArgb(annotation.Color);
+            var color = ParseColorOrDefault(annotation.Color);
+            canvas.StrokeColor = color;
             canvas.StrokeSize = strokeWidth;
 
-            if (pixels.Count == 1)
+            switch (annotation.Shape)
             {
-                canvas.FillColor = Color.FromArgb(annotation.Color);
-                canvas.FillCircle((float)pixels[0].X, (float)pixels[0].Y, strokeWidth / 2f);
-                continue;
-            }
+                case AnnotationShape.Freehand:
+                    DrawFreehand(canvas, pixels, color, strokeWidth);
+                    break;
 
-            var path = new PathF();
-            path.MoveTo((float)pixels[0].X, (float)pixels[0].Y);
-            for (var i = 1; i < pixels.Count; i++)
-            {
-                path.LineTo((float)pixels[i].X, (float)pixels[i].Y);
-            }
+                case AnnotationShape.Arrow when pixels.Count >= 2:
+                    DrawArrow(canvas, pixels[0], pixels[^1], strokeWidth);
+                    break;
 
-            canvas.DrawPath(path);
+                case AnnotationShape.Rectangle when pixels.Count >= 2:
+                {
+                    var bounds = PhotoAnnotationMapper.ToBoundsRect(annotation, width, height);
+                    canvas.DrawRectangle((float)bounds.X, (float)bounds.Y, (float)bounds.Width, (float)bounds.Height);
+                    break;
+                }
+
+                case AnnotationShape.Ellipse when pixels.Count >= 2:
+                {
+                    var bounds = PhotoAnnotationMapper.ToBoundsRect(annotation, width, height);
+                    canvas.DrawEllipse((float)bounds.X, (float)bounds.Y, (float)bounds.Width, (float)bounds.Height);
+                    break;
+                }
+
+                case AnnotationShape.Text when !string.IsNullOrWhiteSpace(annotation.Text):
+                {
+                    var fontSize = Math.Max(14f, strokeWidth * 5f);
+                    var x = (float)pixels[0].X;
+                    var y = (float)pixels[0].Y;
+                    canvas.FontSize = fontSize;
+                    canvas.FontColor = color;
+                    canvas.DrawString(annotation.Text, x, y, HorizontalAlignment.Left);
+                    break;
+                }
+            }
         }
     }
 
-    /// <summary>
-    /// Draws the background photo and the in-progress strokes for the on-screen
-    /// preview, and accumulates strokes (with their color) for the overlay.
-    /// </summary>
-    private sealed class AnnotationDrawable : IDrawable
+    private static void DrawFreehand(
+        ICanvas canvas,
+        IReadOnlyList<(double X, double Y)> pixels,
+        Color color,
+        float strokeWidth)
     {
-        private readonly List<Stroke> _strokes = [];
+        if (pixels.Count == 1)
+        {
+            canvas.FillColor = color;
+            canvas.FillCircle((float)pixels[0].X, (float)pixels[0].Y, strokeWidth / 2f);
+            return;
+        }
 
-        public AnnotationDrawable(IImage? image)
+        var path = new PathF();
+        path.MoveTo((float)pixels[0].X, (float)pixels[0].Y);
+        for (var i = 1; i < pixels.Count; i++)
+        {
+            path.LineTo((float)pixels[i].X, (float)pixels[i].Y);
+        }
+
+        canvas.DrawPath(path);
+    }
+
+    private static void DrawArrow(
+        ICanvas canvas,
+        (double X, double Y) start,
+        (double X, double Y) end,
+        float strokeWidth)
+    {
+        canvas.DrawLine((float)start.X, (float)start.Y, (float)end.X, (float)end.Y);
+        var head = PhotoAnnotationMapper.ComputeArrowHead(start, end, strokeWidth * 6.0);
+        if (head is { } wings)
+        {
+            canvas.DrawLine((float)end.X, (float)end.Y, (float)wings.Left.X, (float)wings.Left.Y);
+            canvas.DrawLine((float)end.X, (float)end.Y, (float)wings.Right.X, (float)wings.Right.Y);
+        }
+    }
+
+    private static Color ParseColorOrDefault(string? hex)
+    {
+        if (!string.IsNullOrWhiteSpace(hex) && Color.TryParse(hex, out var parsed))
+        {
+            return parsed;
+        }
+
+        return Color.FromArgb(Palette[0].Hex);
+    }
+
+    /// <summary>
+    /// Draws the background photo and all normalized annotations (including any
+    /// preloaded overlay and the active in-progress shape).
+    /// </summary>
+    private sealed class AnnotationDrawable : IDrawable, IDisposable
+    {
+        private readonly List<PhotoAnnotation> _items = [];
+        private readonly List<AnnotationPoint> _activePoints = [];
+        private AnnotationShape? _activeShape;
+        private string _activeColor = Palette[0].Hex;
+        private bool _disposed;
+
+        public AnnotationDrawable(IImage? image, PhotoAnnotationOverlay? initialOverlay)
         {
             Image = image;
             ImageWidth = image?.Width ?? 0f;
             ImageHeight = image?.Height ?? 0f;
-            StrokeColor = Color.FromArgb(Palette[0].Hex);
+            if (initialOverlay is not null)
+            {
+                _items.AddRange(initialOverlay.Annotations);
+            }
         }
 
-        public IImage? Image { get; }
+        public IImage? Image { get; private set; }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            Image?.Dispose();
+            Image = null;
+        }
 
         public float ImageWidth { get; }
 
         public float ImageHeight { get; }
 
-        public Color StrokeColor { get; set; }
+        public string StrokeColorHex { get; set; } = Palette[0].Hex;
 
-        public bool IsEmpty => _strokes.TrueForAll(s => s.Points.Count == 0);
+        public bool IsEmpty => _items.Count == 0 && _activePoints.Count == 0;
 
-        public void BeginStroke(PointF p) => _strokes.Add(new Stroke(StrokeColor.ToArgbHex(true), p));
-
-        public void Extend(PointF p)
+        public void BeginShape(AnnotationShape shape, PointF p, double width, double height)
         {
-            if (_strokes.Count > 0)
+            _activeShape = shape;
+            _activeColor = StrokeColorHex;
+            _activePoints.Clear();
+            var norm = PhotoAnnotationMapper.Normalize(p.X, p.Y, width, height);
+            _activePoints.Add(norm);
+            if (shape is AnnotationShape.Arrow or AnnotationShape.Rectangle or AnnotationShape.Ellipse)
             {
-                _strokes[^1].Points.Add(p);
+                _activePoints.Add(norm);
             }
         }
 
-        public void EndStroke()
+        public void ExtendShape(PointF p, double width, double height)
         {
+            if (_activeShape is null || _activePoints.Count == 0)
+            {
+                return;
+            }
+
+            var norm = PhotoAnnotationMapper.Normalize(p.X, p.Y, width, height);
+            if (_activeShape == AnnotationShape.Freehand)
+            {
+                _activePoints.Add(norm);
+            }
+            else if (_activePoints.Count >= 2)
+            {
+                _activePoints[^1] = norm;
+            }
+        }
+
+        public void EndShape()
+        {
+            if (_activeShape is { } shape && _activePoints.Count > 0)
+            {
+                _items.Add(new PhotoAnnotation
+                {
+                    Shape = shape,
+                    Points = _activePoints.ToList(),
+                    Color = _activeColor,
+                });
+            }
+
+            _activeShape = null;
+            _activePoints.Clear();
+        }
+
+        public void AddText(PointF p, string text, double width, double height)
+        {
+            _items.Add(PhotoAnnotationMapper.ToText((p.X, p.Y), text, width, height, StrokeColorHex));
         }
 
         public void Undo()
         {
-            if (_strokes.Count > 0)
+            if (_items.Count > 0)
             {
-                _strokes.RemoveAt(_strokes.Count - 1);
+                _items.RemoveAt(_items.Count - 1);
             }
         }
 
-        /// <summary>
-        /// Maps the accumulated display-space strokes into a normalized overlay,
-        /// preserving each stroke's color. Empty strokes are dropped.
-        /// </summary>
-        public PhotoAnnotationOverlay BuildOverlay(double displayWidth, double displayHeight)
+        public void Clear()
         {
-            var overlay = new PhotoAnnotationOverlay();
-            foreach (var stroke in _strokes)
-            {
-                if (stroke.Points.Count == 0)
-                {
-                    continue;
-                }
-
-                var points = stroke.Points.Select(p => ((double)p.X, (double)p.Y));
-                overlay.Add(PhotoAnnotationMapper.ToFreehand(
-                    points, displayWidth, displayHeight, stroke.Color));
-            }
-
-            return overlay;
+            _items.Clear();
+            _activeShape = null;
+            _activePoints.Clear();
         }
+
+        public PhotoAnnotationOverlay BuildOverlay() => new(_items);
 
         public void Draw(ICanvas canvas, RectF dirtyRect)
         {
@@ -294,43 +460,17 @@ public partial class PhotoAnnotationPage : ContentPage
                 canvas.FillRectangle(dirtyRect);
             }
 
-            canvas.StrokeLineCap = LineCap.Round;
-            canvas.StrokeLineJoin = LineJoin.Round;
-            canvas.StrokeSize = 3.5f;
-
-            foreach (var stroke in _strokes)
+            var toDraw = _items;
+            if (_activeShape is { } shape && _activePoints.Count > 0)
             {
-                if (stroke.Points.Count == 0)
-                {
-                    continue;
-                }
-
-                var color = Color.FromArgb(stroke.Color);
-                canvas.StrokeColor = color;
-
-                if (stroke.Points.Count == 1)
-                {
-                    canvas.FillColor = color;
-                    canvas.FillCircle(stroke.Points[0].X, stroke.Points[0].Y, 2f);
-                    continue;
-                }
-
-                var path = new PathF();
-                path.MoveTo(stroke.Points[0].X, stroke.Points[0].Y);
-                for (var i = 1; i < stroke.Points.Count; i++)
-                {
-                    path.LineTo(stroke.Points[i].X, stroke.Points[i].Y);
-                }
-
-                canvas.DrawPath(path);
+                toDraw =
+                [
+                    .. _items,
+                    new PhotoAnnotation { Shape = shape, Points = _activePoints.ToList(), Color = _activeColor },
+                ];
             }
-        }
 
-        private sealed class Stroke(string color, PointF first)
-        {
-            public string Color { get; } = color;
-
-            public List<PointF> Points { get; } = [first];
+            DrawAnnotations(canvas, toDraw, dirtyRect.Width, dirtyRect.Height);
         }
     }
 }

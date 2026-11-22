@@ -86,6 +86,18 @@ public sealed class FieldState
     internal bool RemoveMedia(string attachmentId)
         => _media.RemoveAll(m => string.Equals(m.AttachmentId, attachmentId, StringComparison.Ordinal)) > 0;
 
+    internal bool ReplaceMedia(CapturedMediaAttachment attachment)
+    {
+        var index = _media.FindIndex(m => string.Equals(m.AttachmentId, attachment.AttachmentId, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            return false;
+        }
+
+        _media[index] = attachment;
+        return true;
+    }
+
     internal void SetErrors(IEnumerable<string> messages)
     {
         _errors.Clear();

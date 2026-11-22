@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Honua.Collect.Core.Field;
+using Honua.Collect.Core.Field.Annotation;
 using Honua.Collect.Core.Field.Capture;
 using Honua.Collect.Core.Field.Forms;
 using Honua.Collect.Presentation.Mvvm;
@@ -113,6 +114,17 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>Number of media attachments captured for this field.</summary>
     public int MediaCount => State.Media.Count;
 
+    /// <summary>Whether at least one media attachment has been captured for this field.</summary>
+    public bool HasMedia => State.Media.Count > 0;
+
+    /// <summary>Whether the field's media count policy permits capturing another item.</summary>
+    public bool CanCaptureMore =>
+        State.Field.Validation.MaxMediaCount is not { } max || MediaCount < max;
+
+    /// <summary>Presentation summaries for each media attachment captured on this field.</summary>
+    public IReadOnlyList<MediaAttachmentItemViewModel> MediaItems =>
+        State.Media.Select(a => new MediaAttachmentItemViewModel(a)).ToList();
+
     /// <summary>Number of linked child records for a <see cref="CaptureWidgetKind.RecordLink"/> field.</summary>
     public int RelatedCount => State.Value switch
     {
@@ -122,22 +134,127 @@ public sealed class FieldViewModel : ObservableObject
     };
 
     /// <summary>
-    /// Registers a captured media file against this field (used by the photo/
-    /// signature/sketch widgets). Pushes through the host and refreshes.
+    /// Registers a captured media file against this field (used by the photo,
+    /// video, audio, signature, and sketch widgets). For media fields, enforces
+    /// <see cref="FieldMediaCapturePolicy"/> via <see cref="MediaCaptureField"/>,
+    /// stamps <see cref="CapturedMediaAttachment.MediaType"/>, geotag location,
+    /// rich metadata, and optional markup overlay, then refreshes siblings.
     /// </summary>
     /// <param name="localPath">Host-local path to the captured file.</param>
     /// <param name="contentType">Media content type, when known.</param>
-    public void CaptureMedia(string localPath, string? contentType = null)
+    /// <param name="sizeBytes">Media file size in bytes, when known.</param>
+    /// <param name="location">Capture GPS geotag, when available and permitted by policy.</param>
+    /// <param name="metadata">Optional rich capture metadata (caption, duration, dimensions, geotag extras).</param>
+    /// <param name="annotationOverlay">Optional structured markup overlay.</param>
+    /// <returns>The captured attachment that was added.</returns>
+    public CapturedMediaAttachment CaptureMedia(
+        string localPath,
+        string? contentType = null,
+        long? sizeBytes = null,
+        FieldGeoPoint? location = null,
+        MediaCaptureMetadata? metadata = null,
+        PhotoAnnotationOverlay? annotationOverlay = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
-        _host.AddMedia(new CapturedMediaAttachment
+
+        CapturedMediaAttachment attachment;
+        if (FormFieldTypes.IsMedia(State.Field.Type))
         {
-            AttachmentId = Guid.NewGuid().ToString("n"),
-            FieldId = FieldId,
-            LocalPath = localPath,
-            ContentType = contentType,
-        });
+            var widget = new MediaCaptureField(_host, State.Field);
+            attachment = widget.Capture(
+                localPath,
+                contentType: contentType,
+                sizeBytes: sizeBytes,
+                location: location,
+                metadata: metadata,
+                annotationOverlay: annotationOverlay);
+        }
+        else
+        {
+            attachment = new CapturedMediaAttachment
+            {
+                AttachmentId = Guid.NewGuid().ToString("n"),
+                FieldId = FieldId,
+                LocalPath = localPath,
+                ContentType = contentType,
+                SizeBytes = sizeBytes,
+                CaptureLocation = location,
+            };
+
+            if (metadata is not null)
+            {
+                attachment = metadata.ApplyTo(attachment);
+            }
+
+            if (annotationOverlay is { Count: > 0 })
+            {
+                attachment = annotationOverlay.ApplyTo(attachment);
+            }
+
+            _host.AddMedia(attachment);
+        }
+
         _onChanged();
+        return attachment;
+    }
+
+    /// <summary>Removes a captured media attachment from this field and refreshes.</summary>
+    /// <param name="attachmentId">Attachment identifier.</param>
+    /// <returns><see langword="true"/> if an attachment was removed.</returns>
+    public bool RemoveMedia(string attachmentId)
+    {
+        var removed = _host.RemoveMedia(FieldId, attachmentId);
+        if (removed)
+        {
+            _onChanged();
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Attaches or replaces the <see cref="PhotoAnnotationOverlay"/> on an
+    /// existing photo or sketch attachment, optionally updating its flattened
+    /// image path while preserving the original unannotated source path.
+    /// </summary>
+    /// <param name="attachmentId">Existing attachment identifier.</param>
+    /// <param name="overlay">Markup overlay to store.</param>
+    /// <param name="annotatedLocalPath">Optional flattened image path.</param>
+    /// <param name="annotatedContentType">Optional content type for the flattened image.</param>
+    /// <param name="annotatedSizeBytes">Optional size in bytes for the flattened image.</param>
+    /// <returns>The updated attachment.</returns>
+    public CapturedMediaAttachment AnnotateMedia(
+        string attachmentId,
+        PhotoAnnotationOverlay overlay,
+        string? annotatedLocalPath = null,
+        string? annotatedContentType = null,
+        long? annotatedSizeBytes = null)
+    {
+        var widget = new MediaCaptureField(_host, State.Field);
+        var updated = widget.Annotate(
+            attachmentId,
+            overlay,
+            annotatedLocalPath,
+            annotatedContentType,
+            annotatedSizeBytes);
+        _onChanged();
+        return updated;
+    }
+
+    /// <summary>Updates the caption stored in an attachment's rich metadata and refreshes.</summary>
+    /// <param name="attachmentId">Existing attachment identifier.</param>
+    /// <param name="caption">New caption, or <see langword="null"/>/whitespace to clear.</param>
+    /// <returns>The updated attachment.</returns>
+    public CapturedMediaAttachment UpdateMediaCaption(string attachmentId, string? caption)
+    {
+        var widget = new MediaCaptureField(_host, State.Field);
+        var existing = widget.Attachments.FirstOrDefault(a => string.Equals(a.AttachmentId, attachmentId, StringComparison.Ordinal))
+            ?? throw new KeyNotFoundException($"Field '{FieldId}' has no attachment '{attachmentId}'.");
+
+        var currentMeta = MediaCaptureMetadata.From(existing) ?? new MediaCaptureMetadata();
+        var updated = widget.UpdateMetadata(attachmentId, currentMeta with { Caption = caption });
+        _onChanged();
+        return updated;
     }
 
     /// <summary>Re-reads runtime state and raises change notification for all bound members.</summary>
@@ -150,6 +267,9 @@ public sealed class FieldViewModel : ObservableObject
         OnPropertyChanged(nameof(ErrorText));
         OnPropertyChanged(nameof(HasError));
         OnPropertyChanged(nameof(MediaCount));
+        OnPropertyChanged(nameof(HasMedia));
+        OnPropertyChanged(nameof(CanCaptureMore));
+        OnPropertyChanged(nameof(MediaItems));
         OnPropertyChanged(nameof(RelatedCount));
     }
 }
