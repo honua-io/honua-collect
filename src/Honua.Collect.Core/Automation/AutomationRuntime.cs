@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.ObjectModel;
 using Honua.Sdk.Field.Forms.Expressions;
 
 namespace Honua.Collect.Core.Automation;
@@ -177,6 +178,13 @@ public sealed class AutomationRuntime
             case RunAiAction ai:
                 RunAi(ai, ruleName, acc);
                 break;
+            case DispatchWebhookAction webhook:
+                acc.WebhookDispatches.Add(new QueuedWebhookDispatch(
+                    webhook.TargetId,
+                    webhook.EventType,
+                    webhook.ExtraMetadata ?? ReadOnlyDictionary<string, string>.Empty,
+                    ruleName));
+                break;
         }
     }
 
@@ -235,6 +243,8 @@ public sealed class AutomationRuntime
 
         public List<AiActionInvocation> AiInvocations { get; } = [];
 
+        public List<QueuedWebhookDispatch> WebhookDispatches { get; } = [];
+
         public List<string> Fired { get; } = [];
 
         public void SetField(string fieldId, object? value)
@@ -277,6 +287,7 @@ public sealed class AutomationRuntime
             FollowUps = FollowUps,
             Tags = _tags,
             AiInvocations = AiInvocations,
+            WebhookDispatches = WebhookDispatches,
             FiredRules = Fired,
         };
     }
