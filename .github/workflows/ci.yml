@@ -173,8 +173,8 @@ jobs:
         run: ../../tools/dotnet-stryker
 
   build-app:
-    # Compiles the shipping MAUI artifact so a break in the App project fails CI
-    # (not just the libraries/tests).
+    # Builds a standalone, debug-key-signed Release APK for installed verification
+    # as well as catching App compilation failures (not just libraries/tests).
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -201,4 +201,31 @@ jobs:
         # The app is intentionally not lockfile-enforced (its SDK/workload-implicit
         # graph floats with the toolchain — see RestorePackagesWithLockFile=false in
         # the csproj), so no -p:RestoreLockedMode here.
-        run: dotnet build src/Honua.Collect.App/Honua.Collect.App.csproj -f net10.0-android -c Release
+        run: >-
+          dotnet build src/Honua.Collect.App/Honua.Collect.App.csproj
+          -f net10.0-android -c Release -t:SignAndroidPackage
+          -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false
+
+      - name: Prepare Android verification artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' apks < <(find src/Honua.Collect.App/bin/Release/net10.0-android -type f -name '*-Signed.apk' -print0)
+          if [[ ${#apks[@]} -ne 1 ]]; then
+            echo "Expected exactly one signed APK; found ${#apks[@]}" >&2
+            exit 1
+          fi
+          mkdir -p artifacts/android
+          cp "${apks[0]}" artifacts/android/honua-collect.apk
+          cd artifacts/android
+          sha256sum honua-collect.apk > SHA256SUMS
+          printf 'source_sha=%s\nrun_id=%s\nrun_attempt=%s\nsigning=SDK debug key; verification only\n' \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > BUILD.txt
+
+      - name: Upload Android verification artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: honua-collect-android-${{ github.sha }}
+          path: artifacts/android/
+          if-no-files-found: error
+          retention-days: 7
