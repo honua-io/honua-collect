@@ -3,8 +3,23 @@
 # mobile_offline_demo/68910 feature layer, for the Honua Collect e2e suite.
 # Reuses a prebuilt server image (HONUA_SERVER_IMAGE) to avoid a long build.
 set -euo pipefail
-IMAGE="${HONUA_SERVER_IMAGE:-honua-server:esri-cert-trunk}"
-SERVER_REPO="${HONUA_SERVER_REPO:-/home/mike/honua-io/honua-server}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+if [ -z "${HONUA_SERVER_IMAGE:-}" ]; then
+  echo "error: HONUA_SERVER_IMAGE is required (for example: HONUA_SERVER_IMAGE=ghcr.io/honua-io/honua-server:<tag> scripts/e2e/up.sh)." >&2
+  exit 1
+fi
+IMAGE="${HONUA_SERVER_IMAGE}"
+
+SERVER_REPO="${HONUA_SERVER_REPO:-${REPO_ROOT}/../honua-server}"
+SEED_YAML="${SERVER_REPO}/tests/seed/server.yaml"
+SEED_SQL="${SERVER_REPO}/tests/seed/mobile-offline-demo-v1.sql"
+if [ ! -f "${SEED_YAML}" ] || [ ! -f "${SEED_SQL}" ]; then
+  echo "error: required honua-server seed files not found under '${SERVER_REPO}' (expected tests/seed/server.yaml and tests/seed/mobile-offline-demo-v1.sql). Set HONUA_SERVER_REPO to a local honua-server checkout." >&2
+  exit 1
+fi
 PGPORT="${PGPORT:-55432}"; HTTPPORT="${HTTPPORT:-18080}"
 # Admin/API key for the ephemeral e2e server. No literal default is committed:
 # supply HONUA_E2E_APIKEY, else a random one is generated and printed below.
