@@ -22,6 +22,18 @@ public enum AutomationTrigger
 
     /// <summary>The record is being saved.</summary>
     RecordSave,
+
+    /// <summary>The record is being deleted.</summary>
+    RecordDelete,
+
+    /// <summary>The record finished syncing with the server.</summary>
+    RecordSync,
+
+    /// <summary>The record's workflow status changed.</summary>
+    StatusChanged,
+
+    /// <summary>A media attachment (photo, audio, video, or sketch) was added to the record.</summary>
+    MediaAdded,
 }
 
 /// <summary>Severity of an alert raised by an automation action.</summary>

@@ -73,6 +73,22 @@ public sealed class AutomationSession : IDisposable
     /// <returns>The run result.</returns>
     public AutomationResult RaiseRecordSave() => Run(new AutomationEvent(AutomationTrigger.RecordSave));
 
+    /// <summary>Fires the <see cref="AutomationTrigger.RecordDelete"/> event.</summary>
+    /// <returns>The run result.</returns>
+    public AutomationResult RaiseRecordDelete() => Run(new AutomationEvent(AutomationTrigger.RecordDelete));
+
+    /// <summary>Fires the <see cref="AutomationTrigger.RecordSync"/> event.</summary>
+    /// <returns>The run result.</returns>
+    public AutomationResult RaiseRecordSync() => Run(new AutomationEvent(AutomationTrigger.RecordSync));
+
+    /// <summary>Fires the <see cref="AutomationTrigger.StatusChanged"/> event.</summary>
+    /// <returns>The run result.</returns>
+    public AutomationResult RaiseStatusChanged() => Run(new AutomationEvent(AutomationTrigger.StatusChanged));
+
+    /// <summary>Fires the <see cref="AutomationTrigger.MediaAdded"/> event.</summary>
+    /// <returns>The run result.</returns>
+    public AutomationResult RaiseMediaAdded() => Run(new AutomationEvent(AutomationTrigger.MediaAdded));
+
     private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
     {
         // Re-entrancy guard: applying a rule's writes raises FieldChanged again;
