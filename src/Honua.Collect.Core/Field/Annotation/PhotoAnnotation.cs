@@ -48,6 +48,16 @@ public sealed record PhotoAnnotation
     /// <summary>Stroke width as a fraction of the image's smaller dimension.</summary>
     public double StrokeWidth { get; init; } = 0.005;
 
+    /// <summary>Text size as a fraction of the image's smaller dimension, when captured by an editor.</summary>
+    public double? FontSize { get; init; }
+
+    /// <summary>Resolves text size proportionally at either preview or export dimensions.</summary>
+    /// <param name="width">Target image width.</param>
+    /// <param name="height">Target image height.</param>
+    /// <returns>The font size in target pixels.</returns>
+    public double TextSizePixels(double width, double height) =>
+        (FontSize ?? Math.Max(0.025, StrokeWidth * 5)) * Math.Min(Math.Abs(width), Math.Abs(height));
+
     /// <summary>Label text for <see cref="AnnotationShape.Text"/> annotations.</summary>
     public string? Text { get; init; }
 }

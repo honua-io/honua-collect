@@ -279,7 +279,7 @@ public partial class PhotoAnnotationPage : ContentPage
 
                 case AnnotationShape.Text when !string.IsNullOrWhiteSpace(annotation.Text):
                 {
-                    var fontSize = Math.Max(14f, strokeWidth * 5f);
+                    var fontSize = (float)annotation.TextSizePixels(width, height);
                     var x = (float)pixels[0].X;
                     var y = (float)pixels[0].Y;
                     canvas.FontSize = fontSize;

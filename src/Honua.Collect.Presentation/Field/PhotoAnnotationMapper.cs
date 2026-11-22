@@ -207,6 +207,9 @@ public static class PhotoAnnotationMapper
             Color = color,
             StrokeWidth = strokeWidth,
             Text = text.Trim(),
+            // Capture the editor's minimum once; applying it again at native
+            // resolution would shrink the label relative to its preview.
+            FontSize = Math.Max(14.0 / Math.Max(1.0, Math.Min(displayWidth, displayHeight)), strokeWidth * 5),
         };
     }
 

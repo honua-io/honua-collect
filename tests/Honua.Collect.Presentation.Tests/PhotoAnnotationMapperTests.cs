@@ -139,6 +139,17 @@ public class PhotoAnnotationMapperTests
     }
 
     [Fact]
+    public void Text_size_survives_persistence_and_scales_from_preview_to_export()
+    {
+        var text = PhotoAnnotationMapper.ToText((100, 150), "Crack", 300, 400);
+        var restored = Assert.Single(PhotoAnnotationOverlay.FromJson(new PhotoAnnotationOverlay([text]).ToJson()).Annotations);
+
+        Assert.Equal(14, restored.TextSizePixels(300, 400), 6);
+        Assert.Equal(56, restored.TextSizePixels(1200, 1600), 6);
+        Assert.Equal(14, restored.TextSizePixels(1200, 1600) / 4, 6);
+    }
+
+    [Fact]
     public void ToBoundsRect_returns_zero_when_fewer_than_two_points()
     {
         var single = new PhotoAnnotation { Shape = AnnotationShape.Rectangle, Points = [new(0.5, 0.5)] };

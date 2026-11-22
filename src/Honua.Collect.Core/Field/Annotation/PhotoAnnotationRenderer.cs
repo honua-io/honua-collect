@@ -145,7 +145,7 @@ public static class PhotoAnnotationRenderer
                 break;
 
             case AnnotationShape.Text when !string.IsNullOrWhiteSpace(annotation.Text):
-                DrawText(canvas, annotation.Points[0], annotation.Text, width, height, color, strokeWidth);
+                DrawText(canvas, annotation.Points[0], annotation.Text, width, height, color, (float)annotation.TextSizePixels(width, height));
                 break;
         }
     }
@@ -221,11 +221,10 @@ public static class PhotoAnnotationRenderer
         int width,
         int height,
         SKColor color,
-        float strokeWidth)
+        float fontSize)
     {
         var x = (float)(anchor.X * width);
         var y = (float)(anchor.Y * height);
-        var fontSize = MathF.Max(14f, strokeWidth * 5f);
 
         using var font = new SKFont { Size = fontSize };
         var textWidth = font.MeasureText(text);
