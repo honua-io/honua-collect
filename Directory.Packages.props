@@ -41,8 +41,8 @@
     The App layer keeps its MAUI-Graphics path for on-device capture.
   -->
   <ItemGroup>
-    <PackageVersion Include="SkiaSharp" Version="4.156.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.156.1" />
+    <PackageVersion Include="SkiaSharp" Version="4.157.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.157.0" />
   </ItemGroup>
 
   <!-- Storage / crypto. -->
