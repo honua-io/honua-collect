@@ -144,13 +144,23 @@ public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordSt
             }
         }
 
-        // Collect the cascade children so the caller can delete the child records,
-        // then remove every link row this parent owns.
+        // A child can appear under multiple fields or belong to other inspections.
+        // Return each child only when deleting this parent removes its final link.
         var cascaded = new List<string>();
         await using (var select = connection.CreateCommand())
         {
             select.Transaction = (SqliteTransaction)transaction;
-            select.CommandText = $"SELECT child_record_id FROM {Table} WHERE parent_record_id = $parent AND behavior = $cascade ORDER BY ordinal;";
+            select.CommandText = $"""
+                SELECT owned.child_record_id
+                FROM {Table} AS owned
+                WHERE owned.parent_record_id = $parent AND owned.behavior = $cascade
+                  AND NOT EXISTS (
+                      SELECT 1 FROM {Table} AS other
+                      WHERE other.child_record_id = owned.child_record_id AND other.parent_record_id <> $parent
+                  )
+                GROUP BY owned.child_record_id
+                ORDER BY MIN(owned.ordinal), owned.child_record_id;
+                """;
             select.Parameters.AddWithValue("$parent", parentRecordId);
             select.Parameters.AddWithValue("$cascade", (int)RecordLinkBehavior.Cascade);
             await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -190,6 +200,8 @@ public sealed class SqliteRelatedRecordStore : SqliteStoreBase, IRelatedRecordSt
             );
             CREATE INDEX IF NOT EXISTS ix_collect_record_links_parent
                 ON {Table} (parent_record_id);
+            CREATE INDEX IF NOT EXISTS ix_collect_record_links_child
+                ON {Table} (child_record_id);
             """;
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
