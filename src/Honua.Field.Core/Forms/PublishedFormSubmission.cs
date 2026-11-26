@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -110,19 +111,32 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
         }
 
         using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.BadRequest)
         {
             return FeatureSyncResult.Fail($"Form submission returned HTTP {(int)response.StatusCode}.", (int)response.StatusCode);
         }
 
-        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+        }
+        catch (JsonException)
+        {
+            return FeatureSyncResult.Fail("The server returned an unreadable submission receipt.", (int)response.StatusCode);
+        }
+
+        using var result = document;
         using var sent = JsonDocument.Parse(RequestJson);
         var root = result.RootElement;
         var expected = sent.RootElement.GetProperty("attachments").EnumerateArray()
             .Select(a => a.GetProperty("clientAttachmentId").GetString()).ToHashSet(StringComparer.Ordinal);
-        var matchesVersion = root.GetProperty("formId").GetString() == FormId
-            && root.GetProperty("formVersion").GetInt32() == sent.RootElement.GetProperty("formVersion").GetInt32();
-        var status = root.GetProperty("status").GetString();
+        var matchesVersion = root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("formId", out var id) && id.ValueKind == JsonValueKind.String && id.GetString() == FormId
+            && root.TryGetProperty("formVersion", out var version) && version.ValueKind == JsonValueKind.Number
+            && version.TryGetInt32(out var number) && number == sent.RootElement.GetProperty("formVersion").GetInt32();
+        var status = matchesVersion && root.TryGetProperty("status", out var state) && state.ValueKind == JsonValueKind.String
+            ? state.GetString() : null;
         if (matchesVersion && status == "rejected"
             && (!root.TryGetProperty("targetFeatureId", out var target) || target.ValueKind == JsonValueKind.Null)
             && (!root.TryGetProperty("editOutcome", out var edit) || edit.ValueKind == JsonValueKind.Null)
@@ -133,7 +147,13 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
                 ? issues.EnumerateArray().Select(issue => issue.GetProperty("message").GetString())
                     .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
                 : null;
-            return FeatureSyncResult.Fail(message ?? "Correct the rejected inspection before submitting it again.", 422);
+            return FeatureSyncResult.Fail(message ?? "Correct the rejected inspection before submitting it again.",
+                response.IsSuccessStatusCode ? null : (int)response.StatusCode) with { CanCorrectSubmission = true };
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return FeatureSyncResult.Fail($"Form submission returned HTTP {(int)response.StatusCode}.", (int)response.StatusCode);
         }
 
         if (!matchesVersion || status != "accepted"

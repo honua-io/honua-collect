@@ -35,6 +35,9 @@ public sealed record GeoServicesTarget(string BaseUrl, string ServiceId, int Lay
 /// <param name="Attempts">Number of attempts made (including retries).</param>
 public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Error, int? ErrorCode = null, int Attempts = 1)
 {
+    /// <summary>The server confirmed a validation rejection before applying the edit.</summary>
+    public bool CanCorrectSubmission { get; init; }
+
     /// <summary>Builds a successful result for the given server object id.</summary>
     /// <param name="objectId">The server-assigned object id, when known.</param>
     public static FeatureSyncResult Ok(long? objectId) => new(true, objectId, null);
