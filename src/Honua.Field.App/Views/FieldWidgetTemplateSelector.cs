@@ -22,8 +22,17 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
     /// <summary>Template for boolean toggle fields.</summary>
     public DataTemplate? ToggleTemplate { get; set; }
 
-    /// <summary>Template for single/multi choice fields.</summary>
+    /// <summary>Template for single choice fields.</summary>
     public DataTemplate? ChoiceTemplate { get; set; }
+
+    /// <summary>Template for multiple choice fields.</summary>
+    public DataTemplate? MultipleChoiceTemplate { get; set; }
+
+    /// <summary>Template for capturing the device location.</summary>
+    public DataTemplate? LocationTemplate { get; set; }
+
+    /// <summary>Template for read-only calculated fields.</summary>
+    public DataTemplate? CalculatedTemplate { get; set; }
 
     /// <summary>Template for media-capture fields (photo/video/audio/signature/sketch).</summary>
     public DataTemplate? MediaTemplate { get; set; }
@@ -51,6 +60,9 @@ public sealed class FieldWidgetTemplateSelector : DataTemplateSelector
             FieldWidgetTemplate.Number => NumberTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.Toggle => ToggleTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.Choice => ChoiceTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.MultipleChoice => MultipleChoiceTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Location => LocationTemplate ?? FallbackTemplate,
+            FieldWidgetTemplate.Calculated => CalculatedTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.Media => MediaTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.Barcode => BarcodeTemplate ?? FallbackTemplate,
             FieldWidgetTemplate.RecordLink => RecordLinkTemplate ?? FallbackTemplate,

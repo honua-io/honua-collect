@@ -43,6 +43,41 @@
                 </VerticalStackLayout>
             </DataTemplate>
 
+            <DataTemplate x:Key="MultipleChoiceEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding MultipleChoiceOptions}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              SemanticProperties.Description="{Binding Label}" />
+                                    <Label Grid.Column="1" Text="{Binding Label}" VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="LocationEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Label Text="{Binding LocationText, TargetNullValue='No location captured'}" />
+                    <Button Text="Capture current location" HorizontalOptions="Start" Clicked="OnCaptureLocation" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="CalculatedEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Label Text="{Binding Value}" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
             <DataTemplate x:Key="MediaEditor">
                 <VerticalStackLayout Spacing="4" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
@@ -111,6 +146,9 @@
                 NumberTemplate="{StaticResource NumberEditor}"
                 ToggleTemplate="{StaticResource ToggleEditor}"
                 ChoiceTemplate="{StaticResource ChoiceEditor}"
+                MultipleChoiceTemplate="{StaticResource MultipleChoiceEditor}"
+                LocationTemplate="{StaticResource LocationEditor}"
+                CalculatedTemplate="{StaticResource CalculatedEditor}"
                 MediaTemplate="{StaticResource MediaEditor}"
                 BarcodeTemplate="{StaticResource BarcodeEditor}"
                 RecordLinkTemplate="{StaticResource RecordLinkEditor}"

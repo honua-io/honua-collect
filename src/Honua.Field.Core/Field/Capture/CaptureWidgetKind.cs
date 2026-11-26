@@ -24,7 +24,7 @@ public enum CaptureWidgetKind
     /// <summary>Boolean toggle.</summary>
     Toggle,
 
-    /// <summary>Single- or multi-select choice picker.</summary>
+    /// <summary>Single-select choice picker.</summary>
     Choice,
 
     /// <summary>Camera / photo capture.</summary>
@@ -56,6 +56,9 @@ public enum CaptureWidgetKind
 
     /// <summary>Read-only calculated value.</summary>
     Calculated,
+
+    /// <summary>Multiple choice selection.</summary>
+    MultipleChoice,
 }
 
 /// <summary>Maps <see cref="FormFieldType"/> to the widget that renders it.</summary>
@@ -70,7 +73,8 @@ public static class CaptureWidget
         FormFieldType.Numeric => CaptureWidgetKind.Number,
         FormFieldType.Date or FormFieldType.Time or FormFieldType.DateTime => CaptureWidgetKind.DateTime,
         FormFieldType.YesNo => CaptureWidgetKind.Toggle,
-        FormFieldType.SingleChoice or FormFieldType.MultipleChoice or FormFieldType.Classification => CaptureWidgetKind.Choice,
+        FormFieldType.SingleChoice or FormFieldType.Classification => CaptureWidgetKind.Choice,
+        FormFieldType.MultipleChoice => CaptureWidgetKind.MultipleChoice,
         FormFieldType.Photo => CaptureWidgetKind.Photo,
         FormFieldType.Video => CaptureWidgetKind.Video,
         FormFieldType.Audio => CaptureWidgetKind.Audio,

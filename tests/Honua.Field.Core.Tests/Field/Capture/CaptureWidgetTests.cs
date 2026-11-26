@@ -33,7 +33,7 @@ public class CaptureWidgetTests
     {
         Assert.Equal(CaptureWidgetKind.Photo, CaptureWidget.For(FormFieldType.Photo));
         Assert.Equal(CaptureWidgetKind.Barcode, CaptureWidget.For(FormFieldType.Barcode));
-        Assert.Equal(CaptureWidgetKind.Choice, CaptureWidget.For(FormFieldType.MultipleChoice));
+        Assert.Equal(CaptureWidgetKind.MultipleChoice, CaptureWidget.For(FormFieldType.MultipleChoice));
         Assert.Equal(CaptureWidgetKind.Toggle, CaptureWidget.For(FormFieldType.YesNo));
         Assert.Equal(CaptureWidgetKind.Text, CaptureWidget.For(FormFieldType.Address));
     }

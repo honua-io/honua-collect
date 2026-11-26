@@ -23,7 +23,7 @@ public enum FieldWidgetTemplate
     /// <summary>Boolean toggle editor.</summary>
     Toggle,
 
-    /// <summary>Single/multi choice picker.</summary>
+    /// <summary>Single choice picker.</summary>
     Choice,
 
     /// <summary>Media capture (photo/video/audio/signature/sketch).</summary>
@@ -37,6 +37,15 @@ public enum FieldWidgetTemplate
 
     /// <summary>Fallback editor for any other field.</summary>
     Fallback,
+
+    /// <summary>Multiple choice selection.</summary>
+    MultipleChoice,
+
+    /// <summary>Device location capture.</summary>
+    Location,
+
+    /// <summary>Read-only calculated value.</summary>
+    Calculated,
 }
 
 /// <summary>Pure mapping from a capture widget kind to its editor template.</summary>
@@ -46,7 +55,7 @@ public static class FieldWidgetTemplateMap
     /// Returns the editor template for a widget kind. Photo, video, audio,
     /// signature, and sketch all share the media editor; barcode, record link,
     /// text, number, toggle, and choice each map to their own; everything else
-    /// (date/time, file, location, calculated, and any future kind) falls back.
+    /// (date/time, file, and any future kind) falls back.
     /// </summary>
     /// <param name="widget">The capture widget kind.</param>
     /// <returns>The editor template to render.</returns>
@@ -56,6 +65,9 @@ public static class FieldWidgetTemplateMap
         CaptureWidgetKind.Number => FieldWidgetTemplate.Number,
         CaptureWidgetKind.Toggle => FieldWidgetTemplate.Toggle,
         CaptureWidgetKind.Choice => FieldWidgetTemplate.Choice,
+        CaptureWidgetKind.MultipleChoice => FieldWidgetTemplate.MultipleChoice,
+        CaptureWidgetKind.Location => FieldWidgetTemplate.Location,
+        CaptureWidgetKind.Calculated => FieldWidgetTemplate.Calculated,
         CaptureWidgetKind.Photo or CaptureWidgetKind.Video or CaptureWidgetKind.Audio
             or CaptureWidgetKind.Signature or CaptureWidgetKind.Sketch => FieldWidgetTemplate.Media,
         CaptureWidgetKind.Barcode => FieldWidgetTemplate.Barcode,

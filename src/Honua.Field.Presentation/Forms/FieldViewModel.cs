@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Text.Json;
 using Honua.Field.Core.Field;
 using Honua.Field.Core.Field.Annotation;
 using Honua.Field.Core.Field.Capture;
@@ -22,6 +23,7 @@ public sealed class FieldViewModel : ObservableObject
 {
     private readonly ICaptureHost _host;
     private readonly Action _onChanged;
+    private IReadOnlyList<MultipleChoiceOption>? _multipleChoiceOptions;
     private IReadOnlyList<MediaAttachmentItemViewModel>? _mediaItems;
     private IReadOnlyList<MediaAttachmentItemViewModel>? _notifiedMediaItems;
 
@@ -88,6 +90,78 @@ public sealed class FieldViewModel : ObservableObject
             return Choices.FirstOrDefault(c => string.Equals(c.Value, current, StringComparison.Ordinal));
         }
         set => Value = value?.Value;
+    }
+
+    /// <summary>Options with a check state bound to the stored array of choice codes.</summary>
+    public IReadOnlyList<MultipleChoiceOption> MultipleChoiceOptions =>
+        _multipleChoiceOptions ??= Choices.Select(choice => new MultipleChoiceOption(this, choice)).ToArray();
+
+    /// <summary>Coordinates and accuracy for a captured or reopened location.</summary>
+    public string? LocationText
+    {
+        get
+        {
+            var point = Value switch
+            {
+                FieldGeoPoint location => location,
+                JsonElement { ValueKind: JsonValueKind.Object } json
+                    when json.TryGetProperty(nameof(FieldGeoPoint.Latitude), out var latitude)
+                        && latitude.ValueKind == JsonValueKind.Number
+                        && json.TryGetProperty(nameof(FieldGeoPoint.Longitude), out var longitude)
+                        && longitude.ValueKind == JsonValueKind.Number => new FieldGeoPoint(
+                            latitude.GetDouble(),
+                            longitude.GetDouble(),
+                            json.TryGetProperty(nameof(FieldGeoPoint.AccuracyMeters), out var accuracy)
+                                && accuracy.ValueKind == JsonValueKind.Number ? accuracy.GetDouble() : null),
+                _ => null,
+            };
+            return point is null ? null : MediaCaptureMetadata.FormatGeotag(point);
+        }
+    }
+
+    private IEnumerable<string> SelectedCodes => Value switch
+    {
+        IEnumerable<string> codes => codes,
+        JsonElement { ValueKind: JsonValueKind.Array } json => json.EnumerateArray()
+            .Where(code => code.ValueKind == JsonValueKind.String)
+            .Select(code => code.GetString()!),
+        _ => [],
+    };
+
+    /// <summary>A single checkbox in a multiple-choice field.</summary>
+    public sealed class MultipleChoiceOption : ObservableObject
+    {
+        private readonly FieldViewModel _field;
+
+        internal MultipleChoiceOption(FieldViewModel field, FieldChoice choice)
+        {
+            _field = field;
+            Choice = choice;
+        }
+
+        internal FieldChoice Choice { get; }
+
+        /// <summary>Display label for the option.</summary>
+        public string Label => Choice.Label;
+
+        /// <summary>Whether this choice's code is in the current field value.</summary>
+        public bool IsSelected
+        {
+            get => _field.SelectedCodes.Contains(Choice.Value, StringComparer.Ordinal);
+            set
+            {
+                if (value == IsSelected)
+                {
+                    return;
+                }
+
+                _field.Value = value
+                    ? _field.SelectedCodes.Append(Choice.Value).ToArray()
+                    : _field.SelectedCodes.Where(code => code != Choice.Value).ToArray();
+            }
+        }
+
+        internal void Refresh() => OnPropertyChanged(nameof(IsSelected));
     }
 
     /// <summary>Whether the field is currently shown.</summary>
@@ -291,6 +365,23 @@ public sealed class FieldViewModel : ObservableObject
         OnPropertyChanged(nameof(Value));
         OnPropertyChanged(nameof(Choices));
         OnPropertyChanged(nameof(SelectedChoice));
+        OnPropertyChanged(nameof(LocationText));
+        if (_multipleChoiceOptions is { } options)
+        {
+            if (options.Select(option => option.Choice).SequenceEqual(Choices))
+            {
+                foreach (var option in options)
+                {
+                    option.Refresh();
+                }
+            }
+            else
+            {
+                _multipleChoiceOptions = null;
+                OnPropertyChanged(nameof(MultipleChoiceOptions));
+            }
+        }
+
         OnPropertyChanged(nameof(IsVisible));
         OnPropertyChanged(nameof(IsRequired));
         OnPropertyChanged(nameof(ErrorText));

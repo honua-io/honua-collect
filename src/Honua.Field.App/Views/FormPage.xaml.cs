@@ -46,6 +46,44 @@ public partial class FormPage : ContentPage
         BindingContext = viewModel;
     }
 
+    private async void OnCaptureLocation(object? sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: FieldViewModel field } button)
+        {
+            return;
+        }
+
+        button.IsEnabled = false;
+        try
+        {
+            var location = await Geolocation.Default.GetLocationAsync(
+                new GeolocationRequest(GeolocationAccuracy.High, TimeSpan.FromSeconds(15)));
+            if (location is null)
+            {
+                await DisplayAlert(field.Label, "A location fix is unavailable. Try again with a clear view of the sky.", "OK");
+                return;
+            }
+
+            field.Value = ToGeotag(location).Location;
+        }
+        catch (PermissionException)
+        {
+            await DisplayAlert(field.Label, "Allow location access in device settings to capture this field.", "OK");
+        }
+        catch (FeatureNotEnabledException)
+        {
+            await DisplayAlert(field.Label, "Turn on device location services and try again.", "OK");
+        }
+        catch (FeatureNotSupportedException)
+        {
+            await DisplayAlert(field.Label, "Location capture is unavailable on this device.", "OK");
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
+    }
+
     private async void OnCaptureMedia(object? sender, EventArgs e)
     {
         if (sender is not Button { BindingContext: FieldViewModel field })

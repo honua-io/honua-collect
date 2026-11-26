@@ -13,6 +13,7 @@ public class FieldWidgetTemplateMapTests
     [InlineData(CaptureWidgetKind.Number, FieldWidgetTemplate.Number)]
     [InlineData(CaptureWidgetKind.Toggle, FieldWidgetTemplate.Toggle)]
     [InlineData(CaptureWidgetKind.Choice, FieldWidgetTemplate.Choice)]
+    [InlineData(CaptureWidgetKind.MultipleChoice, FieldWidgetTemplate.MultipleChoice)]
     [InlineData(CaptureWidgetKind.Photo, FieldWidgetTemplate.Media)]
     [InlineData(CaptureWidgetKind.Video, FieldWidgetTemplate.Media)]
     [InlineData(CaptureWidgetKind.Audio, FieldWidgetTemplate.Media)]
@@ -21,9 +22,9 @@ public class FieldWidgetTemplateMapTests
     [InlineData(CaptureWidgetKind.Barcode, FieldWidgetTemplate.Barcode)]
     [InlineData(CaptureWidgetKind.DateTime, FieldWidgetTemplate.Fallback)]
     [InlineData(CaptureWidgetKind.File, FieldWidgetTemplate.Fallback)]
-    [InlineData(CaptureWidgetKind.Location, FieldWidgetTemplate.Fallback)]
+    [InlineData(CaptureWidgetKind.Location, FieldWidgetTemplate.Location)]
     [InlineData(CaptureWidgetKind.RecordLink, FieldWidgetTemplate.RecordLink)]
-    [InlineData(CaptureWidgetKind.Calculated, FieldWidgetTemplate.Fallback)]
+    [InlineData(CaptureWidgetKind.Calculated, FieldWidgetTemplate.Calculated)]
     public void Maps_each_widget_kind_to_its_template(CaptureWidgetKind kind, FieldWidgetTemplate expected)
         => Assert.Equal(expected, FieldWidgetTemplateMap.For(kind));
 
