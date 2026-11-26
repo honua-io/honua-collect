@@ -30,9 +30,20 @@ appId: io.honua.collect
     element: Offline visit one
 - scrollUntilVisible:
     element: Offline visit two
+# Keep the action clear of the floating iOS tab bar before tapping.
 - scrollUntilVisible:
     element: Submit
-- tapOn: Submit
+    visibilityPercentage: 100
+- swipe:
+    start: 90%,76%
+    end: 90%,57%
+    duration: 450
+- assertVisible: Submit
+- takeScreenshot: resume-draft-ios-before-action
+- tapOn:
+    text: Submit
+    retryTapIfNoChange: false
+- takeScreenshot: resume-draft-ios-after-action
 - extendedWaitUntil:
     visible: 'Drafts [0-9]+ · Outbox [1-9][0-9]* .*'
     timeout: 15000
