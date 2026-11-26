@@ -4,36 +4,40 @@
              x:Class="Honua.Field.App.Views.GeometryCapturePage"
              Title="Capture geometry">
 
-    <Grid RowDefinitions="Auto,*,Auto" Padding="12" RowSpacing="10">
-
-        <HorizontalStackLayout Grid.Row="0" Spacing="8">
-            <Label Text="Type:" VerticalOptions="Center" />
-            <Picker x:Name="TypePicker" SelectedIndexChanged="OnTypeChanged" WidthRequest="130">
-                <Picker.Items>
-                    <x:String>Point</x:String>
-                    <x:String>Line</x:String>
-                    <x:String>Polygon</x:String>
-                </Picker.Items>
-            </Picker>
-            <Button Text="–" Clicked="OnZoomOut" WidthRequest="44" />
-            <Button Text="+" Clicked="OnZoomIn" WidthRequest="44" />
-            <Button Text="⤓ Area" Clicked="OnDownloadArea" WidthRequest="80" />
-        </HorizontalStackLayout>
-
-        <Border Grid.Row="1" Stroke="LightGray" StrokeThickness="1">
-            <GraphicsView x:Name="Canvas"
+    <Grid x:Name="Workspace" Margin="8" RowDefinitions="*,Auto" ColumnDefinitions="*,0"
+          SizeChanged="OnWorkspaceSizeChanged">
+        <Border Stroke="LightGray" StrokeThickness="1">
+            <GraphicsView x:Name="Canvas" AutomationId="GeometryCanvas"
+                          SemanticProperties.Description="Geometry drawing area"
                           StartInteraction="OnStart"
                           DragInteraction="OnDrag"
                           EndInteraction="OnEnd" />
         </Border>
 
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-            <Label x:Name="StatusLabel" VerticalOptions="Center" />
-            <Button Grid.Column="1" Text="Undo" Clicked="OnUndo" />
-            <Button Grid.Column="2" Text="Clear" Clicked="OnClear" />
-            <Button Grid.Column="3" Text="Done" Clicked="OnDone" />
-        </Grid>
-
+        <ScrollView x:Name="Tools" Grid.Row="1" Margin="0,8,0,0">
+            <VerticalStackLayout Spacing="6">
+                <Grid ColumnDefinitions="*,48,48,Auto" ColumnSpacing="4">
+                    <Picker x:Name="TypePicker" Title="Geometry type" AutomationId="GeometryType"
+                            SelectedIndexChanged="OnTypeChanged">
+                        <Picker.Items>
+                            <x:String>Point</x:String>
+                            <x:String>Line</x:String>
+                            <x:String>Polygon</x:String>
+                        </Picker.Items>
+                    </Picker>
+                    <Button Grid.Column="1" Text="−" Padding="0" Clicked="OnZoomOut"
+                            SemanticProperties.Description="Zoom out" />
+                    <Button Grid.Column="2" Text="+" Padding="0" Clicked="OnZoomIn"
+                            SemanticProperties.Description="Zoom in" />
+                    <Button Grid.Column="3" Text="Offline area" Padding="8,4" Clicked="OnDownloadArea" />
+                </Grid>
+                <Label x:Name="StatusLabel" />
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                    <Button Text="Undo" Clicked="OnUndo" />
+                    <Button Grid.Column="1" Text="Clear" Clicked="OnClear" />
+                    <Button Grid.Column="2" Text="Done" Clicked="OnDone" />
+                </Grid>
+            </VerticalStackLayout>
+        </ScrollView>
     </Grid>
-
 </ContentPage>

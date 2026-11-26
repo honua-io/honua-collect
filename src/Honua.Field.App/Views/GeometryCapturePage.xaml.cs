@@ -49,6 +49,21 @@ public partial class GeometryCapturePage : ContentPage
         UpdateStatus();
     }
 
+    private void OnWorkspaceSizeChanged(object? sender, EventArgs e)
+    {
+        // Use the app window so a tablet in split screen gets the compact layout.
+        bool sideBySide = Workspace.Width >= 600;
+        if (sideBySide == (Grid.GetColumn(Tools) == 1))
+        {
+            return;
+        }
+
+        Workspace.ColumnDefinitions[1].Width = new GridLength(sideBySide ? 288 : 0);
+        Grid.SetRow(Tools, sideBySide ? 0 : 1);
+        Grid.SetColumn(Tools, sideBySide ? 1 : 0);
+        Tools.Margin = sideBySide ? new Thickness(8, 0, 0, 0) : new Thickness(0, 8, 0, 0);
+    }
+
     private void OnTypeChanged(object? sender, EventArgs e)
     {
         var type = TypePicker.SelectedIndex switch

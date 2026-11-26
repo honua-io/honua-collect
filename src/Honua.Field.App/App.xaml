@@ -9,6 +9,11 @@
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="FieldFormColumn" TargetType="ScrollView">
+                <Setter Property="HorizontalOptions" Value="Center" />
+                <Setter Property="MaximumWidthRequest" Value="720" />
+                <Setter Property="WidthRequest" Value="{Binding Width, Source={RelativeSource AncestorType={x:Type ContentPage}}}" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

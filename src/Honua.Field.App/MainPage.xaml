@@ -4,7 +4,7 @@
              x:Class="Honua.Field.App.MainPage"
              Title="Honua Field">
 
-    <ScrollView>
+    <ScrollView Style="{StaticResource FieldFormColumn}">
         <VerticalStackLayout Padding="24" Spacing="18">
 
             <Label Text="Honua Field"
