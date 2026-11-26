@@ -8,8 +8,16 @@ appId: io.honua.collect
 - assertVisible: Capture geometry
 - tapOn:
     id: GeometryType
-- tapOn: Polygon
-- tapOn: Done
+# UIKit exposes only the selected wheel row. Tap the third row inside the wheel.
+- tapOn:
+    text: Point
+    index: -1
+    point: 50%,70%
+- assertVisible: Polygon
+- tapOn:
+    text: Done
+    childOf:
+      id: DoneAccessory
 - assertVisible: 'Polygon: 0 vertex\(es\)'
 - tapOn:
     point: 25%,30%
