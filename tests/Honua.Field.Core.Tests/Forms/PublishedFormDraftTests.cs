@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Honua.Field.Core.Field;
+using Honua.Field.Core.Field.Annotation;
+using Honua.Field.Core.Field.Capture;
 using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
@@ -66,6 +68,11 @@ public sealed class PublishedFormDraftTests
                 SizeBytes = 3,
                 CaptureLocation = location,
             };
+            var photoMetadata = new MediaCaptureMetadata { Caption = "Offline evidence", WidthPixels = 64 };
+            var photoOverlay = new PhotoAnnotationOverlay([
+                new PhotoAnnotation { Shape = AnnotationShape.Text, Points = [new(0.2, 0.3)], Text = "Inspection" },
+            ]);
+            photo = photoOverlay.ApplyTo(photoMetadata.ApplyTo(photo));
             session.AddMedia(photo);
             session.AddRepeatInstance("visits").SetValue("note", "first");
             var second = session.AddRepeatInstance("visits");
@@ -119,6 +126,8 @@ public sealed class PublishedFormDraftTests
             var restoredPhoto = Assert.Single(reopened.GetField("photo").Media);
             Assert.Equal(photo.AttachmentId, restoredPhoto.AttachmentId);
             Assert.Equal(photo.CaptureLocation, restoredPhoto.CaptureLocation);
+            Assert.Equal(photoMetadata, MediaCaptureMetadata.From(restoredPhoto));
+            Assert.Equal("Inspection", Assert.Single(PhotoAnnotationOverlay.From(restoredPhoto).Annotations).Text);
             Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(restoredPhoto.LocalPath));
             var group = reopened.GetRepeat("visits");
             Assert.Equal(2, group.Bounds?.Min);
