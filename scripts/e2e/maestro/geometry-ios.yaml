@@ -4,6 +4,11 @@ appId: io.honua.collect
 - extendedWaitUntil:
     visible: Geometry
     timeout: 60000
+- tapOn: Records
+- assertVisible: 'No drafts\.'
+- assertVisible: 'Outbox is empty\.'
+- assertVisible: 'Nothing sent yet\.'
+- takeScreenshot: empty-records
 - tapOn: Geometry
 - assertVisible: Capture geometry
 - tapOn:
