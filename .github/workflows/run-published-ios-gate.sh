@@ -115,7 +115,13 @@ import sys
 dump = pathlib.Path(sys.argv[1]).read_text()
 rows = re.findall(r"^[0-9a-fA-F]+[ \t]+([0-9a-fA-F \t]+)$", dump, re.MULTILINE)
 try:
-    entitlements = plistlib.loads(bytes.fromhex(" ".join(rows)).rstrip(b"\0"))
+    # otool emits little-endian ARM instructions as 32-bit hex words and
+    # prints any trailing bytes individually.
+    contents = bytearray()
+    for word in " ".join(rows).split():
+        chunk = bytes.fromhex(word)
+        contents.extend(chunk[::-1] if len(chunk) == 4 else chunk)
+    entitlements = plistlib.loads(contents.rstrip(b"\0"))
 except ValueError as error:
     sys.exit(f"Could not read embedded simulator entitlements: {error}")
 if sys.argv[2] not in entitlements.get("keychain-access-groups", []):
