@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--longitude", type=float, required=True)
     parser.add_argument("--latitude", type=float, required=True)
     parser.add_argument("--attachment", type=Path, required=True)
+    parser.add_argument("--report", type=Path, help="Write verified server readback evidence as JSON")
     parser.add_argument("--api-key-file", type=Path)
     parser.add_argument("--db-container", default=os.environ.get("HONUA_E2E_PG_CONTAINER", "honua-field-xlsform-pg"))
     parser.add_argument("--db-name", default="honua")
@@ -101,6 +102,14 @@ def main():
     """, check=True, text=True, stdout=subprocess.PIPE).stdout.splitlines()
     require([json.loads(row) for row in receipts] == [[args.form, version]],
             "Expected one accepted receipt for the captured form and version")
+    if args.report:
+        evidence = {
+            "formId": args.form, "formVersion": version, "featureId": object_id,
+            "attachmentId": attachment_id, "attachmentSha256": expected_hash.hex(),
+            "matchedFeatures": len(features), "acceptedReceipts": len(receipts),
+            "repeatRows": len(args.repeat_note),
+        }
+        args.report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"Verified feature {object_id}, attachment {attachment_id}, form version {version}")
 
 
