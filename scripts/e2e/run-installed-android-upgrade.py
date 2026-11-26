@@ -71,18 +71,28 @@ class Android:
 
     def screen(self, predicate, description, *, timeout=45):
         deadline = time.monotonic() + timeout
+        failures = {"valid": 0, "invalidXml": 0, "adbError": 0, "idleTimeout": 0}
         while time.monotonic() < deadline:
             try:
                 self.shell("rm", "-f", self.xml_path)
-                self.shell("uiautomator", "dump", self.xml_path)
+                output = self.shell("uiautomator", "dump", self.xml_path)
+                if "could not get idle state" in output.lower():
+                    failures["idleTimeout"] += 1
+                    continue
                 root = ET.fromstring(self.adb("exec-out", "cat", self.xml_path))
+                failures["valid"] += 1
                 result = predicate(root)
                 if result is not None:
                     return result
-            except (ET.ParseError, subprocess.CalledProcessError):
-                pass
+            except ET.ParseError:
+                failures["invalidXml"] += 1
+            except subprocess.CalledProcessError as error:
+                if b"could not get idle state" in (error.stderr or b"").lower():
+                    failures["idleTimeout"] += 1
+                else:
+                    failures["adbError"] += 1
             time.sleep(0.5)
-        raise RuntimeError(f"Screen never showed {description}")
+        raise RuntimeError(f"Screen never showed {description}. UI hierarchy attempts: {failures}")
 
     def element(self, text=None, *, kind=None):
         def find(root):
