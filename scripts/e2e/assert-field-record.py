@@ -119,6 +119,12 @@ def main():
             "matchedFeatures": len(features), "acceptedReceipts": len(receipts),
             "repeatRows": len(args.repeat_note),
         }
+        if "HONUA_E2E_SERVER_REVISION" in os.environ:
+            evidence["fieldRevision"] = os.environ["GITHUB_SHA"]
+            evidence["serverRevision"] = os.environ["HONUA_E2E_SERVER_REVISION"]
+            pin_path = Path(__file__).parent / "fixtures" / "server-revision.txt"
+            require(evidence["serverRevision"] == pin_path.read_text().strip(),
+                    "The checked-out server revision differs from the pinned fixture revision")
         if args.latest_version is not None:
             evidence["latestFormVersion"] = args.latest_version
         args.report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")

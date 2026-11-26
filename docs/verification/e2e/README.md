@@ -39,7 +39,7 @@ The [Apple workflow](../../../.github/workflows/field-apple.yml) builds Field fo
 
 ## Published XLSForm iPhone gate
 
-The iPhone workflow installs Field on an iOS 27.2 simulator and publishes the inspection workbook to a local Honua Server backed by PostGIS. Both mobile workflows take their Server commit from `scripts/e2e/fixtures/server-revision.txt`.
+The iPhone workflow installs Field on an iOS 27.2 simulator and publishes the inspection workbook to a local Honua Server backed by PostGIS. Both mobile workflows take their Server commit from `scripts/e2e/fixtures/server-revision.txt`. Each hosted `server-readback.json` records the Field and Server commits and verifies that the Server checkout matches that pin.
 
 Maestro downloads the form as a layer-scoped worker, saves a draft offline with two repeat rows and a photo, and resumes it after a cold start. The host publishes the next form version while the draft is offline. During the first sync, a proxy forwards the submission and replaces the successful response with HTTP 503. The outbox must survive another restart. After retry, the gate queries FeatureServer and the receipt table for one feature, one matching attachment and one accepted receipt at the original form version. The `published-ios-results` artifact includes per-stage JUnit results and the readback evidence. [iOS workflow](../../../.github/workflows/published-ios.yml)
 

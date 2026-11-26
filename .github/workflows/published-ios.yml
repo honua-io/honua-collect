@@ -51,6 +51,7 @@ jobs:
           [[ $revision =~ ^[a-f0-9]{40}$ ]]
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        id: server-checkout
         with:
           repository: honua-io/honua-server
           ref: ${{ steps.server.outputs.revision }}
@@ -95,6 +96,7 @@ jobs:
             --output "$RUNNER_TEMP/published-server"
       - name: Verify offline capture and receipt replay on iPhone
         env:
+          HONUA_E2E_SERVER_REVISION: ${{ steps.server-checkout.outputs.commit }}
           HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
         run: bash .github/workflows/run-published-ios-gate.sh
       - name: Upload iOS receipt replay evidence
