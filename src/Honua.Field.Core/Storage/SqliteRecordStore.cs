@@ -53,11 +53,11 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             INSERT INTO {TableName}
                 (record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                  created_utc, submitted_utc, completed_utc, values_json,
-                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json)
+                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json, published_draft_json)
             VALUES
                 ($record_id, $form_id, $status, $assigned_user_id, $lat, $lon, $accuracy,
                  $created_utc, $submitted_utc, $completed_utc, $values_json,
-                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version, $published_submission_json)
+                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version, $published_submission_json, $published_draft_json)
             ON CONFLICT(record_id) DO UPDATE SET
                 form_id = excluded.form_id,
                 status = excluded.status,
@@ -75,7 +75,8 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 failed_attempts = excluded.failed_attempts,
                 last_synced_utc = excluded.last_synced_utc,
                 version = excluded.version,
-                published_submission_json = excluded.published_submission_json;
+                published_submission_json = excluded.published_submission_json,
+                published_draft_json = excluded.published_draft_json;
             """;
 
         var record = entry.Record;
@@ -102,6 +103,10 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             ? JsonSerializer.Serialize(submission, RecordStoreJsonContext.Default.PublishedFormSubmission)
             : DBNull.Value);
 
+        command.Parameters.AddWithValue("$published_draft_json", entry.PublishedDraft is { } draft
+            ? JsonSerializer.Serialize(draft, RecordStoreJsonContext.Default.PublishedFormDraft)
+            : DBNull.Value);
+
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -113,7 +118,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         command.CommandText = $"""
             SELECT record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                    created_utc, submitted_utc, completed_utc, values_json,
-                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json
+                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json, published_draft_json
             FROM {TableName};
             """;
 
@@ -181,7 +186,12 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             : JsonSerializer.Deserialize(reader.GetString(17), RecordStoreJsonContext.Default.PublishedFormSubmission)
                 ?? throw new JsonException("Stored published form submission cannot be null.");
 
-        var entry = Rehydrate(record, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc, submission);
+        var draft = reader.IsDBNull(18)
+            ? null
+            : JsonSerializer.Deserialize(reader.GetString(18), RecordStoreJsonContext.Default.PublishedFormDraft)
+                ?? throw new JsonException("Stored published form draft cannot be null.");
+        var entry = new FieldRecordEntry(record) { PublishedSubmission = submission, PublishedDraft = draft };
+        Rehydrate(entry, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc);
         entry.SetVersion(version);
         return entry;
     }
@@ -191,23 +201,21 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
     /// its internal bookkeeping (error, retry count, timestamps) is consistent with
     /// the stored transport state, rather than fabricated by direct assignment.
     /// </summary>
-    private static FieldRecordEntry Rehydrate(
-        FieldRecord record,
+    private static void Rehydrate(
+        FieldRecordEntry entry,
         RecordSyncState syncState,
         string? remoteId,
         string? lastError,
         int failedAttempts,
-        DateTimeOffset? lastSyncedUtc,
-        PublishedFormSubmission? submission)
+        DateTimeOffset? lastSyncedUtc)
     {
         // Local records (including drafts) never transitioned; the constructor's
         // default already models that, so leave them untouched.
         if (syncState == RecordSyncState.Local)
         {
-            return new FieldRecordEntry(record, RecordSyncState.Local) { PublishedSubmission = submission };
+            return;
         }
 
-        var entry = new FieldRecordEntry(record) { PublishedSubmission = submission };
         entry.MarkPending();
 
         switch (syncState)
@@ -249,8 +257,6 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 // MarkPending already applied above.
                 break;
         }
-
-        return entry;
     }
 
     /// <inheritdoc />
@@ -279,12 +285,14 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                     failed_attempts INTEGER NOT NULL,
                     last_synced_utc TEXT NULL,
                     version INTEGER NOT NULL DEFAULT 0,
-                    published_submission_json TEXT NULL
+                    published_submission_json TEXT NULL,
+                    published_draft_json TEXT NULL
                 );
                 """;
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         await EnsureColumnAsync(command, "version", "INTEGER NOT NULL DEFAULT 0", ct).ConfigureAwait(false);
         await EnsureColumnAsync(command, "published_submission_json", "TEXT NULL", ct).ConfigureAwait(false);
+        await EnsureColumnAsync(command, "published_draft_json", "TEXT NULL", ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
@@ -300,6 +308,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 }
 
 [JsonSerializable(typeof(PublishedFormSubmission))]
+[JsonSerializable(typeof(PublishedFormDraft))]
 internal sealed partial class RecordStoreJsonContext : JsonSerializerContext
 {
 }

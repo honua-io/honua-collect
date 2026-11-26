@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.Core.Forms;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Records;
@@ -28,6 +29,12 @@ public sealed class FieldRecordEntry
 
     /// <summary>The captured record.</summary>
     public FieldRecord Record { get; }
+
+    /// <summary>Frozen request used when replaying a versioned published form.</summary>
+    public PublishedFormSubmission? PublishedSubmission { get; init; }
+
+    /// <summary>Saved editor state for a published form draft.</summary>
+    public PublishedFormDraft? PublishedDraft { get; init; }
 
     /// <summary>Current transport state.</summary>
     public RecordSyncState SyncState { get; private set; }

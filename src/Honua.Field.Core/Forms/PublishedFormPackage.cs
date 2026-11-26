@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json;
 using Honua.Field.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Forms;
 
@@ -15,9 +16,10 @@ public sealed class PublishedFormPackage
     private readonly Dictionary<string, object?> _defaults = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Dictionary<string, JsonElement>> _choiceCodes = new(StringComparer.OrdinalIgnoreCase);
 
-    private PublishedFormPackage(JsonElement package, string formId, int version)
+    private PublishedFormPackage(JsonElement package, string formId, int version, string envelopeJson)
     {
         Version = version;
+        EnvelopeJson = envelopeJson;
         RequiresGeometry = package.Property("submitPolicy").Property("requiresGeometry").ValueKind != JsonValueKind.False;
         OfflineEnabled = package.Property("offlinePolicy").Property("enabled").ValueKind == JsonValueKind.True;
         var attachmentPolicy = package.Property("attachmentPolicy").Property("fields").Items()
@@ -73,6 +75,10 @@ public sealed class PublishedFormPackage
             Sections = sections,
         };
     }
+
+    internal string EnvelopeJson { get; }
+
+    internal FormSession OpenRecord(FieldRecord record) => FormSession.Open(Definition, record, repeatBounds: _repeatBounds);
 
     /// <summary>The form definition for the capture runtime.</summary>
     public FormDefinition Definition { get; }
@@ -140,7 +146,7 @@ public sealed class PublishedFormPackage
                 throw new FormPackageException("The server response did not contain the requested published form version.");
             }
 
-            return new PublishedFormPackage(package, envelope.RequiredText("formId"), envelope.Property("version").GetInt32());
+            return new PublishedFormPackage(package, envelope.RequiredText("formId"), envelope.Property("version").GetInt32(), json);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException or KeyNotFoundException)
         {

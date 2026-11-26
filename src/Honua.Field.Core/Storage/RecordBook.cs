@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Sdk.Field.Records;
 
@@ -23,6 +24,7 @@ public sealed class RecordBook
     private readonly Func<Task<IRecordStore>> _storeFactory;
     private readonly List<FieldRecordEntry> _entries = [];
     private readonly SemaphoreSlim _initGate = new(1, 1);
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly object _listGate = new();
     private IRecordStore? _store;
     private volatile bool _initialized;
@@ -88,25 +90,59 @@ public sealed class RecordBook
 
     /// <summary>Adds a freshly submitted record to the Outbox and persists it.</summary>
     /// <param name="record">The submitted record (review status past Draft).</param>
+    /// <param name="submission">Optional versioned submission captured with this record.</param>
     /// <returns>The tracked entry.</returns>
-    public async Task<FieldRecordEntry> AddSubmittedAsync(FieldRecord record)
+    public async Task<FieldRecordEntry> AddSubmittedAsync(FieldRecord record, PublishedFormSubmission? submission = null)
     {
         ArgumentNullException.ThrowIfNull(record);
-        await InitializeAsync().ConfigureAwait(false);
-
-        var entry = new FieldRecordEntry(record);
+        var entry = new FieldRecordEntry(record) { PublishedSubmission = submission };
         if (record.Status != RecordStatus.Draft)
         {
             entry.MarkPending();
         }
 
-        lock (_listGate)
+        return await PersistAndTrackAsync(entry).ConfigureAwait(false);
+    }
+
+    /// <summary>Saves and tracks an unfinished published form under its existing record ID.</summary>
+    public Task<FieldRecordEntry> SaveDraftAsync(FieldRecord record, PublishedFormDraft draft)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(draft);
+        if (record.Status != RecordStatus.Draft || record.RecordId != draft.RecordId || record.FormId != draft.FormId)
         {
-            _entries.Insert(0, entry);
+            throw new ArgumentException("The saved editor state must belong to this unfinished record.", nameof(draft));
         }
 
-        await SaveAsync(entry).ConfigureAwait(false);
-        return entry;
+        var (_, restored) = draft.Open(record.FormId, record.RecordId, new Uri(draft.ServerBaseUrl));
+        return PersistAndTrackAsync(new FieldRecordEntry(restored.Record) { PublishedDraft = draft });
+    }
+
+    private async Task<FieldRecordEntry> PersistAndTrackAsync(FieldRecordEntry entry)
+    {
+        await _saveGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await SaveAsync(entry).ConfigureAwait(false);
+            lock (_listGate)
+            {
+                var index = _entries.FindIndex(existing => existing.Record.RecordId == entry.Record.RecordId);
+                if (index < 0)
+                {
+                    _entries.Insert(0, entry);
+                }
+                else
+                {
+                    _entries[index] = entry;
+                }
+            }
+
+            return entry;
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
     }
 
     /// <summary>Persists the current state of an entry (idempotent upsert).</summary>
