@@ -1,6 +1,9 @@
 appId: io.honua.collect
 ---
 - launchApp
+- extendedWaitUntil:
+    visible: Start New Inspection
+    timeout: 90000
 - tapOn: Start New Inspection
 - tapOn:
     id: '(.*:id/)?name'

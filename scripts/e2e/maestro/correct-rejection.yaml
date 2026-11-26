@@ -1,6 +1,9 @@
 appId: io.honua.collect
 ---
 - launchApp
+- extendedWaitUntil:
+    visible: Records
+    timeout: 90000
 - tapOn: Records
 - extendedWaitUntil:
     visible: 'Rejected\. Open to correct\..*'

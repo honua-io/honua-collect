@@ -52,8 +52,15 @@ class Android:
         launcher = output.splitlines()[-1]
         if not launcher.startswith(PACKAGE + "/"):
             raise RuntimeError("App launcher could not be resolved")
-        if "Status: ok" not in self.shell("am", "start", "-W", "-n", launcher):
-            raise RuntimeError("Android launcher did not start the app")
+        self.shell("am", "start", "-n", launcher)
+
+        def rendered(root):
+            for node in root.iter("node"):
+                if node.get("package") == PACKAGE and (node.get("text") or node.get("content-desc")):
+                    return True
+            return None
+
+        self.screen(rendered, "the app's first labeled control", timeout=90)
 
     def uid(self):
         result = self.shell("cmd", "package", "list", "packages", "-U", PACKAGE)
