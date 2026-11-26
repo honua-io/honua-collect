@@ -1,5 +1,6 @@
 appId: io.honua.collect
 ---
+- launchApp
 - tapOn: Start New Inspection
 - tapOn:
     id: '(.*:id/)?name'

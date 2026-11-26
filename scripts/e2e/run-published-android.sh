@@ -20,10 +20,20 @@ adb=("${ADB:-adb}" -s "$serial")
 maestro=("${MAESTRO:-maestro}" --device "$serial")
 working_dir=$(mktemp -d)
 reverse_started=false
+settings_written=false
 
 cleanup() {
     if $reverse_started; then
         "${adb[@]}" reverse --remove "tcp:${port}" >/dev/null 2>&1 || true
+    fi
+    if $settings_written; then
+        "${adb[@]}" shell am force-stop "$app" >/dev/null 2>&1 || true
+        if [[ -f "$working_dir/original-settings" ]]; then
+            "${adb[@]}" shell "run-as $app sh -c 'cat > files/appsettings.local.json'" \
+                < "$working_dir/original-settings" || true
+        else
+            "${adb[@]}" shell run-as "$app" rm -f files/appsettings.local.json || true
+        fi
     fi
     rm -r -- "$working_dir"
 }
@@ -40,6 +50,10 @@ run_flow() {
 
 "${adb[@]}" shell run-as "$app" id >/dev/null
 "${adb[@]}" shell am force-stop "$app"
+if "${adb[@]}" shell run-as "$app" test -f files/appsettings.local.json; then
+    "${adb[@]}" exec-out run-as "$app" cat files/appsettings.local.json > "$working_dir/original-settings"
+fi
+settings_written=true
 python3 - "$endpoint" "$form" "$key_file" <<'PY' | "${adb[@]}" shell "run-as $app sh -c 'mkdir -p files && cat > files/appsettings.local.json'"
 import json
 import pathlib
@@ -65,6 +79,7 @@ fi
 list_media > "$working_dir/before"
 run_flow download
 "${adb[@]}" reverse --remove "tcp:${port}"
+"${adb[@]}" shell am force-stop "$app"
 
 run_flow capture
 "${adb[@]}" shell am force-stop "$app"
