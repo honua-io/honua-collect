@@ -30,10 +30,19 @@ appId: io.honua.collect
     direction: UP
     element:
       id: '(.*:id/)?name'
-- tapOn:
+- longPressOn:
     id: '(.*:id/)?name'
-- eraseText: 100
+- runFlow:
+    when:
+      notVisible: '(?i)select all'
+    commands:
+      - tapOn: '(?i)more options'
+- tapOn: '(?i)select all'
+- eraseText: 1
 - inputText: ${CORRECTED_NAME}
+- assertVisible:
+    id: '(.*:id/)?name'
+    text: '^${CORRECTED_NAME}$'
 - hideKeyboard
 - scrollUntilVisible:
     element: Submit

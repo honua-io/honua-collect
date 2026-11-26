@@ -387,7 +387,10 @@ public class FormPackageClientTests
                 "formId": "inspection", "schemaVersion": "honua.form-package.v1",
                 "expressionLanguage": "xlsform",
                 "offlinePolicy": { "enabled": true },
-                "sections": [{ "sectionId": "visits", "repeatable": true, "fieldIds": ["row_total"] }],
+                "sections": [
+                  { "sectionId": "main", "fieldIds": ["photo", "detail", "name", "status", "total", "location"] },
+                  { "sectionId": "visits", "repeatable": true, "fieldIds": ["row_total", "row_note"] }
+                ],
                 "fields": [
                   { "fieldId": "name", "type": "text", "required": true,
                     "constraintExpression": "string-length(.) > 2", "constraintMessage": "Name is too short" },
@@ -396,8 +399,11 @@ public class FormPackageClientTests
                   } },
                   { "fieldId": "total", "type": "number",
                     "calculatedExpression": "if(selected(${status}, \"open\"), 2, 1)" },
-                  { "fieldId": "photo", "type": "media", "relevanceExpression": "selected(${status}, 'open')" },
-                  { "fieldId": "row_total", "type": "number", "calculatedExpression": "${total} * 2" }
+                  { "fieldId": "detail", "type": "text", "relevanceExpression": "selected(${status}, 'open')" },
+                  { "fieldId": "photo", "type": "media", "relevanceExpression": "${detail} = 'capture'" },
+                  { "fieldId": "location", "type": "geometry", "required": true },
+                  { "fieldId": "row_total", "type": "number", "calculatedExpression": "${total} * 2" },
+                  { "fieldId": "row_note", "type": "text", "required": true, "relevanceExpression": "${detail} = 'capture'" }
                 ]
               }
             }
@@ -410,7 +416,7 @@ public class FormPackageClientTests
             var session = package.CreateSession("record");
             Assert.Equal(1d, session.GetValue("total"));
             Assert.False(session.GetField("photo").IsVisible);
-            session.AddRepeatInstance("visits");
+            var row = session.AddRepeatInstance("visits");
 
             session.SetValue("status", new[] { "reopened" });
             Assert.Equal(1d, session.GetValue("total"));
@@ -418,21 +424,50 @@ public class FormPackageClientTests
 
             session.SetValue("status", new[] { "open", "closed" });
             Assert.Equal(2d, session.GetValue("total"));
+            session.SetValue("detail", "capture");
             Assert.True(session.GetField("photo").IsVisible);
+            session.AddMedia(new CapturedMediaAttachment
+            {
+                FieldId = "photo", AttachmentId = "legacy-photo", LocalPath = path,
+            });
+            row.SetValue("row_note", "inspection note");
             Assert.Equal(new[] { "open", "closed" }, Assert.IsType<string[]>(session.Record.Values["status"]));
             Assert.DoesNotContain(session.Record.Values.Keys, key => key.StartsWith("xlsform:", StringComparison.Ordinal));
 
             session.SetValue("name", "ab");
             Assert.Contains(session.Validate().Errors, error => error.FieldId == "name");
             session.SetValue("name", "abc");
+            Assert.Contains(session.Validate().Errors, error => error.FieldId == "location");
+            session.SetValue("location", new FieldGeoPoint(21.31, -157.81));
             Assert.True(session.Validate().IsValid);
             Assert.Equal(4d, Assert.Single(session.Record.Repeats["visits"]).Values["row_total"]);
 
             session.SetValue("status", new[] { "closed" });
             Assert.Equal(1d, session.GetValue("total"));
             Assert.False(session.GetField("photo").IsVisible);
+            Assert.False(session.GetField("detail").IsVisible);
+            Assert.DoesNotContain(row.VisibleFields, field => field.FieldId == "row_note");
             Assert.True(session.Validate().IsValid);
             Assert.Equal(2d, Assert.Single(session.Record.Repeats["visits"]).Values["row_total"]);
+
+            var server = new Uri("https://s.example/");
+            var draft = PublishedFormDraft.Capture(package, session, server);
+            var (restoredPackage, reopened) = draft.Open("inspection", "record", server);
+            Assert.True(reopened.Validate().IsValid);
+            var submission = PublishedFormSubmission.Capture(restoredPackage, reopened, server);
+            using var body = JsonDocument.Parse(submission.RequestJson);
+            var values = body.RootElement.GetProperty("values");
+            Assert.Equal(7, body.RootElement.GetProperty("formVersion").GetInt32());
+            Assert.False(values.TryGetProperty("detail", out _));
+            Assert.Empty(Assert.Single(values.GetProperty("visits").EnumerateArray()).EnumerateObject());
+            Assert.Empty(body.RootElement.GetProperty("attachments").EnumerateArray());
+            Assert.Empty(submission.Files);
+
+            reopened.SetValue("status", new[] { "open" });
+            Assert.True(reopened.Validate().IsValid);
+            Assert.Equal("capture", reopened.GetValue("detail"));
+            Assert.Equal(path, Assert.Single(reopened.GetField("photo").Media).LocalPath);
+            Assert.Equal("inspection note", Assert.Single(reopened.GetRepeat("visits").Instances).GetValue("row_note"));
         }
         finally
         {
