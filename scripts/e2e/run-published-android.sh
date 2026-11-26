@@ -20,10 +20,16 @@ name="Offline inspection $(date +%s)-${RANDOM}"
 adb=("${ADB:-adb}" -s "$serial")
 maestro=("${MAESTRO:-maestro}" --device "$serial")
 working_dir=$(mktemp -d)
+fault_proxy_pid=
 reverse_started=false
 settings_written=false
+umask 077
 
 cleanup() {
+    if [[ -n $fault_proxy_pid ]]; then
+        kill "$fault_proxy_pid" 2>/dev/null || true
+        wait "$fault_proxy_pid" 2>/dev/null || true
+    fi
     if $reverse_started; then
         "${adb[@]}" reverse --remove "tcp:${port}" >/dev/null 2>&1 || true
     fi
@@ -46,7 +52,7 @@ list_media() {
 }
 
 run_flow() {
-    "${maestro[@]}" test -e "INSPECTION_NAME=$name" "$script_dir/maestro/$1.yaml"
+    "${maestro[@]}" test -e "INSPECTION_NAME=$name" -e "FORM_VERSION=$version" "$script_dir/maestro/$1.yaml"
 }
 
 "${adb[@]}" shell run-as "$app" id >/dev/null
@@ -77,6 +83,9 @@ if [[ -n ${HONUA_E2E_EMULATOR_CONTAINER:-} ]]; then
 else
     "${adb[@]}" emu geo fix -157.81 21.31
 fi
+printf 'X-API-Key: %s\n' "$(cat "$key_file")" > "$working_dir/worker-header"
+version=$(curl --fail --silent --show-error -H @"$working_dir/worker-header" "$endpoint/api/v1/forms/$form" \
+    | jq -er '.version | select(type == "number" and . >= 1)')
 list_media > "$working_dir/before"
 run_flow download
 "${adb[@]}" reverse --remove "tcp:${port}"
@@ -97,10 +106,24 @@ fi
 "${adb[@]}" exec-out run-as "$app" cat "${new_media[0]}" > "$working_dir/attachment"
 test -s "$working_dir/attachment"
 
+# The server commits the first upload, but Field sees a transient network error.
+# Restart with its failed outbox on disk and deliver the real receipt on retry.
+python3 "$script_dir/lose-submission-receipt.py" "$port" "$form" "$working_dir" &
+fault_proxy_pid=$!
+for ((attempt = 0; attempt < 100; ++attempt)); do
+    [[ -s "$working_dir/port" ]] && break
+    kill -0 "$fault_proxy_pid"
+    sleep 0.1
+done
+proxy_port=$(cat "$working_dir/port")
+"${adb[@]}" reverse "tcp:${port}" "tcp:${proxy_port}" >/dev/null
+run_flow retry-outbox
+test -f "$working_dir/withheld"
+"${adb[@]}" shell am force-stop "$app"
+run_flow verify-outbox
 "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
 run_flow sync
-run_flow sync
 python3 "$script_dir/assert-field-record.py" --server "$endpoint" --api-key-file "$readback_key_file" \
-    --form "$form" --name "$name" --status open --status closed --total 2 \
+    --form "$form" --version "$version" --name "$name" --status open --status closed --total 2 \
     --repeat-note 'Offline visit one' --repeat-note 'Offline visit two' \
     --longitude=-157.81 --latitude=21.31 --attachment "$working_dir/attachment"

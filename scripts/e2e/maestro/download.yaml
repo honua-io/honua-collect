@@ -5,5 +5,5 @@ appId: io.honua.collect
     - inspection.png
 - tapOn: Download Latest Form
 - extendedWaitUntil:
-    visible: 'Loaded .* \(version 1\)\.'
+    visible: 'Loaded .* \(version ${FORM_VERSION}\)\.'
     timeout: 30000
