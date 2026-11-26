@@ -121,6 +121,7 @@ jobs:
           path: |
             ${{ runner.temp }}/published-android-report/*/failure.png
             ${{ runner.temp }}/published-android-report/*/server-readback.json
+            ${{ runner.temp }}/published-android-report/*/correction-ledger.json
             ${{ runner.temp }}/published-android-report/*/[0-9]-*.xml
           if-no-files-found: ignore
           retention-days: 7
