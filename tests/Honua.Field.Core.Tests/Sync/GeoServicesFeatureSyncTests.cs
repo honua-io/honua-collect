@@ -257,13 +257,15 @@ public class GeoServicesFeatureSyncTests
 
     private sealed class SequencedHandler(params (HttpStatusCode Status, string Body)[] responses) : HttpMessageHandler
     {
-        public int Calls { get; private set; }
+        public List<string> Bodies { get; } = [];
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public int Calls => Bodies.Count;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var (status, body) = responses[Math.Min(Calls, responses.Length - 1)];
-            Calls++;
-            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+            Bodies.Add(request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken));
+            return new HttpResponseMessage(status) { Content = new StringContent(body) };
         }
     }
 
@@ -357,6 +359,45 @@ public class GeoServicesFeatureSyncTests
         Assert.False(result.Success);
         Assert.Equal(1, handler.Calls); // never retried -> cannot duplicate
         Assert.Contains("connection reset", result.Error);
+    }
+
+    [Theory]
+    [InlineData("useGlobalIds is not supported", true)]
+    [InlineData("useGlobalIds is not supported for this layer", true)]
+    [InlineData("Invalid attributes", false)]
+    public async Task SubmitAsync_switches_edit_mode_only_after_explicit_prewrite_rejection(string detail, bool fallback)
+    {
+        var unsupported = JsonSerializer.Serialize(new { error = new { code = 400, message = "Bad Request", details = new[] { detail } } });
+        var handler = new SequencedHandler((HttpStatusCode.BadRequest, unsupported), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).SubmitAsync(Record(), T);
+
+        Assert.Equal(fallback, result.Success);
+        Assert.Equal(fallback ? 2 : 1, handler.Calls);
+        Assert.Contains("useGlobalIds=true", handler.Bodies[0], StringComparison.Ordinal);
+        if (fallback)
+        {
+            Assert.Equal(5, result.ObjectId);
+            Assert.Equal(handler.Bodies[0].Replace("&useGlobalIds=true", string.Empty, StringComparison.Ordinal), handler.Bodies[1]);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_does_not_retry_an_ambiguous_http_failure_after_switching_edit_mode()
+    {
+        const string unsupported = """{"error":{"code":400,"message":"Bad Request","details":["useGlobalIds is not supported"]}}""";
+        var handler = new SequencedHandler(
+            (HttpStatusCode.OK, unsupported),
+            (HttpStatusCode.BadGateway, "response lost"),
+            (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var result = await new GeoServicesFeatureSync(http, FastRetry).SubmitAsync(Record(), T);
+
+        Assert.False(result.Success);
+        Assert.Equal(502, result.ErrorCode);
+        Assert.Equal(2, handler.Calls);
     }
 
     [Fact]
