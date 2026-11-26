@@ -45,8 +45,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: honua-io/honua-server
-          # Candidate with published form, repeat, and attachment support.
-          ref: 5efa7fe1ae2769e8cf6d909c7572ea703597c6f9
+          # Candidate with offline published forms and layer-scoped authorization.
+          ref: 34240309c87db887d6167f40915adc76b3eee6c0
           path: server-candidate
           persist-credentials: false
 
