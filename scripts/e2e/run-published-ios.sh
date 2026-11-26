@@ -29,6 +29,9 @@ cleanup() {
     local status=$?
     if [[ $status -ne 0 && -n $report ]]; then
         "${simctl[@]}" io "$device" screenshot "$report/failure.png" || true
+        if [[ -n ${data:-} ]]; then
+            report_storage failure || true
+        fi
     fi
     "${simctl[@]}" terminate "$device" "$app" >/dev/null 2>&1 || true
     if $settings_written; then
