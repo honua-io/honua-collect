@@ -67,6 +67,27 @@ list_media() {
     fi
 }
 
+report_storage() {
+    [[ -n $report ]] || return 0
+    local container
+    container=$("${simctl[@]}" get_app_container "$device" "$app" data)
+    python3 - "$1" "$data" "$container" "$report/$1-storage.json" <<'PY_STORAGE'
+import json
+from pathlib import Path
+import sys
+
+phase, original, current, report = sys.argv[1:]
+files = {}
+for suffix in ("", "-wal", "-shm"):
+    name = "collect-records.db" + suffix
+    path = Path(current) / "Library" / name
+    files[name] = path.stat().st_size if path.is_file() else None
+Path(report).write_text(json.dumps({
+    "phase": phase, "sameAppDataContainer": current == original, "fileSizes": files,
+}) + "\n")
+PY_STORAGE
+}
+
 if [[ -n $report ]]; then
     mkdir -p -- "$report"
     report=$(cd -- "$report" && pwd)
@@ -127,7 +148,9 @@ if curl --silent --fail --max-time 3 --output /dev/null "$proxy_endpoint/api/v1/
 fi
 test -f "$working_dir/blocked"
 run_flow capture-ios
+report_storage after-draft-save
 "${simctl[@]}" terminate "$device" "$app"
+report_storage after-draft-stop
 latest_version=$("$script_dir/publish-next-inspection-version.sh" "$port" "$version" "$admin_key")
 run_flow resume-draft-ios
 "${simctl[@]}" terminate "$device" "$app"
