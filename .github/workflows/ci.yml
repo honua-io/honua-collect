@@ -64,8 +64,8 @@ jobs:
         # Directory.Build.props) in lockstep; remove both when a fixed bundle ships.
         run: |
           set -o pipefail
-          dotnet restore Honua.Collect.slnx --locked-mode
-          dotnet list Honua.Collect.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          dotnet restore Honua.Field.slnx --locked-mode
+          dotnet list Honua.Field.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
           # Each vulnerable package is a row beginning with ">" carrying its advisory
           # URL. Report any such row whose advisory is NOT the accepted one — so the
           # accepted SQLitePCLRaw advisory stays quiet while any other vulnerable
@@ -87,6 +87,9 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v7
+
+      - name: Verify upgrade identity
+        run: python3 scripts/check-upgrade-identity.py
 
       - name: Verify license headers and third-party notices
         run: |
@@ -114,7 +117,7 @@ jobs:
       # Core is well-covered (line ~94% / branch ~86%), so it gates at 85/65.
       - name: Build + test Core (with coverage gate)
         run: >-
-          dotnet test tests/Honua.Collect.Core.Tests/Honua.Collect.Core.Tests.csproj
+          dotnet test tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
           -c Release --logger "console;verbosity=minimal"
           -p:RestoreLockedMode=true
           /p:CollectCoverage=true
@@ -130,11 +133,11 @@ jobs:
       # regressions fail CI while leaving headroom as more view-model tests land.
       - name: Build + test Presentation (with coverage gate)
         run: >-
-          dotnet test tests/Honua.Collect.Presentation.Tests/Honua.Collect.Presentation.Tests.csproj
+          dotnet test tests/Honua.Field.Presentation.Tests/Honua.Field.Presentation.Tests.csproj
           -c Release --logger "console;verbosity=minimal"
           -p:RestoreLockedMode=true
           /p:CollectCoverage=true
-          /p:Include="[Honua.Collect.Presentation]*"
+          /p:Include="[Honua.Field.Presentation]*"
           /p:Threshold=90%2c72
           /p:ThresholdType=line%2cbranch
           /p:ThresholdStat=total
@@ -169,7 +172,7 @@ jobs:
         run: dotnet tool install dotnet-stryker --tool-path tools
 
       - name: Run mutation tests (Core)
-        working-directory: tests/Honua.Collect.Core.Tests
+        working-directory: tests/Honua.Field.Core.Tests
         run: ../../tools/dotnet-stryker
 
   build-app:
@@ -202,7 +205,7 @@ jobs:
         # graph floats with the toolchain — see RestorePackagesWithLockFile=false in
         # the csproj), so no -p:RestoreLockedMode here.
         run: >-
-          dotnet build src/Honua.Collect.App/Honua.Collect.App.csproj
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj
           -f net10.0-android -c Release -t:SignAndroidPackage
           -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false
 
@@ -210,22 +213,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' apks < <(find src/Honua.Collect.App/bin/Release/net10.0-android -type f -name '*-Signed.apk' -print0)
+          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Release/net10.0-android -type f -name '*-Signed.apk' -print0)
           if [[ ${#apks[@]} -ne 1 ]]; then
             echo "Expected exactly one signed APK; found ${#apks[@]}" >&2
             exit 1
           fi
+          aapt2="$(find "${ANDROID_HOME:?}/build-tools" -type f -name aapt2 | sort -V | tail -n 1)"
+          test -x "$aapt2"
+          python3 scripts/check-upgrade-identity.py --aapt2 "$aapt2" --apk "${apks[0]}"
           mkdir -p artifacts/android
-          cp "${apks[0]}" artifacts/android/honua-collect.apk
+          cp "${apks[0]}" artifacts/android/honua-field.apk
           cd artifacts/android
-          sha256sum honua-collect.apk > SHA256SUMS
+          sha256sum honua-field.apk > SHA256SUMS
           printf 'source_sha=%s\nrun_id=%s\nrun_attempt=%s\nsigning=SDK debug key; verification only\n' \
             "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > BUILD.txt
 
       - name: Upload Android verification artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: honua-collect-android-${{ github.sha }}
+          name: honua-field-android-${{ github.sha }}
           path: artifacts/android/
           if-no-files-found: error
           retention-days: 7

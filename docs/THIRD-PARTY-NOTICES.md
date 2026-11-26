@@ -1,6 +1,6 @@
 # Third-party notices
 
-Honua Collect is built on open-source software. This file lists the third-party components distributed with Honua Collect binaries and mobile app packages, together with their licenses and required attribution notices. Each component remains under its own license; the Honua Collect license (see `LICENSE`) applies only to Honua Geo Inc.'s own code. Test-only dependencies are not distributed and are not listed.
+Honua Field is built on open-source software. This file lists the third-party components distributed with Honua Field binaries and mobile app packages, together with their licenses and required attribution notices. Each component remains under its own license; the Honua Field license (see `LICENSE`) applies only to Honua Geo Inc.'s own code. Test-only dependencies are not distributed and are not listed.
 
 The .NET package table is verified against `Directory.Packages.props` and `src/**/*.csproj` by `scripts/check-license-hygiene.py` in CI.
 

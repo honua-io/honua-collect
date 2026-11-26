@@ -1,6 +1,6 @@
 # End-to-end verification — emulator → server → database
 
-Proof that a form filled in the Honua Collect app on an Android emulator is
+Proof that a form filled in the Honua Field app on an Android emulator is
 submitted over HTTP to a running Honua server and persisted as a row in
 PostgreSQL — the full capture → sync → store loop.
 
@@ -34,7 +34,7 @@ PostgreSQL — the full capture → sync → store loop.
 
 ## Automated counterpart
 
-`tests/Honua.Collect.Core.Tests/Sync/FeatureSyncE2ETests.cs` performs the same
+`tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs` performs the same
 capture → `applyEdits` → read-back assertion against a running server (opt-in via
 `HONUA_E2E_SERVER` / `HONUA_E2E_APIKEY`), so the path is regression-testable
 without the emulator. `GeoServicesFeatureSync` itself has unit tests for the

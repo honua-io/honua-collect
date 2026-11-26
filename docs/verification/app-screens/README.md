@@ -11,7 +11,7 @@ verified running on a KVM-accelerated Android-35 emulator.
 | `04-signature.png` | **Signature/sketch pad** (C4/C5): freehand ink on a GraphicsView. |
 
 `RecordBoxViewModel` (Drafts/Outbox/Sent grouping) is unit-tested in
-`Honua.Collect.Presentation.Tests`. The photo widget is wired to MAUI
+`Honua.Field.Presentation.Tests`. The photo widget is wired to MAUI
 `MediaPicker` (camera/gallery); on-device photo capture needs a real
 camera/gallery so it isn't exercised in the headless emulator run.
 

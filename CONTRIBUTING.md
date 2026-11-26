@@ -1,6 +1,6 @@
 # Contributing
 
-**Honua Collect is not accepting code contributions at this time.** It is open
+**Honua Field is not accepting code contributions at this time.** It is open
 source under the Apache License 2.0, developed and copyrighted by Honua Geo Inc.,
 and built on the Apache-2.0 Honua SDK and Mobile packages, which are separate
 projects. Pull requests from outside the organization are closed automatically by

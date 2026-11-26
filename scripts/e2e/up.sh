@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Brings up an isolated Honua server + PostGIS with the editable
-# mobile_offline_demo/68910 feature layer, for the Honua Collect e2e suite.
+# mobile_offline_demo/68910 feature layer, for the Honua Field e2e suite.
 # Reuses a prebuilt server image (HONUA_SERVER_IMAGE) to avoid a long build.
 set -euo pipefail
 

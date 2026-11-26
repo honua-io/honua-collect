@@ -1,4 +1,4 @@
-# gitleaks configuration for Honua Collect.
+# gitleaks configuration for Honua Field.
 # Used by the `security-scan` CI job to fail the build if a secret is committed.
 [extend]
 useDefault = true

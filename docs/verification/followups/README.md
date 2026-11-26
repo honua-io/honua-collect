@@ -1,4 +1,4 @@
-# Follow-up feature verification — Honua Collect (Android)
+# Follow-up feature verification — Honua Field (Android)
 
 Four functional-gap features were added, then wired into the MAUI app and run on the emulator (Google APIs
 x86_64, API 35, KVM-accelerated). The build/run toolchain is the one documented
@@ -6,10 +6,10 @@ in [`../README.md`](../README.md).
 
 | # | Feature | Where | Verified |
 | --- | --- | --- | --- |
-| 17 | **Offline persistence** — SQLite `IRecordStore` so Drafts/Outbox/Sent survive restarts | `Honua.Collect.Core/Storage/`, `CaptureStore` write-through, hydrate in `App` | **On device, end-to-end** (below) + 7 Core tests |
+| 17 | **Offline persistence** — SQLite `IRecordStore` so Drafts/Outbox/Sent survive restarts | `Honua.Field.Core/Storage/`, `CaptureStore` write-through, hydrate in `App` | **On device, end-to-end** (below) + 7 Core tests |
 | 18 | **Attachment upload** — `addAttachment` multipart to the Feature Server | `GeoServicesFeatureSync.AddAttachmentAsync`, called from `MainPage` after submit | Wired; 6 Core transport tests (server round-trip needs a live feature) |
-| 19 | **Form-package download** — server form package → `FormDefinition` | `Honua.Collect.Core/Forms/FormPackageClient`, "Download Latest Form" button | Button on device; 7 Core tests (round-trip needs a `FormServer` endpoint) |
-| 20 | **Login / auth** — credential check → `AuthSession` | `Honua.Collect.Presentation/Auth/LoginViewModel`, "Account" tab | Page + validation on device (`01-login.png`) + 9 Presentation tests |
+| 19 | **Form-package download** — server form package → `FormDefinition` | `Honua.Field.Core/Forms/FormPackageClient`, "Download Latest Form" button | Button on device; 7 Core tests (round-trip needs a `FormServer` endpoint) |
+| 20 | **Login / auth** — credential check → `AuthSession` | `Honua.Field.Presentation/Auth/LoginViewModel`, "Account" tab | Page + validation on device (`01-login.png`) + 9 Presentation tests |
 
 ## Persistence — proven across an app restart
 

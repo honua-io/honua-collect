@@ -1,11 +1,11 @@
 <Project>
   <!--
-    Honua Collect consumes the Honua platform as versioned NuGet packages from the
+    Honua Field consumes the Honua platform as versioned NuGet packages from the
     private github-honua feed (see NuGet.config):
       - Honua.Sdk.*     platform-neutral SDK   (honua-io/honua-sdk-dotnet, Apache-2.0)
       - Honua.Mobile.*  mobile SDK foundation  (honua-io/honua-mobile,     Apache-2.0)
 
-    This repository (the Honua Collect app) is licensed under the Apache License
+    This repository (the Honua Field app) is licensed under the Apache License
     2.0 — see LICENSE. The SDK layers are separate Apache-2.0 projects, consumed
     as packages and never vendored.
 

@@ -7,16 +7,16 @@ a string to empty, …) and re-runs the tests. A mutant that the tests still pas
 ("survived") is a place where the assertions are too weak. The **mutation score**
 is `killed / (killed + survived)`.
 
-We mutate `src/Honua.Collect.Core` and run the Core test project against it.
+We mutate `src/Honua.Field.Core` and run the Core test project against it.
 
 ## Run it
 
-The config lives in `tests/Honua.Collect.Core.Tests/stryker-config.json`, so run
+The config lives in `tests/Honua.Field.Core.Tests/stryker-config.json`, so run
 from that directory:
 
 ```bash
 dotnet tool install dotnet-stryker --tool-path tools   # once
-cd tests/Honua.Collect.Core.Tests
+cd tests/Honua.Field.Core.Tests
 ../../tools/dotnet-stryker
 ```
 
@@ -24,7 +24,7 @@ The full Core run is large; for a fast, focused signal restrict the mutated set
 to one folder (this is how the Sync subset below was measured):
 
 ```bash
-cd tests/Honua.Collect.Core.Tests
+cd tests/Honua.Field.Core.Tests
 ../../tools/dotnet-stryker --mutate "**/Sync/**/*.cs"
 ```
 

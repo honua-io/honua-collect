@@ -1,6 +1,6 @@
-# On-device verification — Honua Collect (Android)
+# On-device verification — Honua Field (Android)
 
-The Honua Collect MAUI app was built, signed, installed, and **run end-to-end on
+The Honua Field MAUI app was built, signed, installed, and **run end-to-end on
 an Android emulator** (Google APIs x86_64, **API 35**, KVM-accelerated). These
 screenshots are the captured evidence that the assembled, user-facing app
 functions — not just the unit-tested logic layer.
@@ -14,17 +14,17 @@ export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$
 
 # Self-contained Release APK (embedded assemblies; the Debug APK uses Fast
 # Deployment and cannot be sideloaded standalone)
-dotnet build src/Honua.Collect.App -t:SignAndroidPackage -f net10.0-android -c Release \
+dotnet build src/Honua.Field.App -t:SignAndroidPackage -f net10.0-android -c Release \
   -p:AndroidSdkDirectory=$HOME/android-sdk -p:JavaSdkDirectory=$HOME/jdk17 \
   -p:EmbedAssembliesIntoApk=true
 
 emulator -avd honua -no-window -gpu swiftshader_indirect &
-adb install -r src/Honua.Collect.App/bin/Release/net10.0-android/io.honua.collect-Signed.apk
+adb install -r src/Honua.Field.App/bin/Release/net10.0-android/io.honua.collect-Signed.apk
 adb shell am start -n io.honua.collect/crc6490b85cd101108deb.MainActivity
 ```
 
 `apksigner` verifies the APK under the v1/v2/v3 signing schemes; package
-`io.honua.collect` ("Honua Collect"), minSdk 21 / targetSdk 36.
+`io.honua.collect` ("Honua Field"), minSdk 21 / targetSdk 36.
 
 ## What the screenshots prove
 
@@ -36,5 +36,5 @@ adb shell am start -n io.honua.collect/crc6490b85cd101108deb.MainActivity
 | `04-repeat-row-added.png` | Tapping **Add** on the **repeatable Deficiency section** creates a row with its own *Kind* (required) + *Severity* fields; the outstanding-error count rises 2 → 3. |
 
 All capture behaviour is driven by the platform-neutral
-`FormPageViewModel` (unit-tested in `Honua.Collect.Presentation.Tests`); the XAML
+`FormPageViewModel` (unit-tested in `Honua.Field.Presentation.Tests`); the XAML
 is a thin binding surface over it.

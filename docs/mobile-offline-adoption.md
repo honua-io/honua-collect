@@ -1,6 +1,6 @@
 # Shared offline runtime adoption
 
-Implementation tracking: [Collect #173](https://github.com/honua-io/honua-collect/issues/173)
+Implementation tracking: [Field #173](https://github.com/honua-io/honua-field/issues/173)
 and [mobile #421](https://github.com/honua-io/honua-mobile/issues/421).
 This document defines the migration boundary and installation acceptance
 journey. It is a test script, not evidence that the migration has shipped.

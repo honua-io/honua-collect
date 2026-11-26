@@ -15,8 +15,8 @@ SPEC.loader.exec_module(MOD)
 
 
 def write_fixture_repo(root: Path) -> None:
-    (root / "src/Honua.Collect.App").mkdir(parents=True)
-    (root / "tests/Honua.Collect.Core.Tests").mkdir(parents=True)
+    (root / "src/Honua.Field.App").mkdir(parents=True)
+    (root / "tests/Honua.Field.Core.Tests").mkdir(parents=True)
     (root / "Directory.Packages.props").write_text(
         "<Project>\n"
         "  <PropertyGroup><SdkVer>1.2.3</SdkVer></PropertyGroup>\n"
@@ -29,7 +29,7 @@ def write_fixture_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "docs").mkdir(parents=True)
-    (root / "src/Honua.Collect.App/Honua.Collect.App.csproj").write_text(
+    (root / "src/Honua.Field.App/Honua.Field.App.csproj").write_text(
         "<Project>\n"
         "  <ItemGroup>\n"
         '    <MauiAsset Include="..\\..\\docs\\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" />\n'
@@ -57,8 +57,8 @@ def write_fixture_repo(root: Path) -> None:
         "// SPDX-License-Identifier: Apache-2.0\n\n"
         "namespace Demo;\n"
     )
-    (root / "src/Honua.Collect.App/Program.cs").write_text(valid_cs, encoding="utf-8")
-    (root / "tests/Honua.Collect.Core.Tests/SampleTests.cs").write_text(valid_cs, encoding="utf-8")
+    (root / "src/Honua.Field.App/Program.cs").write_text(valid_cs, encoding="utf-8")
+    (root / "tests/Honua.Field.Core.Tests/SampleTests.cs").write_text(valid_cs, encoding="utf-8")
 
 
 class LicenseHygieneTests(unittest.TestCase):
@@ -72,7 +72,7 @@ class LicenseHygieneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_fixture_repo(root)
-            target = root / "src/Honua.Collect.App/Program.cs"
+            target = root / "src/Honua.Field.App/Program.cs"
             target.write_bytes(b"\xef\xbb\xbfnamespace Demo;\r\npublic class A {}\r\n")
 
             errors = MOD.run_checks(root)
@@ -88,7 +88,7 @@ class LicenseHygieneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_fixture_repo(root)
-            target = root / "tests/Honua.Collect.Core.Tests/SampleTests.cs"
+            target = root / "tests/Honua.Field.Core.Tests/SampleTests.cs"
             target.write_text("// Copyright (c) Honua Geo Inc.\n// SPDX-License-Identifier: MIT\n", encoding="utf-8")
             errors = MOD.run_checks(root)
             self.assertEqual(len(errors), 1)
@@ -114,7 +114,7 @@ class LicenseHygieneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_fixture_repo(root)
-            csproj = root / "src/Honua.Collect.App/Honua.Collect.App.csproj"
+            csproj = root / "src/Honua.Field.App/Honua.Field.App.csproj"
             csproj.write_text(
                 "<Project><ItemGroup>"
                 '<PackageReference Include="Honua.Sdk.Field" />'

@@ -1,6 +1,6 @@
 {
   "format": "honua.component-versions/v1",
-  "component": "honua-collect",
+  "component": "honua-field",
   "contractVersions": {},
   "schemaVersions": {}
 }

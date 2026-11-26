@@ -1,27 +1,27 @@
-# Self-hosting Honua Collect
+# Self-hosting Honua Field
 
-Honua Collect is **open source under the [Apache License 2.0](../LICENSE)** and has no SaaS dependency: it talks to a server you choose by speaking
+Honua Field is **open source under the [Apache License 2.0](../LICENSE)** and has no SaaS dependency: it talks to a server you choose by speaking
 the **GeoServices REST** protocol (FeatureServer `query` / `applyEdits`,
-`generateToken`). This guide shows how to point Collect at a self-hosted Honua
+`generateToken`). This guide shows how to point Field at a self-hosted Honua
 server (or any GeoServices-compatible FeatureServer, including self-hosted
 enterprise GIS servers that implement the required GeoServices REST endpoints)
 **without a vendor-specific licence and without routing data through any
 Honua-operated cloud**.
 
 It is grounded in the app's real configuration surface — every key named here is
-read by [`AppSettings.Load()`](../src/Honua.Collect.App/Services/AppSettings.cs)
-and wired in [`MauiProgram.cs`](../src/Honua.Collect.App/MauiProgram.cs). For
+read by [`AppSettings.Load()`](../src/Honua.Field.App/Services/AppSettings.cs)
+and wired in [`MauiProgram.cs`](../src/Honua.Field.App/MauiProgram.cs). For
 where records live and how the connection is secured, see
 [data-residency-and-self-host.md](./data-residency-and-self-host.md).
 
 ## What "self-hosted" means here
 
-Collect is the **client**. It captures and stores records on-device, then syncs
+Field is the **client**. It captures and stores records on-device, then syncs
 them to a FeatureServer **you operate**. There is no separate vendor data silo
 and no phone-home — the server you configure is the system of record. The
 companion Honua server (a separate component/repo) is what you stand up to be
 that target; its deployment runbook is out of scope for this client repo (tracked
-in [#37](https://github.com/honua-io/honua-collect/issues/37)).
+in [#37](https://github.com/honua-io/honua-field/issues/37)).
 
 Any endpoint that answers the GeoServices FeatureServer contract works as the
 target:
@@ -35,7 +35,7 @@ target:
 
 Connection details ship in configuration, never compiled into the binary. The
 bundled asset is
-[`src/Honua.Collect.App/Resources/Raw/appsettings.json`](../src/Honua.Collect.App/Resources/Raw/appsettings.json):
+[`src/Honua.Field.App/Resources/Raw/appsettings.json`](../src/Honua.Field.App/Resources/Raw/appsettings.json):
 
 ```jsonc
 {
@@ -59,8 +59,8 @@ bundled asset is
 | `server.pinnedCertificates` | string[] | — | `AppSettings.PinnedCertificateSpki` | Optional Base64 SPKI public-key pins (see [Certificate pinning](#optional-certificate-pinning)). Empty/absent = standard platform TLS. |
 | `demo.apiKey` | string\|null | — | `AppSettings.DemoApiKey` | Development-only fallback credential used **only when no user has signed in**. `null` in production — no credential ships in the binary. |
 
-The three `server` values become the GeoServices endpoints Collect calls
-([`GeoServicesTarget`](../src/Honua.Collect.Core/Sync/GeoServicesFeatureSync.cs)):
+The three `server` values become the GeoServices endpoints Field calls
+([`GeoServicesTarget`](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs)):
 
 ```
 {baseUrl}/rest/services/{serviceId}/FeatureServer/{layerId}/query
@@ -72,48 +72,48 @@ The three `server` values become the GeoServices endpoints Collect calls
 
 For local development you can drop a gitignored `appsettings.local.json` into the
 app data directory with a `demo.apiKey`; it is overlaid at startup by
-[`AppSettings.ApplyLocalOverride`](../src/Honua.Collect.App/Services/AppSettings.cs)
+[`AppSettings.ApplyLocalOverride`](../src/Honua.Field.App/Services/AppSettings.cs)
 and a malformed file never breaks startup. This is a dev convenience only — see
 authentication below for the real sign-in path.
 
 ## Authentication
 
-Collect authenticates against **your server's own token endpoint** — there is no
+Field authenticates against **your server's own token endpoint** — there is no
 dependency on a vendor-specific or Honua account, so a self-host deployment uses its own
 identity.
 
 1. The user signs in on the Account tab. Credentials are POSTed to the server's
    GeoServices REST-style token endpoint
-   ([`ServerCredentialVerifier`](../src/Honua.Collect.Presentation/Auth/ServerCredentialVerifier.cs),
+   ([`ServerCredentialVerifier`](../src/Honua.Field.Presentation/Auth/ServerCredentialVerifier.cs),
    default path `/sharing/rest/generateToken`), which returns a short-lived
    bearer token. **The password is never stored** — only the issued token and its
    server-supplied expiry are kept.
 2. The token is presented as `Authorization: Bearer <token>` on every server
    request by
-   [`AuthHeaderHandler`](../src/Honua.Collect.Core/Enterprise/AuthHeaderHandler.cs).
+   [`AuthHeaderHandler`](../src/Honua.Field.Core/Enterprise/AuthHeaderHandler.cs).
 3. The session is persisted to the platform secure store
    (Android Keystore / iOS Keychain) so it resumes across restarts, and is
    discarded once expired (fail-closed: a lapsed session is **not** silently
    downgraded to the anonymous fallback key).
 
 > **Refresh tokens:** the session lifecycle in
-> [`AuthSessionManager`](../src/Honua.Collect.Core/Enterprise/AuthSessionManager.cs)
+> [`AuthSessionManager`](../src/Honua.Field.Core/Enterprise/AuthSessionManager.cs)
 > supports proactive token refresh, but the current `generateToken` flow issues
 > no refresh token, so renewal today means re-sign-in on expiry. First-class
 > enterprise SSO (OIDC/SAML) is **planned**, tracked in
-> [#7](https://github.com/honua-io/honua-collect/issues/7).
+> [#7](https://github.com/honua-io/honua-field/issues/7).
 
 ## Optional certificate pinning
 
 For a hardened or air-gapped deployment you can pin the server's TLS public key.
 Add one or more Base64 SPKI hashes to `server.pinnedCertificates`; they are
-applied by [`CertificatePinning`](../src/Honua.Collect.Core/Sync/CertificatePinning.cs)
+applied by [`CertificatePinning`](../src/Honua.Field.Core/Sync/CertificatePinning.cs)
 **in addition to** platform validation. Pinning is **opt-in** — with none
 configured, standard platform TLS validation applies, so a self-hosted deployment
 is never broken by a pin it didn't set.
 
 Cleartext HTTP to a non-loopback host is rejected at startup by
-[`EndpointSecurity`](../src/Honua.Collect.Core/Sync/EndpointSecurity.cs); use
+[`EndpointSecurity`](../src/Honua.Field.Core/Sync/EndpointSecurity.cs); use
 HTTPS for any real deployment (loopback `http://` is allowed only for local dev).
 
 ## Every feature is free
@@ -137,8 +137,8 @@ Paid value lives on Honua Server, which is licensed server-side.
    `10.0.2.2:18080` (see [`docs/verification/e2e/`](./verification/e2e/)). For a
    real deployment, point at your own server / self-hosted enterprise GIS server instead.
 
-2. **Configure Collect.** Edit
-   [`appsettings.json`](../src/Honua.Collect.App/Resources/Raw/appsettings.json)
+2. **Configure Field.** Edit
+   [`appsettings.json`](../src/Honua.Field.App/Resources/Raw/appsettings.json)
    with your `server.baseUrl`, `serviceId`, and `layerId`. Use HTTPS for any
    non-loopback host; add `pinnedCertificates` if you require pinning.
 
@@ -147,12 +147,12 @@ Paid value lives on Honua Server, which is licensed server-side.
 
 4. **Sign in** on the Account tab against your server's token endpoint. Capture a
    record and sync it — it round-trips to your FeatureServer via
-   [`GeoServicesFeatureSync`](../src/Honua.Collect.Core/Sync/GeoServicesFeatureSync.cs),
+   [`GeoServicesFeatureSync`](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs),
    with no third-party licence and no data leaving your perimeter.
 
 ## See also
 
-- [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Collect supports
+- [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Field supports
   on GeoServices REST, marked honestly.
 - [Data residency & self-host posture](./data-residency-and-self-host.md) — where
   records live and how the connection is secured.
