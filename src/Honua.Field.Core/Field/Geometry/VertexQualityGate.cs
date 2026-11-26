@@ -90,8 +90,8 @@ public sealed class VertexQualityGate
 
         // Live fix gate: when a fix is supplied it must still pass its own accuracy /
         // fix-type bar at the moment of capture.
-        if (latestFix is not null && MaxAccuracyMeters is { } maxFix &&
-            !latestFix.MeetsAccuracy(maxFix, RequireFixAccuracy))
+        if (latestFix is not null && (!latestFix.HasPosition ||
+            (MaxAccuracyMeters is { } maxFix && !latestFix.MeetsAccuracy(maxFix, RequireFixAccuracy))))
         {
             return new VertexQualityResult(false, VertexQualityRejection.FixBelowAccuracy, null, averager.SampleCount);
         }

@@ -1,0 +1,28 @@
+appId: io.honua.collect
+---
+- launchApp
+- tapOn: Records
+- extendedWaitUntil:
+    visible: 'Drafts 1 · Outbox 1 · Conflicts 0 · Sent 0'
+    timeout: 15000
+- tapOn: ${DRAFT_ID}
+- assertVisible: ${INSPECTION_NAME}
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?choice_Open'
+      checked: true
+- assertVisible:
+    id: '(.*:id/)?choice_Closed'
+    checked: true
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?total'
+      text: '2'
+- scrollUntilVisible:
+    element: 1 attached
+- scrollUntilVisible:
+    element: '21\.31000, -157\.81000.*'
+- scrollUntilVisible:
+    element: Offline visit one
+- scrollUntilVisible:
+    element: Offline visit two

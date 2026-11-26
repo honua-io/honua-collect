@@ -92,8 +92,17 @@ chmod 700 "$HONUA_E2E_RESTART_SERVER_COMMAND"
 "$workspace/scripts/e2e/publish-field-runtime-fixture.sh" "$candidate" "$working_dir/admin-key"
 
 serial=emulator-5554
-adb -s "$serial" install "$RUNNER_TEMP/honua-field.apk"
 report_root=${HONUA_E2E_REPORT_DIR:?}
+APKSIGNER=$(find "${ANDROID_HOME:?}/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+export APKSIGNER
+test -x "$APKSIGNER"
+upgrade=(python3 "$workspace/scripts/e2e/run-installed-published-android-upgrade.py" "$serial" "$report_root/upgrade")
+"${upgrade[@]}" seed "$RUNNER_TEMP/honua-field-previous.apk" "$HONUA_E2E_WORKER_KEY_FILE"
+"${upgrade[@]}" verify "$RUNNER_TEMP/honua-field.apk"
+"${upgrade[@]}" recover-key
+
+# Start the receipt test with a fresh outbox on the upgraded app.
+adb -s "$serial" shell pm clear io.honua.collect
 export HONUA_E2E_REPORT_DIR="$report_root/receipt-replay"
 "$workspace/scripts/e2e/run-published-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
 
