@@ -4,6 +4,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Honua.Field.Core.Field;
+using Honua.Field.Core.Field.Annotation;
+using Honua.Field.Core.Field.Capture;
 using Honua.Field.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
@@ -86,9 +88,34 @@ public sealed record PublishedFormDraft(string FormId, string RecordId, string S
             host.SetValue(field.FieldId, field.Value.Restore());
             foreach (var attachment in field.Media)
             {
-                host.AddMedia(attachment);
+                host.AddMedia(RestoreEvidenceMetadata(attachment));
             }
         }
+    }
+
+    private static CapturedMediaAttachment RestoreEvidenceMetadata(CapturedMediaAttachment attachment)
+    {
+        var json = DraftEditorJson.Default;
+        var metadata = attachment.EvidenceMetadata;
+        if (metadata.Count == 0)
+        {
+            return attachment;
+        }
+
+        var restored = new Dictionary<string, object?>(metadata, StringComparer.Ordinal);
+        if (restored.TryGetValue(MediaCaptureMetadata.EvidenceKey, out var capture) &&
+            capture is JsonElement { ValueKind: JsonValueKind.Object } captureJson)
+        {
+            restored[MediaCaptureMetadata.EvidenceKey] = captureJson.Deserialize(json.MediaCaptureMetadata);
+        }
+
+        if (restored.TryGetValue(PhotoAnnotationOverlay.EvidenceKey, out var annotations) &&
+            annotations is JsonElement { ValueKind: JsonValueKind.Array } annotationsJson)
+        {
+            restored[PhotoAnnotationOverlay.EvidenceKey] = annotationsJson.Deserialize(json.ListPhotoAnnotation);
+        }
+
+        return attachment.WithEvidenceMetadata(restored);
     }
 }
 
@@ -147,6 +174,8 @@ internal sealed record DraftValue(string Kind, JsonElement Data)
 }
 
 [JsonSerializable(typeof(DraftEditorState))]
+[JsonSerializable(typeof(MediaCaptureMetadata))]
+[JsonSerializable(typeof(List<PhotoAnnotation>))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(DateTime))]
 [JsonSerializable(typeof(DateOnly))]
