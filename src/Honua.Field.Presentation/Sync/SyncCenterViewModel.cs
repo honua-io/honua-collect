@@ -231,7 +231,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         _logger.LogInformation("Starting feature pull for form {FormId}.", _form.FormId);
         try
         {
-            var queryResult = await _puller(cancellationToken).ConfigureAwait(false);
+            var queryResult = await _puller(cancellationToken);
             if (!queryResult.Success)
             {
                 _logger.LogWarning("Feature pull failed for form {FormId}.", _form.FormId);
@@ -329,6 +329,7 @@ public sealed class SyncCenterViewModel : ObservableObject
             pendingCount = pending.Count;
             _logger.LogInformation("Starting sync pass for {PendingCount} pending record(s).", pendingCount);
 
+            // Stay on the caller’s UI context when updating the bound outbox and command state.
             if (_batchUploader is not null)
             {
                 // New-record adds can be batched into one applyEdits round-trip; a
@@ -337,12 +338,12 @@ public sealed class SyncCenterViewModel : ObservableObject
                 var adds = pending.Where(e => e.PublishedSubmission is null && e.RemoteId is null
                     && e.Record.Status != Honua.Sdk.Field.Records.RecordStatus.Deleted).ToList();
                 var updates = pending.Except(adds).ToList();
-                synced += await SyncBatchedAsync(adds, cancellationToken).ConfigureAwait(false);
-                synced += await SyncPerRecordAsync(updates, cancellationToken).ConfigureAwait(false);
+                synced += await SyncBatchedAsync(adds, cancellationToken);
+                synced += await SyncPerRecordAsync(updates, cancellationToken);
             }
             else
             {
-                synced += await SyncPerRecordAsync(pending, cancellationToken).ConfigureAwait(false);
+                synced += await SyncPerRecordAsync(pending, cancellationToken);
             }
         }
         finally
@@ -367,7 +368,7 @@ public sealed class SyncCenterViewModel : ObservableObject
             entry.MarkUploading();
             try
             {
-                var result = await _uploader(entry, cancellationToken).ConfigureAwait(false);
+                var result = await _uploader(entry, cancellationToken);
                 if (ApplyResult(entry, result))
                 {
                     synced++;
@@ -382,7 +383,7 @@ public sealed class SyncCenterViewModel : ObservableObject
                 entry.MarkFailed(ex.Message);
             }
 
-            await PersistAsync(entry).ConfigureAwait(false);
+            await PersistAsync(entry);
         }
 
         return synced;
@@ -406,7 +407,7 @@ public sealed class SyncCenterViewModel : ObservableObject
             IReadOnlyList<FeatureSyncResult> results;
             try
             {
-                results = await _batchUploader!(chunk, cancellationToken).ConfigureAwait(false);
+                results = await _batchUploader!(chunk, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -419,7 +420,7 @@ public sealed class SyncCenterViewModel : ObservableObject
                 foreach (var entry in chunk)
                 {
                     entry.MarkFailed(ex.Message);
-                    await PersistAsync(entry).ConfigureAwait(false);
+                    await PersistAsync(entry);
                 }
 
                 continue;
@@ -438,7 +439,7 @@ public sealed class SyncCenterViewModel : ObservableObject
                     synced++;
                 }
 
-                await PersistAsync(chunk[i]).ConfigureAwait(false);
+                await PersistAsync(chunk[i]);
             }
         }
 
@@ -474,7 +475,7 @@ public sealed class SyncCenterViewModel : ObservableObject
 
         try
         {
-            await _persist(entry).ConfigureAwait(false);
+            await _persist(entry);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
