@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--latitude", type=float, required=True)
     parser.add_argument("--attachment", type=Path, required=True)
     parser.add_argument("--api-key-file", type=Path)
-    parser.add_argument("--db-container", default="honua-field-xlsform-pg")
+    parser.add_argument("--db-container", default=os.environ.get("HONUA_E2E_PG_CONTAINER", "honua-field-xlsform-pg"))
     parser.add_argument("--db-name", default="honua")
     parser.add_argument("--db-user", default="postgres")
     args = parser.parse_args()
