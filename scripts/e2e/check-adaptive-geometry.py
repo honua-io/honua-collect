@@ -113,17 +113,20 @@ def read_override(device, command):
 
 
 def check_home_width(device, directory, name, expected_width):
+    observed = {}
+
     def read(root):
         button = node_bounds(root, "Start New Inspection")
+        observed.update(rotation=root.get("rotation"), button=button)
         if root.get("rotation") == "0" and button and abs(button[2] - button[0] - expected_width) <= 12:
             return button
         return None
 
     try:
-        left, top, right, bottom = device.screen(read, f"{name} centered home button")
-    except RuntimeError:
+        left, top, right, bottom = device.screen(read, f"{name} centered home button", timeout=90)
+    except RuntimeError as error:
         snapshot(device, directory, name + "-failed")
-        raise
+        raise RuntimeError(f"{error}. Observed {observed}") from error
     width, height = snapshot(device, directory, name)
     check(abs(left + right - width) <= 12 and 0 <= left < right <= width
           and 0 <= top < bottom <= height, f"{name} home button is off center or clipped")
