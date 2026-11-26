@@ -30,7 +30,7 @@ jobs:
   apple:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: xcode-27
-    timeout-minutes: 35
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -59,11 +59,11 @@ jobs:
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Install MAUI Apple workloads
         run: dotnet workload install maui-ios maui-maccatalyst
-      - name: Build iOS simulator and Mac Catalyst apps
+      - name: Build iOS simulator app
         run: |
-          project=src/Honua.Field.App/Honua.Field.App.csproj
-          dotnet build "$project" -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64
-          dotnet build "$project" -p:FieldTargetFramework=net11.0-maccatalyst -p:RuntimeIdentifier=maccatalyst-arm64
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+            --disable-build-servers
       - name: Capture and undo a polygon on ${{ matrix.family }}
         env:
           FAMILY: ${{ matrix.family }}
@@ -89,7 +89,11 @@ jobs:
           echo "Booting $FAMILY simulator $device"
           run_bounded 540 xcrun simctl bootstatus "$device" -b
           echo "Installing Field on $FAMILY"
-          run_bounded 180 xcrun simctl install "$device" "$app"
+          du -sh "$app"
+          if ! run_bounded 480 xcrun simctl install "$device" "$app"; then
+            run_bounded 60 xcrun simctl io "$device" screenshot "$results/install-failure.png" || true
+            exit 1
+          fi
           echo "Running polygon capture on $FAMILY"
           if ! run_bounded 420 maestro --device "$device" test --format junit \
             --output "$results/junit.xml" --test-output-dir "$results" \
@@ -104,3 +108,8 @@ jobs:
           name: field-ios-${{ matrix.family }}-results
           path: ${{ runner.temp }}/field-ios-results
           if-no-files-found: warn
+      - name: Build Mac Catalyst app
+        if: ${{ !cancelled() && matrix.family == 'iPhone' }}
+        run: |
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-maccatalyst -p:RuntimeIdentifier=maccatalyst-arm64
