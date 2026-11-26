@@ -110,6 +110,9 @@ public partial class FormPage : ContentPage
                 case CaptureWidgetKind.Audio:
                     await CaptureAudioAsync(field);
                     break;
+                case CaptureWidgetKind.File:
+                    await PickFileAsync(field);
+                    break;
                 default:
                     await DisplayAlert(field.Label, $"{field.CaptureActionLabel} is not available yet.", "OK");
                     break;
@@ -324,6 +327,23 @@ public partial class FormPage : ContentPage
                 location: geotag,
                 metadata: geoMeta),
             imported);
+    }
+
+    private static async Task PickFileAsync(FieldViewModel field)
+    {
+        var file = await FilePicker.Default.PickAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        var path = await CaptureFiles.ImportAsync(file);
+        CaptureOrDiscard(
+            () => field.CaptureMedia(
+                path,
+                contentType: file.ContentType ?? "application/octet-stream",
+                sizeBytes: TryGetFileSize(path)),
+            path);
     }
 
     private async Task CaptureInkAsync(FieldViewModel field, string title)

@@ -221,17 +221,17 @@ public sealed class PublishedFormPackage
 
     private static FormFieldType ResolveMediaType(string[] types)
     {
-        if (types.Length == 0 || types.All(type => type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)))
+        if (types.Length > 0 && types.All(type => type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)))
         {
             return FormFieldType.Photo;
         }
 
-        if (types.All(type => type.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
+        if (types.Length > 0 && types.All(type => type.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
         {
             return FormFieldType.Video;
         }
 
-        return types.All(type => type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+        return types.Length > 0 && types.All(type => type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
             ? FormFieldType.Audio
             : FormFieldType.File;
     }
