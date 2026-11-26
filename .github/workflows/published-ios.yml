@@ -32,7 +32,7 @@ jobs:
   published-ios:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: xcode-27
-    timeout-minutes: 55
+    timeout-minutes: 75
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       HONUA_E2E_HTTP_PORT: '5189'

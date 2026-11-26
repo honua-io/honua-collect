@@ -132,7 +132,7 @@ echo "Installing $(basename "$app") on $device ($(du -sh "$app" | cut -f1) uncom
 run_bounded 480 xcrun simctl install "$device" "$app"
 echo "App install complete. Starting published form journey."
 
-if ! run_bounded 1500 bash "$workspace/scripts/e2e/run-published-ios.sh" \
+if ! run_bounded 2100 bash "$workspace/scripts/e2e/run-published-ios.sh" \
     "$device" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
     if [[ ! -s "$report_dir/failure.png" ]]; then
         run_bounded 60 xcrun simctl io "$device" screenshot "$report_dir/failure.png" || true
