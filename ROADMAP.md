@@ -46,6 +46,15 @@ The release gates below pair a mobile SDK capability with the field workflow tha
 | P1 | **Keep offline maps responsive.** Mobile measures Android frame timings. Field supplies a representative downloaded work area and visible map. | On a fixed device profile and versioned dataset, perform ten map pans. Warn above 32 ms p95 or 10% janky frames and fail above 50 ms or 20%. Store the device, dataset and frame sample with the result. |
 | P2 | **Collect richer evidence and link independent assets.** Field supports media on individual observations and offline record links across inspections. Server retains attachment ownership and relationships. [Field #126](https://github.com/honua-io/honua-field/issues/126) | Capture two repeat observations with different evidence, reference an existing asset from two inspections offline, sync in reverse order and verify each file hash and link on the server. |
 
+### Verification on the integration branches
+
+| Gate | Measured result | Remaining release work |
+| --- | --- | --- |
+| Android offline XLSForm and retry | A signed Field APK on Android 13 completed an inspection offline as a layer-authorized field worker. The test stopped and reopened the app, dropped a successful upload response, and verified one feature and receipt, two ordered repeat rows, calculated and selected values, GPS coordinates and a matching photo hash in PostGIS. [Hosted Maestro run](https://github.com/honua-io/honua-field/actions/runs/45809411511) | Keep this workflow passing as Field and Server advance. |
+| Collect-to-Field Android upgrade | Installing Field over a signed Collect build preserved the Android UID, queued inspection ID and sketch bytes. [Installed upgrade harness](scripts/e2e/run-installed-android-upgrade.py) | Qualify additional historical versions with representative pending data. |
+| Concurrent offline edits | Two independent GeoPackages edited the same server feature. The test read back the reviewed value and both competing snapshots. A private .NET 10 package build also passed the typed registration and upload path. [Mobile integration tests and adoption dependencies](https://github.com/honua-io/honua-mobile/blob/codex/field-sdk-durability/docs/guides/validation-strategy.md) | Release compatible packages, persist replica IDs and generations in production, connect Field's review and assignment screens, and repeat the workflow on two installed clients. |
+| Map performance and precision | The emulator demo returned 41 frames, 800 ms p95 and 97.56% jank. The minimum is 60 frames. The release limits are 50 ms p95 and 20% jank. | Run the map test with a representative downloaded work area on a fixed device. Verify GNSS accuracy against a surveyed control point using a physical receiver. |
+
 ### Competitor capabilities that inform these gates
 
 | Workflow | Documented competitor capability | Honua acceptance criterion |

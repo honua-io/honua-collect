@@ -103,6 +103,9 @@ public sealed class FormPageViewModel : ObservableObject
     /// <summary>Whether this screen has durable storage for drafts.</summary>
     public bool CanSaveDraft { get; }
 
+    /// <summary>Whether removing or replacing evidence in the editor may also delete its files.</summary>
+    public bool CanDeleteRemovedEvidence => !CanSaveDraft;
+
     /// <summary>Controls editing while an online submission awaits a definitive receipt.</summary>
     public bool EditingEnabled
     {

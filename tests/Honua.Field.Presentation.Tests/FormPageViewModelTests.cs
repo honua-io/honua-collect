@@ -53,6 +53,16 @@ public class FormPageViewModelTests
     private static FormPageViewModel NewPage() =>
         new(FormSession.CreateForNewRecord(Form(), "r1"));
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Durable_draft_editing_preserves_removed_evidence_files(bool canSaveDraft, bool canDeleteRemovedEvidence)
+    {
+        var page = new FormPageViewModel(FormSession.CreateForNewRecord(Form(), "r1"), canSaveDraft);
+
+        Assert.Equal(canDeleteRemovedEvidence, page.CanDeleteRemovedEvidence);
+    }
+
     [Fact]
     public void Page_exposes_scalar_fields_and_repeat_groups()
     {
