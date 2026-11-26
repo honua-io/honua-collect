@@ -44,16 +44,23 @@ if [[ $attempt == 45 ]]; then
 fi
 
 printf 'X-API-Key: %s\n' "$(cat "$admin_key_file")" > "$working_dir/admin-header"
-if ! curl --fail --silent -H @"$working_dir/admin-header" "$base/api/v1/forms/$form" >/dev/null; then
+if ! curl --fail --silent -H @"$working_dir/admin-header" "$base/api/v1/forms/$form" > "$working_dir/published"; then
     workbook="$working_dir/field-runtime-inspection.xlsx"
     python3 "$script_dir/fixtures/write-field-runtime-workbook.py" "$workbook"
-    curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -F "file=@$workbook" \
-        "$base/api/v1/admin/forms/import?serviceId=field_inspections&layerId=68950" >/dev/null
-    curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
-        "$base/api/v1/admin/forms/$form/versions/1/publish" >/dev/null
+    if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -F "file=@$workbook" \
+        "$base/api/v1/admin/forms/import?serviceId=field_inspections&layerId=68950" > "$working_dir/draft"; then
+        jq -c . "$working_dir/draft" >&2
+        exit 1
+    fi
+    version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/draft")
+    if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
+        "$base/api/v1/admin/forms/$form/versions/$version/publish" > "$working_dir/published"; then
+        jq -c . "$working_dir/published" >&2
+        exit 1
+    fi
 fi
-curl --fail --silent --show-error -H @"$working_dir/admin-header" "$base/api/v1/forms/$form" >/dev/null
-echo "Published $form at $base."
+version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/published")
+echo "Published $form version $version at $base."
 
 # Only the disposable fixture worker key goes to the Android runner.
 if [[ -n ${HONUA_E2E_WORKER_KEY_FILE:-} ]]; then
@@ -65,5 +72,5 @@ if [[ -n ${HONUA_E2E_WORKER_KEY_FILE:-} ]]; then
         install -m 600 "$working_dir/worker-key" "$HONUA_E2E_WORKER_KEY_FILE"
     fi
     printf 'X-API-Key: %s\n' "$(cat "$HONUA_E2E_WORKER_KEY_FILE")" > "$working_dir/worker-header"
-    curl --fail --silent --show-error -H @"$working_dir/worker-header" "$base/api/v1/forms/$form/versions/1" >/dev/null
+    curl --fail --silent --show-error -H @"$working_dir/worker-header" "$base/api/v1/forms/$form/versions/$version" >/dev/null
 fi
