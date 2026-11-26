@@ -387,6 +387,7 @@ public class FormPackageClientTests
                 "formId": "inspection", "schemaVersion": "honua.form-package.v1",
                 "expressionLanguage": "xlsform",
                 "offlinePolicy": { "enabled": true },
+                "sections": [{ "sectionId": "visits", "repeatable": true, "fieldIds": ["row_total"] }],
                 "fields": [
                   { "fieldId": "name", "type": "text", "required": true,
                     "constraintExpression": "string-length(.) > 2", "constraintMessage": "Name is too short" },
@@ -395,7 +396,8 @@ public class FormPackageClientTests
                   } },
                   { "fieldId": "total", "type": "number",
                     "calculatedExpression": "if(selected(${status}, \"open\"), 2, 1)" },
-                  { "fieldId": "photo", "type": "media", "relevanceExpression": "selected(${status}, 'open')" }
+                  { "fieldId": "photo", "type": "media", "relevanceExpression": "selected(${status}, 'open')" },
+                  { "fieldId": "row_total", "type": "number", "calculatedExpression": "${total} * 2" }
                 ]
               }
             }
@@ -408,6 +410,7 @@ public class FormPackageClientTests
             var session = package.CreateSession("record");
             Assert.Equal(1d, session.GetValue("total"));
             Assert.False(session.GetField("photo").IsVisible);
+            session.AddRepeatInstance("visits");
 
             session.SetValue("status", new[] { "reopened" });
             Assert.Equal(1d, session.GetValue("total"));
@@ -423,10 +426,13 @@ public class FormPackageClientTests
             Assert.Contains(session.Validate().Errors, error => error.FieldId == "name");
             session.SetValue("name", "abc");
             Assert.True(session.Validate().IsValid);
+            Assert.Equal(4d, Assert.Single(session.Record.Repeats["visits"]).Values["row_total"]);
 
             session.SetValue("status", new[] { "closed" });
             Assert.Equal(1d, session.GetValue("total"));
             Assert.False(session.GetField("photo").IsVisible);
+            Assert.True(session.Validate().IsValid);
+            Assert.Equal(2d, Assert.Single(session.Record.Repeats["visits"]).Values["row_total"]);
         }
         finally
         {
