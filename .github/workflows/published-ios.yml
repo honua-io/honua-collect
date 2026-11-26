@@ -58,6 +58,8 @@ jobs:
           path: server-candidate
           persist-credentials: false
       - name: Start fresh iPhone simulator
+        env:
+          HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
         run: |
           runtime=com.apple.CoreSimulator.SimRuntime.iOS-27-2
           mkdir -p "$HONUA_E2E_REPORT_DIR"
