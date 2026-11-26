@@ -97,7 +97,11 @@ def find_shipping_packages(repo_root: Path) -> set[str]:
         root = ET.fromstring(csproj.read_text("utf-8-sig"))
         for ref in root.findall(".//PackageReference"):
             include = ref.attrib.get("Include")
-            if include:
+            excluded = ref.attrib.get("ExcludeAssets", "")
+            exclude_element = ref.find("ExcludeAssets")
+            if exclude_element is not None and "Condition" not in exclude_element.attrib:
+                excluded = exclude_element.text or ""
+            if include and excluded.strip().lower() != "all":
                 packages.add(include)
     return packages
 

@@ -96,8 +96,12 @@ def main():
 
     # The public FeatureServer response carries the object ID, while the
     # accepted receipt links that object ID to the exact submitted form version.
+    if os.environ.get("HONUA_E2E_PG_NATIVE") == "1":
+        psql = ["psql", "-w", "-h", "127.0.0.1"]
+    else:
+        psql = ["docker", "exec", "-i", args.db_container, "psql"]
     receipts = subprocess.run([
-        "docker", "exec", "-i", args.db_container, "psql", "-X", "-qAt",
+        *psql, "-X", "-qAt",
         "-v", "ON_ERROR_STOP=1", "-v", f"service={args.service}", "-v", f"layer={args.layer}",
         "-v", f"object_id={object_id}", "-U", args.db_user, "-d", args.db_name,
     ], input="""

@@ -110,6 +110,22 @@ class LicenseHygieneTests(unittest.TestCase):
             self.assertTrue(any("Version mismatch" in e and "Honua.Sdk.Field" in e for e in errors))
             self.assertTrue(any("missing from docs/THIRD-PARTY-NOTICES.md" in e and "SkiaSharp" in e for e in errors))
 
+    def test_package_assets_determine_shipping_notices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / "src"
+            src.mkdir()
+            (src / "App.csproj").write_text(
+                '<Project><ItemGroup>'
+                '<PackageReference Include="Suppressed" ExcludeAssets="all" />'
+                '<PackageReference Include="SuppressedChild"><ExcludeAssets>All</ExcludeAssets></PackageReference>'
+                '<PackageReference Include="Partial" ExcludeAssets="analyzers" />'
+                '<PackageReference Include="Conditional"><ExcludeAssets Condition="foo">all</ExcludeAssets></PackageReference>'
+                '<PackageReference Include="Platform" ExcludeAssets="all" />'
+                '<PackageReference Include="Platform" />'
+                '</ItemGroup></Project>', encoding="utf-8")
+            self.assertEqual(MOD.find_shipping_packages(root), {"Partial", "Conditional", "Platform"})
+
     def test_missing_app_maui_asset_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -37,18 +37,23 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       HONUA_E2E_HTTP_PORT: '5189'
       HONUA_E2E_PUBLISH_NEXT_VERSION: '1'
-      HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
       MAESTRO_CLI_NO_ANALYTICS: '1'
       MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Read pinned Honua Server revision
+        id: server
+        shell: bash
+        run: |
+          revision=$(cat scripts/e2e/fixtures/server-revision.txt)
+          [[ $revision =~ ^[a-f0-9]{40}$ ]]
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: honua-io/honua-server
-          # Same offline published forms and layer-scoped authorization candidate as Android.
-          ref: cbe5ccc3cc729c4e50c6212004d8981951bfd863
+          ref: ${{ steps.server.outputs.revision }}
           path: server-candidate
           persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
@@ -89,6 +94,8 @@ jobs:
             -p:PublishAot=false -p:PublishTrimmed=false -p:PublishSingleFile=false \
             --output "$RUNNER_TEMP/published-server"
       - name: Verify offline capture and receipt replay on iPhone
+        env:
+          HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
         run: bash .github/workflows/run-published-ios-gate.sh
       - name: Upload iOS receipt replay evidence
         if: always()
