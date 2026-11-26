@@ -16,6 +16,7 @@
     "README.md",
     "ROADMAP.md",
     "docs/",
+    "global.json",
     "release/",
     "scripts/",
     "src/",
