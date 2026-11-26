@@ -8,6 +8,7 @@ using Honua.Field.Core.Field;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Forms;
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Forms;
 
@@ -337,7 +338,8 @@ public class FormPackageClientTests
                 "constraintExpression": ". > 0", "constraintMessage": "Enter a positive number" },
               { "fieldId": "total", "type": "number", "readOnly": true,
                 "calculatedExpression": "$quantity * 2", "relevanceExpression": "$quantity > 0" },
-              { "fieldId": "clip", "type": "media" }
+              { "fieldId": "clip", "type": "media" },
+              { "fieldId": "location", "type": "geometry" }
             ]
           }
         }
@@ -416,6 +418,11 @@ public class FormPackageClientTests
                 FieldId = "clip", AttachmentId = "video-1", ContentType = "video/mp4",
                 LocalPath = evidence, SizeBytes = 3,
             });
+            session.SetValue("location", new FieldGeoPoint(21.31, -157.81));
+            var located = PublishedFormSubmission.Capture(package, session, server);
+            using var prior = JsonDocument.Parse(located.RequestJson);
+            Assert.Equal(-157.81, prior.RootElement.GetProperty("geometry").GetProperty("x").GetDouble());
+            session.SetValue("location", null);
             var snapshot = PublishedFormSubmission.Capture(package, session, server);
             using var request = JsonDocument.Parse(snapshot.RequestJson);
             var root = request.RootElement;

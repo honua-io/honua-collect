@@ -25,7 +25,8 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
     {
         var files = new List<SubmissionFile>();
         var attachments = new List<FormAttachment>();
-        var point = session.Record.Location;
+        var point = session.Fields.Any(field => field.Field.Type == FormFieldType.Location)
+            ? null : session.Record.Location;
 
         Dictionary<string, object?> ReadValues(IEnumerable<FieldState> fields, bool isRepeat = false)
         {
