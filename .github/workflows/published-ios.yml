@@ -96,7 +96,7 @@ jobs:
         with:
           name: published-ios-results
           path: |
-            ${{ runner.temp }}/published-ios-report/*.xml
+            ${{ runner.temp }}/published-ios-report/*/junit.xml
             ${{ runner.temp }}/published-ios-report/*.json
             ${{ runner.temp }}/published-ios-report/*.png
           if-no-files-found: warn
