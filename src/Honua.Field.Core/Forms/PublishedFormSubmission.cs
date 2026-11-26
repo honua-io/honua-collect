@@ -21,7 +21,7 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
 {
     /// <summary>Freezes the request, destination, and evidence references for replay.</summary>
     public static PublishedFormSubmission Capture(PublishedFormPackage package, FormSession session, Uri serverBaseUri,
-        DateTimeOffset? submittedAt = null)
+        DateTimeOffset? submittedAt = null, string? idempotencyKey = null)
     {
         var files = new List<SubmissionFile>();
         var attachments = new List<FormAttachment>();
@@ -77,7 +77,7 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
 
         session.Record.Location = point;
         var geometry = point is null ? null : new SubmissionGeometry(point.Longitude, point.Latitude, new(4326));
-        var request = new FormRequest(package.Version, "create", session.Record.RecordId,
+        var request = new FormRequest(package.Version, "create", idempotencyKey ?? session.Record.RecordId,
             submittedAt ?? DateTimeOffset.UtcNow, values, geometry, attachments);
         return new(session.Form.FormId, JsonSerializer.Serialize(request, FormWireJson.Default.FormRequest),
             files, serverBaseUri.AbsoluteUri);
@@ -119,8 +119,23 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
         var root = result.RootElement;
         var expected = sent.RootElement.GetProperty("attachments").EnumerateArray()
             .Select(a => a.GetProperty("clientAttachmentId").GetString()).ToHashSet(StringComparer.Ordinal);
-        if (root.GetProperty("status").GetString() != "accepted" || root.GetProperty("formId").GetString() != FormId
-            || root.GetProperty("formVersion").GetInt32() != sent.RootElement.GetProperty("formVersion").GetInt32()
+        var matchesVersion = root.GetProperty("formId").GetString() == FormId
+            && root.GetProperty("formVersion").GetInt32() == sent.RootElement.GetProperty("formVersion").GetInt32();
+        var status = root.GetProperty("status").GetString();
+        if (matchesVersion && status == "rejected"
+            && (!root.TryGetProperty("targetFeatureId", out var target) || target.ValueKind == JsonValueKind.Null)
+            && (!root.TryGetProperty("editOutcome", out var edit) || edit.ValueKind == JsonValueKind.Null)
+            && root.TryGetProperty("retry", out var retry) && retry.ValueKind == JsonValueKind.Object
+            && retry.TryGetProperty("retryable", out var retryable) && retryable.ValueKind == JsonValueKind.False)
+        {
+            var message = root.TryGetProperty("validationIssues", out var issues) && issues.ValueKind == JsonValueKind.Array
+                ? issues.EnumerateArray().Select(issue => issue.GetProperty("message").GetString())
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                : null;
+            return FeatureSyncResult.Fail(message ?? "Correct the rejected inspection before submitting it again.", 422);
+        }
+
+        if (!matchesVersion || status != "accepted"
             || !root.GetProperty("editOutcome").GetProperty("succeeded").GetBoolean()
             || !root.GetProperty("targetFeatureId").TryGetInt64(out var objectId))
         {

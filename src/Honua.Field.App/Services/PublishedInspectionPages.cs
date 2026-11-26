@@ -21,6 +21,7 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
         var page = new FormPage(model, clients, related, book);
         var busy = false;
         PublishedFormSubmission? pending = null;
+        string? attemptKey = null;
 
         async Task SaveAsync(Func<Task<string>> save)
         {
@@ -74,8 +75,8 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
                 return "Saved to Outbox. Open Sync to upload.";
             }
 
-            // If a response was lost, replay the identical request under the same record id.
-            pending ??= PublishedFormSubmission.Capture(package, session, settings.BaseUri);
+            // If a response was lost, replay the identical request under the same idempotency key.
+            pending ??= PublishedFormSubmission.Capture(package, session, settings.BaseUri, idempotencyKey: attemptKey);
             model.EditingEnabled = false;
             using var http = clients.CreateClient(MauiProgram.ServerHttpClient);
             var receipt = await pending.UploadAsync(http);
@@ -84,6 +85,8 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
                 if (receipt.ErrorCode is 400 or 422)
                 {
                     pending = null;
+                    attemptKey = Guid.NewGuid().ToString("N");
+                    model.RestoreDraftAfterSaveFailure();
                     model.EditingEnabled = true;
                 }
 

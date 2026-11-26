@@ -439,6 +439,50 @@ public class FormPackageClientTests
         }
     }
 
+    [Theory]
+    [InlineData(7, 422)]
+    [InlineData(8, null)]
+    public async Task Replayed_rejection_only_allows_correction_for_matching_version(int version, int? expectedError)
+    {
+        var cache = Path.GetTempFileName();
+        PublishedFormPackage package;
+        try
+        {
+            await File.WriteAllTextAsync(cache, PublishedPackage);
+            package = PublishedFormPackage.LoadCached("inspection", cache)!;
+        }
+        finally
+        {
+            File.Delete(cache);
+        }
+
+        var session = package.CreateSession("capture-1");
+        var server = new Uri("https://field.example/");
+        session.SetValue("quantity", "2");
+        var original = PublishedFormSubmission.Capture(package, session, server);
+        var rejected = $$"""
+            {"formId":"inspection","formVersion":{{version}},"status":"rejected","targetFeatureId":null,
+             "retry":{"retryable":false},"validationIssues":[{"message":"Quantity is too low."}]}
+            """;
+        using var http = new HttpClient(new StubHandler(rejected)) { BaseAddress = server };
+        var result = await original.UploadAsync(http);
+        Assert.False(result.Success);
+        Assert.Equal(expectedError, result.ErrorCode);
+        if (expectedError == 422)
+        {
+            Assert.Equal("Quantity is too low.", result.Error);
+        }
+
+        session.SetValue("quantity", "10");
+        var corrected = PublishedFormSubmission.Capture(package, session, server, idempotencyKey: "attempt-2");
+        using var sent = JsonDocument.Parse(original.RequestJson);
+        using var changed = JsonDocument.Parse(corrected.RequestJson);
+        Assert.Equal("capture-1", sent.RootElement.GetProperty("idempotencyKey").GetString());
+        Assert.Equal(2, sent.RootElement.GetProperty("values").GetProperty("quantity").GetDecimal());
+        Assert.Equal("attempt-2", changed.RootElement.GetProperty("idempotencyKey").GetString());
+        Assert.Equal(10, changed.RootElement.GetProperty("values").GetProperty("quantity").GetDecimal());
+    }
+
     private sealed class MultipartHandler(string envelope, bool includeReceipt) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
