@@ -31,6 +31,13 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 set_limit 16
 "$HONUA_E2E_RESTART_SERVER_COMMAND"
+base="http://127.0.0.1:${HONUA_E2E_HTTP_PORT:-5189}"
+if ! printf 'X-API-Key: %s\n' "$(cat "$2")" |
+    curl --fail --silent --show-error -H @- "$base/rest/services/field_inspections/FeatureServer/68950?f=json" |
+    jq -e 'any(.fields[]; .name == "name" and .length == 16)' >/dev/null; then
+    echo "Server layer metadata does not expose the temporary 16-character name limit." >&2
+    exit 1
+fi
 started=$("${db[@]}" -c 'SELECT clock_timestamp()')
 export HONUA_E2E_CORRECTED_NAME="Fix$(date +%s)"
 "$script_dir/run-published-android.sh" "$@"

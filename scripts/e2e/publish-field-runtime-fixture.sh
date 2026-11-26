@@ -8,7 +8,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-server_seed=$1/tests/seed/client-compat-v1.sql
+server_seed=$1/tests/seed/base-schema.sql
 admin_key_file=$2
 port=${HONUA_E2E_HTTP_PORT:-5189}
 base="http://127.0.0.1:$port"
