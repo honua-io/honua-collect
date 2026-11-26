@@ -111,7 +111,7 @@ echo "Setting simulator location and seeding the photo library."
 
 echo "Checking the published fixture through the proxy."
 printf 'X-API-Key: %s\n' "$(cat "$worker_key")" > "$working_dir/worker-header"
-version=$(curl --fail --silent --show-error -H @"$working_dir/worker-header" \
+version=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -H @"$working_dir/worker-header" \
     "$proxy_endpoint/api/v1/forms/$form" | jq -er '
     if .package.offlinePolicy.enabled != true then error("The published fixture must allow offline capture.")
     else .version | select(type == "number" and . >= 1) end')
