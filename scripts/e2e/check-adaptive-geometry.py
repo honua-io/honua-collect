@@ -142,7 +142,7 @@ def run(device, directory, serial):
     try:
         device.shell("settings", "put", "system", "accelerometer_rotation", "0")
         device.shell("settings", "put", "system", "user_rotation", "0")
-        device.shell("wm", "size", "540x960")
+        device.shell("wm", "size", "540x1080")
         device.shell("wm", "density", "240")
         device.shell("am", "force-stop", PACKAGE)
         device.launch()
@@ -151,27 +151,29 @@ def run(device, directory, serial):
         report["home"]["phone"] = check_home_width(device, directory, "phone-home", 468)
         device.shell("wm", "size", "1200x1920")
         report["home"]["tablet"] = check_home_width(device, directory, "tablet-home", 1008)
-        device.shell("wm", "size", "540x960")
+        device.shell("wm", "size", "540x1080")
         check_home_width(device, directory, "phone-home-return", 468)
         device.tap("Geometry")
         phone = layout(device, directory, "phone-empty", landscape=False, side_by_side=False, count=0)
         l, t, r, b = phone["controls"]["geometryType"]
         device.shell("input", "tap", str((l + r) // 2), str((t + b) // 2))
         device.tap("Polygon")
+        device.element("Polygon: 0 vertex(es)")
         left, top, right, bottom = phone["map"]
-        for x, y in ((0.3, 0.3), (0.7, 0.35), (0.5, 0.7)):
+        for count, (x, y) in enumerate(((0.3, 0.3), (0.7, 0.35), (0.5, 0.7)), start=1):
             device.shell("input", "tap", str(int(left + x * (right - left))),
                          str(int(top + y * (bottom - top))))
+            device.element(f"Polygon: {count} vertex(es)" + (" ✓" if count == 3 else ""))
         report["layouts"]["phone-portrait"] = layout(
             device, directory, "phone-portrait", landscape=False, side_by_side=False, count=3)
         expected = captured_polygon(device)
         report["polygon"] = expected
 
         for name, size, rotation, landscape, expanded in (
-            ("phone-landscape", "540x960", "1", True, True),
+            ("phone-landscape", "540x1080", "1", True, True),
             ("tablet-portrait", "1200x1920", "0", False, True),
             ("tablet-landscape", "1200x1920", "1", True, True),
-            ("phone-portrait-return", "540x960", "0", False, False),
+            ("phone-portrait-return", "540x1080", "0", False, False),
         ):
             device.shell("wm", "size", size)
             device.shell("settings", "put", "system", "user_rotation", rotation)
