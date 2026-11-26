@@ -54,7 +54,7 @@ public partial class RecordsPage : ContentPage
             view.SelectedItem = null;
         }
 
-        if (e.CurrentSelection.FirstOrDefault() is not RecordRowViewModel row)
+        if (e.CurrentSelection.FirstOrDefault() is not RecordBoxItem { Record: { } row })
         {
             return;
         }

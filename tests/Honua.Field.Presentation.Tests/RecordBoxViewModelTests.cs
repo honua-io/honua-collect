@@ -49,6 +49,27 @@ public class RecordBoxViewModelTests
     }
 
     [Fact]
+    public void Visible_groups_preserve_empty_mailboxes_and_refresh_moved_records()
+    {
+        var pending = Entry("pending", RecordStatus.Submitted);
+        var drafts = Enumerable.Range(0, 175).Select(index => Entry($"draft-{index}", RecordStatus.Draft));
+        var vm = new RecordBoxViewModel(drafts.Append(pending));
+
+        Assert.Equal(["Drafts", "Outbox", "Sent"], vm.VisibleGroups.Select(group => group.Title));
+        Assert.Equal(175, vm.VisibleGroups[0].Count);
+        Assert.Equal("draft-174", vm.VisibleGroups[0][174].Record?.RecordId);
+        Assert.Equal("pending", Assert.Single(vm.VisibleGroups[1]).Record?.RecordId);
+        Assert.Equal("Nothing sent yet.", Assert.Single(vm.VisibleGroups[2]).EmptyText);
+
+        pending.MarkSynced("server-record");
+        vm.Refresh();
+
+        Assert.Equal("Outbox is empty.", Assert.Single(vm.VisibleGroups[1]).EmptyText);
+        Assert.Equal("pending", Assert.Single(vm.VisibleGroups[2]).Record?.RecordId);
+        Assert.Equal("Drafts 175 · Outbox 0 · Conflicts 0 · Sent 1", vm.Header);
+    }
+
+    [Fact]
     public void Status_text_reflects_each_box_state()
     {
         var draft = new RecordRowViewModel(Entry("d", RecordStatus.Draft));
