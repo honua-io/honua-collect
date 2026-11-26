@@ -30,23 +30,5 @@ appId: io.honua.collect
     direction: UP
     element:
       id: '(.*:id/)?name'
-- longPressOn:
+- tapOn:
     id: '(.*:id/)?name'
-- runFlow:
-    when:
-      notVisible: '(?i)select all'
-    commands:
-      - tapOn: '(?i)more options'
-- tapOn: '(?i)select all'
-- eraseText: 1
-- inputText: ${CORRECTED_NAME}
-- assertVisible:
-    id: '(.*:id/)?name'
-    text: '^${CORRECTED_NAME}$'
-- hideKeyboard
-- scrollUntilVisible:
-    element: Submit
-- tapOn: Submit
-- extendedWaitUntil:
-    visible: 'Drafts [0-9]+ · Outbox [1-9][0-9]* .*'
-    timeout: 15000
