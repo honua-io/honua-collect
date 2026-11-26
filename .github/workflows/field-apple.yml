@@ -70,6 +70,10 @@ jobs:
         run: |
           app=$(find src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64 -maxdepth 1 -name '*.app' -type d)
           test -d "$app"
+          for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
+              NSPhotoLibraryUsageDescription NSLocationWhenInUseUsageDescription; do
+            test -n "$(plutil -extract "$key" raw -expect string -o - "$app/Info.plist")"
+          done
           results="$RUNNER_TEMP/field-ios-results"
           mkdir -p "$results"
           xcrun simctl list devices available --json > "$results/simulators.json"

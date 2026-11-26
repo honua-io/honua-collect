@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo or video, or scan a barcode, for your inspection.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record audio notes and sound for inspection videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose photos and videos to attach to your inspection.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Honua Field tags photos, video and audio with the location where they were captured.</string>
 	<key>LSRequiresIPhoneOS</key>
