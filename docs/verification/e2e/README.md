@@ -23,6 +23,8 @@ HONUA_E2E_REPORT_DIR=/tmp/field-android-results \
 
 The workflow pins Maestro and the emulator version. Its `published-android-results` artifact groups JUnit reports by scenario and capture phase. Compare `upgrade/before.json`, `upgrade/after.json` and `upgrade/recovered-key.json` for installed upgrade evidence. The replay and correction folders contain `server-readback.json` with the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. The correction folder also contains the two submission identities in `correction-ledger.json`. A failed capture or sync run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
 
+The Android gate runs the installed upgrade and receipt replay at a phone window size (411 × 891 dp), and the rejected inspection and correction at a tablet window size (800 × 1280 dp). A separate geometry check draws a polygon on a narrow phone, resizes the running app to tablet portrait and landscape, and checks the same vertices and editing controls. The `adaptive` artifact folder contains the layout evidence.
+
 The previous versionCode 2 to 3 [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45872622719) passed all 23 Maestro phases across the installed upgrade (7), receipt replay (7) and rejection correction (9). The [run artifact](https://github.com/honua-io/honua-field/actions/runs/45872622719/artifacts/15144523638) contains the matching upgrade snapshots, both server readbacks and the correction ledger.
 
 ## GeoServices capture topology

@@ -158,7 +158,7 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <ScrollView>
+    <ScrollView Style="{StaticResource FieldFormColumn}">
         <VerticalStackLayout Padding="16" Spacing="14">
 
             <!-- Scalar fields -->

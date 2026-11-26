@@ -96,10 +96,15 @@ report_root=${HONUA_E2E_REPORT_DIR:?}
 APKSIGNER=$(find "${ANDROID_HOME:?}/build-tools" -name apksigner -type f | sort -V | tail -n 1)
 export APKSIGNER
 test -x "$APKSIGNER"
+# Phone portrait, 411 x 891 dp.
+adb -s "$serial" shell wm size 822x1782
+adb -s "$serial" shell wm density 320
 upgrade=(python3 "$workspace/scripts/e2e/run-installed-published-android-upgrade.py" "$serial" "$report_root/upgrade")
 "${upgrade[@]}" seed "$RUNNER_TEMP/honua-field-previous.apk" "$HONUA_E2E_WORKER_KEY_FILE"
 "${upgrade[@]}" verify "$RUNNER_TEMP/honua-field.apk"
 "${upgrade[@]}" recover-key
+
+python3 "$workspace/scripts/e2e/check-adaptive-geometry.py" "$serial" "$report_root/adaptive"
 
 # Start the receipt test with a fresh outbox on the upgraded app.
 adb -s "$serial" shell pm clear io.honua.collect
@@ -109,6 +114,9 @@ export HONUA_E2E_REPORT_DIR="$report_root/receipt-replay"
 # This emulator is created for this job. Start the independent inspection with
 # an empty outbox while retaining the live server and the first receipt.
 adb -s "$serial" shell pm clear io.honua.collect
+# Tablet portrait, 800 x 1280 dp.
+adb -s "$serial" shell wm size 1200x1920
+adb -s "$serial" shell wm density 240
 export HONUA_E2E_REPORT_DIR="$report_root/rejection-correction"
 export HONUA_E2E_TEST_POSTGIS_CONTAINER="$container"
 "$workspace/scripts/e2e/run-rejected-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
