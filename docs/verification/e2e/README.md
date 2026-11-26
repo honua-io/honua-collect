@@ -17,7 +17,7 @@ HONUA_E2E_REPORT_DIR=/tmp/field-android-results \
   scripts/e2e/run-published-android.sh emulator-5554 /path/to/worker-key /path/to/readback-key
 ```
 
-The workflow pins Maestro and the emulator version. Failed hosted runs publish a screenshot and JUnit reports for the phases that ran.
+The workflow pins Maestro and the emulator version. Its `published-android-results` artifact contains a JUnit report for each completed phase. On success, `server-readback.json` records the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. A failed run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
 
 ## GeoServices capture topology
 
