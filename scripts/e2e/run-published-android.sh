@@ -3,14 +3,15 @@
 # field_runtime_inspection fixture published on the local E2E server.
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-    echo "Usage: $0 ANDROID_SERIAL API_KEY_FILE" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+    echo "Usage: $0 ANDROID_SERIAL WORKER_KEY_FILE [READBACK_KEY_FILE]" >&2
     exit 2
 fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 serial=$1
 key_file=$2
+readback_key_file=${3:-$key_file}
 port=${HONUA_E2E_HTTP_PORT:-5189}
 endpoint="http://127.0.0.1:${port}"
 app=io.honua.collect
@@ -99,7 +100,7 @@ test -s "$working_dir/attachment"
 "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
 run_flow sync
 run_flow sync
-python3 "$script_dir/assert-field-record.py" --server "$endpoint" --api-key-file "$key_file" \
+python3 "$script_dir/assert-field-record.py" --server "$endpoint" --api-key-file "$readback_key_file" \
     --form "$form" --name "$name" --status open --status closed --total 2 \
     --repeat-note 'Offline visit one' --repeat-note 'Offline visit two' \
     --longitude=-157.81 --latitude=21.31 --attachment "$working_dir/attachment"

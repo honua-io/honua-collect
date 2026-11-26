@@ -46,6 +46,7 @@ openssl rand -base64 32 > "$working_dir/master-key"
 openssl rand -base64 16 > "$working_dir/encryption-salt"
 
 export HONUA_E2E_SERVER_STATE="$working_dir"
+export HONUA_E2E_WORKER_KEY_FILE="$working_dir/worker-key"
 export HONUA_E2E_RESTART_SERVER_COMMAND="$working_dir/restart-server"
 cat > "$HONUA_E2E_RESTART_SERVER_COMMAND" <<'RESTART'
 #!/usr/bin/env bash
@@ -89,4 +90,4 @@ wait_for server_ready
 
 serial=emulator-5554
 adb -s "$serial" install "$RUNNER_TEMP/honua-field.apk"
-"$workspace/scripts/e2e/run-published-android.sh" "$serial" "$working_dir/admin-key"
+"$workspace/scripts/e2e/run-published-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
