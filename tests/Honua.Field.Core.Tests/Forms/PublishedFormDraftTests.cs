@@ -19,10 +19,11 @@ public sealed class PublishedFormDraftTests
           "formId": "inspection", "version": 7, "status": "published",
           "package": {
             "formId": "inspection", "schemaVersion": "honua.form-package.v1",
+            "expressionLanguage": "xlsform",
             "offlinePolicy": {"enabled": true},
             "fields": [
               {"fieldId": "status", "type": "multiChoice"},
-              {"fieldId": "location", "type": "geometry"},
+              {"fieldId": "where", "label": "Location", "type": "location", "required": true},
               {"fieldId": "date", "type": "date"},
               {"fieldId": "total", "type": "number"},
               {"fieldId": "photo", "type": "attachment"},
@@ -30,7 +31,9 @@ public sealed class PublishedFormDraftTests
               {"fieldId": "rowPhoto", "type": "attachment"}
             ],
             "sections": [
-              {"sectionId": "visits", "repeatable": true, "minInstances": 2, "fieldIds": ["note", "rowPhoto"]}
+              {"sectionId": "questions", "fieldIds": ["status", "date", "total"]},
+              {"sectionId": "visits", "repeatable": true, "minInstances": 2, "fieldIds": ["note", "rowPhoto"]},
+              {"sectionId": "final", "fieldIds": ["photo", "where"]}
             ]
           }
         }
@@ -55,7 +58,7 @@ public sealed class PublishedFormDraftTests
             string[] selected = ["open", "closed"];
             session.SetValue("status", selected);
             var location = new FieldGeoPoint(38.02, -122.17, 3.0);
-            session.SetValue("location", location);
+            session.SetValue("where", location);
             var date = new DateOnly(2026, 11, 26);
             session.SetValue("date", date);
             session.SetValue("total", 19.75m);
@@ -120,7 +123,7 @@ public sealed class PublishedFormDraftTests
             Assert.Equal(session.Record.CreatedAtUtc, reopened.Record.CreatedAtUtc);
             Assert.Equal("stable-id", reopened.Record.RecordId);
             Assert.Equal(new[] { "open", "closed" }, Assert.IsType<string[]>(reopened.GetValue("status")));
-            Assert.Equal(location, Assert.IsType<FieldGeoPoint>(reopened.GetValue("location")));
+            Assert.Equal(location, Assert.IsType<FieldGeoPoint>(reopened.GetValue("where")));
             Assert.Equal(date, Assert.IsType<DateOnly>(reopened.GetValue("date")));
             Assert.Equal(20.25m, Assert.IsType<decimal>(reopened.GetValue("total")));
             var restoredPhoto = Assert.Single(reopened.GetField("photo").Media);
@@ -139,6 +142,7 @@ public sealed class PublishedFormDraftTests
                     Assert.Equal("evidence-2", Assert.Single(row.GetField("rowPhoto").Media).AttachmentId);
                 });
 
+            Assert.True(reopened.Validate().IsValid);
             reopened.Record.Status = RecordStatus.Submitted;
             var snapshot = PublishedFormDraft.Capture(reopenedPackage, reopened, Server);
             var original = new PublishedFormSubmission("inspection", """{"idempotencyKey":"stable-id"}""", [], Server.AbsoluteUri);
@@ -158,6 +162,8 @@ public sealed class PublishedFormDraftTests
 
             var (correctionPackage, correction) = persisted.PublishedDraft!.Open(persisted.Record.FormId, persisted.Record.RecordId, Server);
             Assert.Equal(7, correctionPackage.Version);
+            Assert.True(correction.Validate().IsValid);
+            Assert.Equal(location, correction.GetValue("where"));
             Assert.Equal(new[] { "open", "closed" }, Assert.IsType<string[]>(correction.GetValue("status")));
             Assert.Equal(photo.AttachmentId, Assert.Single(correction.GetField("photo").Media).AttachmentId);
             Assert.Equal("second", correction.GetRepeat("visits").Instances[1].GetValue("note"));
