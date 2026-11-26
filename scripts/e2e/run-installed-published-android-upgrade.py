@@ -75,18 +75,32 @@ def run_flow(args, phase, flow, **variables):
         *[item for key, value in variables.items() for item in ("-e", f"{key}={value}")],
         str(HERE / "maestro" / f"{flow}.yaml"),
     ]
-    try:
-        subprocess.run(command, check=True, timeout=360)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        adb = [os.environ.get("ADB", "adb"), "-s", args.serial]
+    subprocess.run(command, check=True, timeout=360)
+
+
+def capture_failure(args, device):
+    def probe(*command):
         try:
-            subprocess.run([*adb, "get-state"], check=False, timeout=10)
-            with (args.report / "failure.png").open("wb") as screenshot:
-                subprocess.run([*adb, "exec-out", "screencap", "-p"], stdout=screenshot,
-                               check=False, timeout=10)
-        except subprocess.TimeoutExpired:
-            print("Emulator did not respond while collecting failure evidence.", flush=True)
-        raise
+            return subprocess.check_output([*device.command, *command],
+                                           stderr=subprocess.PIPE, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return b""
+
+    screenshot = probe("exec-out", "screencap", "-p")
+    if screenshot.startswith(b"\x89PNG\r\n\x1a\n"):
+        (args.report / "failure.png").write_bytes(screenshot)
+    # Check process and focus without recording app data or unrestricted logs.
+    state = probe("get-state").strip()
+    pid = probe("shell", "pidof", PACKAGE).strip()
+    windows = probe("shell", "dumpsys", "window", "windows").splitlines()
+    focus = next((line for line in windows if b"mCurrentFocus=" in line), b"")
+    evidence = {
+        "phase": args.phase,
+        "deviceConnected": state == b"device",
+        "appProcessRunning": bool(re.fullmatch(rb"[0-9]+( [0-9]+)*", pid)),
+        "appWindowFocused": PACKAGE.encode() + b"/" in focus if focus else None,
+    }
+    (args.report / "failure-state.json").write_text(json.dumps(evidence, indent=2) + "\n")
 
 
 def records(device):
@@ -281,7 +295,14 @@ def main():
     args.report.mkdir(parents=True, exist_ok=True)
     device = Android(os.environ.get("ADB", "adb"), args.serial)
     check(device.shell("getprop", "ro.kernel.qemu") == "1", "An Android emulator is required")
-    {"seed": seed, "verify": verify, "recover-key": recover_key}[args.phase](args, device)
+    try:
+        {"seed": seed, "verify": verify, "recover-key": recover_key}[args.phase](args, device)
+    except Exception:
+        try:
+            capture_failure(args, device)
+        except OSError:
+            print("Could not write emulator failure evidence.", flush=True)
+        raise
 
 
 if __name__ == "__main__":
