@@ -91,11 +91,21 @@ public sealed class RecordBook
     /// <summary>Adds a freshly submitted record to the Outbox and persists it.</summary>
     /// <param name="record">The submitted record (review status past Draft).</param>
     /// <param name="submission">Optional versioned submission captured with this record.</param>
+    /// <param name="editorSnapshot">Optional editor state retained for correcting a confirmed rejection.</param>
     /// <returns>The tracked entry.</returns>
-    public async Task<FieldRecordEntry> AddSubmittedAsync(FieldRecord record, PublishedFormSubmission? submission = null)
+    public async Task<FieldRecordEntry> AddSubmittedAsync(FieldRecord record, PublishedFormSubmission? submission = null,
+        PublishedFormDraft? editorSnapshot = null)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var entry = new FieldRecordEntry(record) { PublishedSubmission = submission };
+        if (editorSnapshot is not null
+            && (submission is null || record.Status == RecordStatus.Draft
+                || record.RecordId != editorSnapshot.RecordId || record.FormId != editorSnapshot.FormId
+                || editorSnapshot.ServerBaseUrl != submission.ServerBaseUrl))
+        {
+            throw new ArgumentException("The editor snapshot must belong to this submitted inspection.", nameof(editorSnapshot));
+        }
+
+        var entry = new FieldRecordEntry(record) { PublishedSubmission = submission, PublishedDraft = editorSnapshot };
         if (record.Status != RecordStatus.Draft)
         {
             entry.MarkPending();

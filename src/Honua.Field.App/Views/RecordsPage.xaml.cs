@@ -59,12 +59,13 @@ public partial class RecordsPage : ContentPage
             return;
         }
 
-        if (row.Entry.PublishedDraft is { } draft)
+        if (row.Entry.CanOpenPublishedEditor && row.Entry.PublishedDraft is { } draft)
         {
             try
             {
                 var (package, session) = draft.Open(row.Entry.Record.FormId, row.RecordId, _settings.BaseUri);
-                await Navigation.PushAsync(_inspections.Create(package, session));
+                var isCorrection = draft.ReplacesRejectedSubmission || row.Entry.SyncState == Core.Records.RecordSyncState.SubmissionRejected;
+                await Navigation.PushAsync(_inspections.Create(package, session, isCorrection: isCorrection));
             }
             catch (Exception ex)
             {

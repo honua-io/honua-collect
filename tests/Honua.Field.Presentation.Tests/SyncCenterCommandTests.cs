@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Mvvm;
@@ -19,6 +20,48 @@ public class SyncCenterCommandTests
         var entry = new FieldRecordEntry(record);
         entry.MarkPending();
         return entry;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Published_queue_replays_the_same_request_after_a_503_and_parks_only_a_definitive_rejection(bool hasSnapshot)
+    {
+        var request = new PublishedFormSubmission("f", """{"idempotencyKey":"original"}""", []);
+        var record = new FieldRecord { RecordId = "inspection", FormId = "f", Status = RecordStatus.Submitted };
+        var entry = new FieldRecordEntry(record)
+        {
+            PublishedSubmission = request,
+            PublishedDraft = hasSnapshot ? new PublishedFormDraft("f", "inspection", "https://field.example/", "{}", "{}") : null,
+        };
+        entry.MarkPending();
+        var requests = new List<PublishedFormSubmission>();
+        var vm = new SyncCenterViewModel([entry], (pending, _) =>
+        {
+            requests.Add(pending.PublishedSubmission!);
+            return Task.FromResult(requests.Count == 1
+                ? FeatureSyncResult.Fail("HTTP 503", 503)
+                : FeatureSyncResult.Fail("Correct the site name.", 400) with { CanCorrectSubmission = true });
+        });
+
+        await vm.SyncAsync();
+        Assert.Equal(RecordSyncState.Failed, entry.SyncState);
+        Assert.False(entry.CanOpenPublishedEditor);
+        Assert.True(entry.IsPendingUpload);
+        Assert.True(vm.SyncCommand.CanExecute(null));
+        Assert.False(vm.HasRejectedSubmissions);
+
+        await vm.SyncAsync();
+        Assert.Equal(RecordSyncState.SubmissionRejected, entry.SyncState);
+        Assert.Equal(hasSnapshot, entry.CanOpenPublishedEditor);
+        Assert.False(entry.IsPendingUpload);
+        Assert.Equal(1, vm.Summary.Failed);
+        Assert.True(vm.HasRejectedSubmissions);
+        Assert.False(vm.SyncCommand.CanExecute(null));
+
+        await vm.SyncAsync();
+        Assert.Equal(2, requests.Count);
+        Assert.All(requests, sent => Assert.Same(request, sent));
     }
 
     [Fact]

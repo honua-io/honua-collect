@@ -140,13 +140,34 @@ public sealed class PublishedFormDraftTests
                 });
 
             reopened.Record.Status = RecordStatus.Submitted;
-            var submitted = await reopenedBook.AddSubmittedAsync(reopened.Record, new("inspection", "{}", []));
+            var snapshot = PublishedFormDraft.Capture(reopenedPackage, reopened, Server);
+            var original = new PublishedFormSubmission("inspection", """{"idempotencyKey":"stable-id"}""", [], Server.AbsoluteUri);
+            var submitted = await reopenedBook.AddSubmittedAsync(reopened.Record, original, snapshot);
             Assert.Same(submitted, Assert.Single(reopenedBook.All));
             Assert.Equal(RecordSyncState.Pending, submitted.SyncState);
-            Assert.Null(submitted.PublishedDraft);
+            Assert.False(submitted.CanOpenPublishedEditor);
+
+            submitted.MarkSubmissionRejected("Correct the site name.");
+            await reopenedBook.SaveAsync(submitted);
             var persisted = Assert.Single(await new SqliteRecordStore(database, "draft-test-key").LoadAllAsync());
-            Assert.NotNull(persisted.PublishedSubmission);
-            Assert.Null(persisted.PublishedDraft);
+            Assert.Equal(RecordSyncState.SubmissionRejected, persisted.SyncState);
+            Assert.Equal("Correct the site name.", persisted.LastError);
+            Assert.False(persisted.IsPendingUpload);
+            Assert.True(persisted.CanOpenPublishedEditor);
+            Assert.Equal(original.RequestJson, persisted.PublishedSubmission?.RequestJson);
+
+            var (correctionPackage, correction) = persisted.PublishedDraft!.Open(persisted.Record.FormId, persisted.Record.RecordId, Server);
+            Assert.Equal(7, correctionPackage.Version);
+            Assert.Equal(new[] { "open", "closed" }, Assert.IsType<string[]>(correction.GetValue("status")));
+            Assert.Equal(photo.AttachmentId, Assert.Single(correction.GetField("photo").Media).AttachmentId);
+            Assert.Equal("second", correction.GetRepeat("visits").Instances[1].GetValue("note"));
+
+            var correctionDraft = PublishedFormDraft.Capture(correctionPackage, correction, Server) with { ReplacesRejectedSubmission = true };
+            await reopenedBook.SaveDraftAsync(correction.Record, correctionDraft);
+            persisted = Assert.Single(await new SqliteRecordStore(database, "draft-test-key").LoadAllAsync());
+            Assert.Null(persisted.PublishedSubmission);
+            Assert.True(persisted.CanOpenPublishedEditor);
+            Assert.True(persisted.PublishedDraft!.ReplacesRejectedSubmission);
         }
         finally
         {

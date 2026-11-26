@@ -112,13 +112,14 @@ jobs:
           disable-spellchecker: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics -camera-back none
           script: bash .github/workflows/run-published-android-gate.sh
-      - name: Upload failed emulator evidence
-        if: failure()
+      - name: Upload emulator test results
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: published-android-failure
+          name: published-android-results
           path: |
             ${{ runner.temp }}/published-android-report/failure.png
+            ${{ runner.temp }}/published-android-report/server-readback.json
             ${{ runner.temp }}/published-android-report/[1-7]-*.xml
           if-no-files-found: ignore
           retention-days: 7

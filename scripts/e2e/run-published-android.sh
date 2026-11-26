@@ -144,7 +144,11 @@ test -f "$working_dir/withheld"
 run_flow verify-outbox
 "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
 run_flow sync
+readback_report=()
+if [[ -n ${HONUA_E2E_REPORT_DIR:-} ]]; then
+    readback_report=(--report "$HONUA_E2E_REPORT_DIR/server-readback.json")
+fi
 python3 "$script_dir/assert-field-record.py" --server "$endpoint" --api-key-file "$readback_key_file" \
     --form "$form" --version "$version" --name "$name" --status open --status closed --total 2 \
     --repeat-note 'Offline visit one' --repeat-note 'Offline visit two' \
-    --longitude=-157.81 --latitude=21.31 --attachment "$working_dir/attachment"
+    --longitude=-157.81 --latitude=21.31 --attachment "$working_dir/attachment" "${readback_report[@]}"
