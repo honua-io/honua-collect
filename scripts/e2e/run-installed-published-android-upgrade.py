@@ -32,7 +32,6 @@ DRAFT_NAME = "Upgrade saved inspection"
 QUEUE_NAME = "Upgrade queued inspection"
 SUMMARY = "Drafts 1 · Outbox 1 · Conflicts 0 · Sent 0"
 SECURE_PREFS = f"shared_prefs/{PACKAGE}.microsoft.maui.essentials.preferences.xml"
-MISSING_KEY = "The device key for existing field data is unavailable."
 
 
 def check(condition, message):
@@ -129,7 +128,6 @@ def records(device):
                     "Drafts", "Outbox", "Sent", "No drafts.", "Outbox is empty.",
                     "Nothing sent yet.", "Ready to send", "Retry",
                 } or re.fullmatch(r"Drafts \d+ · Outbox \d+ · Conflicts \d+ · Sent \d+", label)],
-                missingKey=any(label.startswith(MISSING_KEY) for label in labels),
                 appNodeCount=len(nodes),
             )
             return True
@@ -160,13 +158,15 @@ def private_files(device):
     }
 
 
-def snapshot(args, device, phase):
-    result = records(device)
+def snapshot(args, device, phase, identities=None):
+    if identities is None:
+        identities = records(device)
+    record_state = {key: identities[key] for key in ("draftId", "outboxId", "summary")}
     stop(device)
-    run_flow(args, phase, "upgrade-saved-draft", DRAFT_ID=result["draftId"],
-             INSPECTION_NAME=DRAFT_NAME)
+    run_flow(args, phase, "upgrade-saved-draft", DRAFT_ID=record_state["draftId"],
+             OUTBOX_ID=record_state["outboxId"], INSPECTION_NAME=DRAFT_NAME)
     stop(device)
-    return result | private_files(device)
+    return record_state | private_files(device)
 
 
 def write_report(args, phase, evidence):
@@ -234,7 +234,7 @@ def verify(args, device):
         check(before["identity"][key] == identity[key], f"Installed {key} changed after update")
     check(before["identity"]["apkSha256"] != identity["apkSha256"], "Candidate must be a different APK")
     check(before["identity"]["versionCode"] < identity["versionCode"], "Candidate must increase Android versionCode")
-    evidence = snapshot(args, device, "after")
+    evidence = snapshot(args, device, "after", before["storage"])
     check(evidence == before["storage"], "Historical draft, outbox, cached package, or media changed")
     write_report(args, "after", {"identity": identity, "storage": evidence})
 
@@ -258,15 +258,8 @@ def recover_key(args, device):
     device.shell("run-as", PACKAGE, "test", "!", "-e", backup)
     device.shell("run-as", PACKAGE, "mv", SECURE_PREFS, backup)
 
-    def blocked(root):
-        visible = {node.get("text", "") for node in root.iter("node")}
-        return True if "Retry" in visible and any(text.startswith(MISSING_KEY) for text in visible) else None
-
     try:
-        device.launch()
-        device.screen(blocked, "missing-key recovery message and Retry")
-        device.tap("Retry")
-        device.screen(blocked, "missing-key recovery message after Retry")
+        run_flow(args, "missing-key", "upgrade-key-recovery")
         check(database_digests(device) == databases, "Missing-key startup changed an existing database")
         check(private_files(device) == files, "Missing-key startup changed a cache or attachment")
     finally:
@@ -275,7 +268,7 @@ def recover_key(args, device):
         finally:
             device.shell("run-as", PACKAGE, "mv", "-f", backup, SECURE_PREFS)
 
-    recovered = snapshot(args, device, "recovered-key")
+    recovered = snapshot(args, device, "recovered-key", after["storage"])
     check(recovered == after["storage"], "Offline records changed after restoring the original key")
     write_report(args, "recovered-key", {"databaseSha256WhileKeyMissing": databases, "storage": recovered})
 
