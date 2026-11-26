@@ -110,7 +110,7 @@ public sealed class FormPageViewModel : ObservableObject
         set => SetProperty(ref _editingEnabled, value);
     }
 
-    /// <summary>Restores the editable draft when its transition into the local outbox fails.</summary>
+    /// <summary>Restores the editable draft after a failed local save or a rejected online submission.</summary>
     public void RestoreDraftAfterSaveFailure()
     {
         _session.Record.Status = RecordStatus.Draft;
