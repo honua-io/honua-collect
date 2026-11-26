@@ -65,16 +65,14 @@ live server:
 - **add** — geometry + attribute round-trip and read-back;
 - **update** — attribute change reflected server-side;
 - **delete** — feature removed;
-- **update / delete of a non-existent feature** — rejected with the server's
-  message, not a crash;
+- **missing feature** — an update returns the server rejection and a repeated delete succeeds idempotently;
 - **submit without credentials** — fails gracefully and writes nothing;
 - **concurrent adds (×12)** — all persist with distinct object ids (no id
   collision or lost write);
 - **concurrent updates to the same feature (×10)** — transient write contention
   is retried with backoff, so **every** submission succeeds (no spurious
   failures) and exactly one consistent row remains;
-- **duplicate submissions** — create two distinct rows (the Feature Server is not
-  a dedup authority; client-side `DuplicateDetector` owns suppression).
+- **independent captures with identical answers** — distinct record IDs produce two feature rows.
 
 Findings the suite surfaced (and the fix): concurrent same-row updates fail
 transiently under contention — the server reuses error code 1000 for both that

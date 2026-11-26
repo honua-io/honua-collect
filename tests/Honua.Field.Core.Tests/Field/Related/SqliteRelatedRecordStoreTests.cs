@@ -94,6 +94,18 @@ public sealed class SqliteRelatedRecordStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Shared_assets_are_freed_once_when_the_last_parent_is_deleted()
+    {
+        await _store.LinkAsync("inspection-a", "assets", Link("pole"));
+        await _store.LinkAsync("inspection-b", "assets", Link("pole"));
+        await _store.LinkAsync("inspection-b", "repairs", Link("pole"));
+
+        Assert.Empty(await _store.DeleteParentAsync("inspection-a"));
+        Assert.Equal("pole", Assert.Single(await _store.ListAsync("inspection-b", "assets")).RecordId);
+        Assert.Equal(["pole"], await _store.DeleteParentAsync("inspection-b"));
+    }
+
+    [Fact]
     public async Task Deleting_a_parent_with_restrict_children_throws_and_keeps_links()
     {
         await _store.LinkAsync("p1", "deficiencies", Link("d1"), RecordLinkBehavior.Restrict);
