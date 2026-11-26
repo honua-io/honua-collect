@@ -96,6 +96,9 @@ jobs:
       - name: Verify upgrade identity
         run: python3 scripts/check-upgrade-identity.py
 
+      - name: Verify published submission fault proxy
+        run: python3 scripts/e2e/test-lose-submission-receipt.py
+
       - name: Verify license headers and third-party notices
         run: |
           python3 scripts/test-license-hygiene.py
