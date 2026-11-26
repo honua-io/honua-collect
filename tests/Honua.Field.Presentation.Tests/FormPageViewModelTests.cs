@@ -123,6 +123,25 @@ public class FormPageViewModelTests
     }
 
     [Fact]
+    public void Failed_outbox_write_can_be_saved_as_a_draft_and_submitted_again()
+    {
+        var page = NewPage();
+        page.Fields.Single(f => f.FieldId == "name").Value = "Bridge 7";
+        page.SubmitCommand.Execute(null);
+
+        page.RestoreDraftAfterSaveFailure();
+
+        Assert.False(page.IsSubmitted);
+        Assert.Null(page.Record.SubmittedAtUtc);
+        FieldRecord? saved = null;
+        page.DraftSaved += (_, record) => saved = record;
+        page.SaveDraftCommand.Execute(null);
+        Assert.Equal(RecordStatus.Draft, saved!.Status);
+        page.SubmitCommand.Execute(null);
+        Assert.Equal(RecordStatus.Submitted, page.Record.Status);
+    }
+
+    [Fact]
     public void Adding_a_repeat_row_then_filling_it_keeps_submit_consistent()
     {
         var page = NewPage();

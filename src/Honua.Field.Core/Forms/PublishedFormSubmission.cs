@@ -27,11 +27,16 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
         var attachments = new List<FormAttachment>();
         var point = session.Record.Location;
 
-        Dictionary<string, object?> ReadValues(IEnumerable<FieldState> fields)
+        Dictionary<string, object?> ReadValues(IEnumerable<FieldState> fields, bool isRepeat = false)
         {
             var values = new Dictionary<string, object?>(StringComparer.Ordinal);
             foreach (var field in fields)
             {
+                if (isRepeat && (field.Media.Count > 0 || field.Value is FieldGeoPoint))
+                {
+                    throw new InvalidOperationException("This server form supports location and evidence on the inspection only.");
+                }
+
                 foreach (var attachment in field.Media)
                 {
                     var partName = $"file{files.Count}";
@@ -62,7 +67,7 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
         var values = ReadValues(session.VisibleFields);
         foreach (var group in session.RepeatGroups)
         {
-            values[group.SectionId] = group.Instances.Select(row => ReadValues(row.VisibleFields)).ToArray();
+            values[group.SectionId] = group.Instances.Select(row => ReadValues(row.VisibleFields, isRepeat: true)).ToArray();
         }
 
         if (package.RequiresGeometry && point is null)
@@ -137,7 +142,6 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
     }
 }
 
-
 internal sealed record FormRequest(int FormVersion, string Operation, string IdempotencyKey,
     DateTimeOffset SubmittedAt, Dictionary<string, object?> Values, SubmissionGeometry? Geometry, List<FormAttachment> Attachments);
 internal sealed record SubmissionGeometry(double X, double Y, SpatialReference SpatialReference);
@@ -158,6 +162,8 @@ internal sealed record FormAttachment(string ClientAttachmentId, string FieldId,
 [JsonSerializable(typeof(double))]
 [JsonSerializable(typeof(decimal))]
 [JsonSerializable(typeof(DateTime))]
+[JsonSerializable(typeof(DateTimeOffset))]
+[JsonSerializable(typeof(TimeSpan))]
 [JsonSerializable(typeof(DateOnly))]
 [JsonSerializable(typeof(TimeOnly))]
 internal sealed partial class FormWireJson : JsonSerializerContext;

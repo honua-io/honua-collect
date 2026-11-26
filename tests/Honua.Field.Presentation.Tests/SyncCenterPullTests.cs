@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Sync;
@@ -45,6 +46,23 @@ public class SyncCenterPullTests
 
     private static FeaturePuller Puller(params PulledRecord[] records)
         => _ => Task.FromResult(new FeatureQueryResult(true, records, null));
+
+    [Fact]
+    public async Task Pull_does_not_conflict_with_a_published_submission_with_the_same_feature_id()
+    {
+        var record = new FieldRecord { RecordId = "published", FormId = "f", Status = RecordStatus.Submitted };
+        var entry = new FieldRecordEntry(record) { PublishedSubmission = new PublishedFormSubmission("f", "{}", []) };
+        entry.MarkPending();
+        entry.MarkSynced("11");
+        var vm = new SyncCenterViewModel([entry], (_, _) => Task.FromResult(FeatureSyncResult.Fail("unused")),
+            Puller(Server(11, "Different target")), Form());
+
+        await vm.PullAsync();
+
+        Assert.Equal(11, Assert.Single(vm.NewFromServer).ObjectId);
+        Assert.Empty(vm.Conflicts);
+        Assert.Equal(RecordBox.Sent, entry.Box);
+    }
 
     [Fact]
     public async Task PullAsync_builds_conflict_list_for_diverging_features()

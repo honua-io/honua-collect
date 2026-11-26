@@ -21,12 +21,16 @@ public sealed class FormPageViewModel : ObservableObject
     private string _errorSummary = string.Empty;
     private bool _canSubmit;
     private bool _isSubmitted;
+    private bool _editingEnabled = true;
 
     /// <summary>Creates the page view-model over a form session.</summary>
     /// <param name="session">The capture session to drive.</param>
-    public FormPageViewModel(FormSession session)
+    /// <param name="canSaveDraft">Whether the host provides durable draft storage.</param>
+    public FormPageViewModel(FormSession session, bool canSaveDraft = false)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
+
+        CanSaveDraft = canSaveDraft;
 
         Fields = _session.Fields
             .Select(state => new FieldViewModel(_session, state.FieldId, RefreshAll))
@@ -96,9 +100,28 @@ public sealed class FormPageViewModel : ObservableObject
     /// <summary>Raised when a draft is saved.</summary>
     public event EventHandler<FieldRecord>? DraftSaved;
 
+    /// <summary>Whether this screen has durable storage for drafts.</summary>
+    public bool CanSaveDraft { get; }
+
+    /// <summary>Controls editing while an online submission awaits a definitive receipt.</summary>
+    public bool EditingEnabled
+    {
+        get => _editingEnabled;
+        set => SetProperty(ref _editingEnabled, value);
+    }
+
+    /// <summary>Restores the editable draft when its transition into the local outbox fails.</summary>
+    public void RestoreDraftAfterSaveFailure()
+    {
+        _session.Record.Status = RecordStatus.Draft;
+        _session.Record.SubmittedAtUtc = null;
+        IsSubmitted = false;
+        RefreshAll();
+    }
+
     private void Submit()
     {
-        var result = _session.Submit();
+        var result = IsSubmitted ? _session.Validate() : _session.Submit();
         RefreshAll();
 
         if (result.IsValid)

@@ -24,6 +24,8 @@
                     Clicked="OnDownloadFormClicked"
                     HorizontalOptions="Fill" />
 
+            <Button Text="Sample Inspection Demo" Clicked="OnSampleInspectionClicked" />
+
             <Button x:Name="CaptureKitBtn"
                     Text="Capture Widgets Demo"
                     Clicked="OnCaptureKitClicked"

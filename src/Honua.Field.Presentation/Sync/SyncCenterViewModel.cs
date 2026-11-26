@@ -238,7 +238,7 @@ public sealed class SyncCenterViewModel : ObservableObject
                 return null;
             }
 
-            var merge = _pullService.Merge(_form, queryResult.Records, BuildLocalIndex());
+            var merge = _pullService.Merge(_form, queryResult.Records, IndexFeatureLayerRecords(_entries, _form.FormId));
 
             Conflicts.Clear();
             foreach (var classification in merge.Classifications)
@@ -282,12 +282,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Indexes the local records by the server object id they were synced as. Only
-    /// records carrying a numeric <see cref="FieldRecordEntry.RemoteId"/>
-    /// participate; an unsynced (local-only) record has no server counterpart, so a
-    /// matching server feature is correctly treated as new-from-server.
-    /// </summary>
     private FieldRecordEntry? FindEntry(string? recordId)
     {
         if (string.IsNullOrEmpty(recordId))
@@ -299,12 +293,14 @@ public sealed class SyncCenterViewModel : ObservableObject
             string.Equals(e.Record.RecordId, recordId, StringComparison.Ordinal));
     }
 
-    private Dictionary<long, FieldRecord> BuildLocalIndex()
+    /// <summary>Finds records synced through this form's feature layer. Published submissions own a separate target.</summary>
+    public static IReadOnlyDictionary<long, FieldRecord> IndexFeatureLayerRecords(IEnumerable<FieldRecordEntry> entries, string formId)
     {
         var index = new Dictionary<long, FieldRecord>();
-        foreach (var entry in _entries)
+        foreach (var entry in entries)
         {
-            if (entry.RemoteId is { } remoteId
+            if (entry.PublishedSubmission is null && entry.Record.FormId == formId
+                && entry.RemoteId is { } remoteId
                 && long.TryParse(remoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
             {
                 index[objectId] = entry.Record;
@@ -338,8 +334,9 @@ public sealed class SyncCenterViewModel : ObservableObject
                 // New-record adds can be batched into one applyEdits round-trip; a
                 // server update (PendingUpdate keyed by RemoteId) stays one-at-a-time
                 // because applyEdits batching here targets the adds array only.
-                var adds = pending.Where(e => !e.IsServerUpdate).ToList();
-                var updates = pending.Where(e => e.IsServerUpdate).ToList();
+                var adds = pending.Where(e => e.PublishedSubmission is null && e.RemoteId is null
+                    && e.Record.Status != Honua.Sdk.Field.Records.RecordStatus.Deleted).ToList();
+                var updates = pending.Except(adds).ToList();
                 synced += await SyncBatchedAsync(adds, cancellationToken).ConfigureAwait(false);
                 synced += await SyncPerRecordAsync(updates, cancellationToken).ConfigureAwait(false);
             }

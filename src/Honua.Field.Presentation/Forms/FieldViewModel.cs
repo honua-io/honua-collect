@@ -142,7 +142,7 @@ public sealed class FieldViewModel : ObservableObject
         internal FieldChoice Choice { get; }
 
         /// <summary>Display label for the option.</summary>
-        public string Label => Choice.Label;
+        public string Label => Choice.Label ?? Choice.Value;
 
         /// <summary>Whether this choice's code is in the current field value.</summary>
         public bool IsSelected

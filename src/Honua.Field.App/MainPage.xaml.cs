@@ -1,6 +1,8 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Security.Cryptography;
+using System.Text;
 using Honua.Field.App.Services;
 using Honua.Field.App.Views;
 using Honua.Field.Core.Field.Forms;
@@ -30,15 +32,19 @@ public partial class MainPage : ContentPage
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
     private readonly IRelatedRecordStore _relatedStore;
 
-    private FormDefinition _activeForm = SampleForms.FieldSite();
-    private FormSession? _session;
+    private readonly PublishedInspectionPages _inspections;
+    private PublishedFormPackage? _onlineForm;
+
+    private string CachePath => Path.Combine(FileSystem.AppDataDirectory,
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{_settings.BaseUri}\n{_settings.FormId}"))) + ".form.json");
 
     public MainPage(
         AppSettings settings,
         RecordBook book,
         IHttpClientFactory httpClientFactory,
         Func<GeoServicesFeatureSync> syncFactory,
-        IRelatedRecordStore relatedStore)
+        IRelatedRecordStore relatedStore,
+        PublishedInspectionPages inspections)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _book = book ?? throw new ArgumentNullException(nameof(book));
@@ -46,14 +52,35 @@ public partial class MainPage : ContentPage
         _http = _httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
         _relatedStore = relatedStore ?? throw new ArgumentNullException(nameof(relatedStore));
+        _inspections = inspections;
         InitializeComponent();
     }
 
     private async void OnNewInspectionClicked(object? sender, EventArgs e)
     {
-        _session = FormSession.CreateForNewRecord(_activeForm, Guid.NewGuid().ToString("n"));
-        var viewModel = new FormPageViewModel(_session);
-        viewModel.SubmitSucceeded += OnSubmitted;
+        try
+        {
+            var package = _onlineForm ?? PublishedFormPackage.LoadCached(_settings.FormId, CachePath);
+            if (package is null)
+            {
+                StatusLabel.Text = "Download the published form before starting an inspection.";
+                return;
+            }
+
+            var session = package.CreateSession(Guid.NewGuid().ToString("n"));
+            await Navigation.PushAsync(_inspections.Create(package, session, message => StatusLabel.Text = message));
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = $"Could not open inspection: {ex.Message}";
+        }
+    }
+
+    private async void OnSampleInspectionClicked(object? sender, EventArgs e)
+    {
+        var session = FormSession.CreateForNewRecord(SampleForms.FieldSite(), Guid.NewGuid().ToString("n"));
+        var viewModel = new FormPageViewModel(session);
+        viewModel.SubmitSucceeded += (_, record) => OnSubmitted(session, record);
         await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
     }
 
@@ -80,23 +107,25 @@ public partial class MainPage : ContentPage
         StatusLabel.Text = "Downloading latest form…";
         try
         {
-            var form = await new FormPackageClient(_http).DownloadAsync(_settings.ServiceId, "field_site");
-            _activeForm = form;
-            StatusLabel.Text = $"Loaded form “{form.Name}” ({form.Sections.Count} section(s)). Start a new inspection.";
+            var form = await new FormPackageClient(_http).DownloadPublishedAsync(_settings.FormId, CachePath);
+            _onlineForm = form.OfflineEnabled ? null : form;
+            StatusLabel.Text = $"Loaded {form.Definition.Name} (version {form.Version}).";
         }
         catch (Exception ex)
         {
-            // Fall back to the bundled sample form so capture still works offline.
-            _activeForm = SampleForms.FieldSite();
-            StatusLabel.Text = $"Could not download form ({ex.Message}). Using the bundled sample form.";
+            _onlineForm = null;
+            StatusLabel.Text = $"Could not download form: {ex.Message}";
         }
     }
 
-    private async void OnSubmitted(object? sender, FieldRecord record)
+    private async void OnSubmitted(FormSession session, FieldRecord record)
     {
         // Stamp a capture location (the layer is point geometry), track it in the
         // Outbox, and push to the server.
-        record.Location = new FieldGeoPoint(21.31, -157.81);
+        if (session.VisibleFields.Select(field => field.Value).OfType<FieldGeoPoint>().FirstOrDefault() is { } point)
+        {
+            record.Location ??= point;
+        }
         var entry = await _book.AddSubmittedAsync(record);
         entry.MarkUploading();
         await _book.SaveAsync(entry);
@@ -109,7 +138,7 @@ public partial class MainPage : ContentPage
             {
                 entry.MarkSynced(result.ObjectId?.ToString());
                 await _book.SaveAsync(entry);
-                await UploadAttachmentsAsync(sync, result.ObjectId);
+                await UploadAttachmentsAsync(session, sync, result.ObjectId);
                 StatusLabel.Text = $"Synced to server — objectId {result.ObjectId}. See the Records tab.";
             }
             else
@@ -127,14 +156,14 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private async Task UploadAttachmentsAsync(GeoServicesFeatureSync sync, long? objectId)
+    private async Task UploadAttachmentsAsync(FormSession session, GeoServicesFeatureSync sync, long? objectId)
     {
-        if (_session is null || objectId is not { } featureId)
+        if (objectId is not { } featureId)
         {
             return;
         }
 
-        var media = _session.Fields.SelectMany(f => f.Media).ToList();
+        var media = session.Fields.SelectMany(f => f.Media).ToList();
         for (var i = 0; i < media.Count; i++)
         {
             var attachment = media[i];

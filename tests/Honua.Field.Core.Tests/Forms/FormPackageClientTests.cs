@@ -3,6 +3,8 @@
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
+using Honua.Field.Core.Field;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Forms;
 using Honua.Sdk.Field.Forms;
@@ -391,6 +393,68 @@ public class FormPackageClientTests
         finally
         {
             File.Delete(cachePath);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Published_upload_preserves_typed_values_and_requires_matching_evidence_receipt(bool includesEvidenceReceipt)
+    {
+        var cache = Path.GetTempFileName();
+        var evidence = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(cache, PublishedPackage);
+            await File.WriteAllBytesAsync(evidence, [7, 8, 9]);
+            var server = new Uri("https://field.example/");
+            var package = PublishedFormPackage.LoadCached("inspection", cache)!;
+            var session = package.CreateSession("capture-1");
+            session.SetValue("quantity", "4.5");
+            session.AddMedia(new CapturedMediaAttachment
+            {
+                FieldId = "clip", AttachmentId = "video-1", ContentType = "video/mp4",
+                LocalPath = evidence, SizeBytes = 3,
+            });
+            var snapshot = PublishedFormSubmission.Capture(package, session, server);
+            using var request = JsonDocument.Parse(snapshot.RequestJson);
+            var root = request.RootElement;
+            Assert.Equal("capture-1", root.GetProperty("idempotencyKey").GetString());
+            Assert.Equal(7, root.GetProperty("formVersion").GetInt32());
+            Assert.Equal(JsonValueKind.Null, root.GetProperty("geometry").ValueKind);
+            var values = root.GetProperty("values");
+            Assert.Equal(4.5m, values.GetProperty("quantity").GetDecimal());
+            Assert.Equal("[1,\"ok\"]", values.GetProperty("status").GetRawText());
+            Assert.False(values.TryGetProperty("total", out _));
+            using var http = new HttpClient(new MultipartHandler(snapshot.RequestJson, includesEvidenceReceipt)) { BaseAddress = server };
+            var result = await snapshot.UploadAsync(http);
+            Assert.Equal(includesEvidenceReceipt, result.Success);
+            using var other = new HttpClient(new MultipartHandler(snapshot.RequestJson, true)) { BaseAddress = new Uri("https://other.example/") };
+            Assert.False((await snapshot.UploadAsync(other)).Success);
+        }
+        finally
+        {
+            File.Delete(cache);
+            File.Delete(evidence);
+        }
+    }
+
+    private sealed class MultipartHandler(string envelope, bool includeReceipt) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal("/api/v1/forms/inspection/submissions", request.RequestUri!.AbsolutePath);
+            var parts = Assert.IsType<MultipartFormDataContent>(request.Content).ToArray();
+            Assert.Equal(2, parts.Length);
+            Assert.Equal("submission", parts[0].Headers.ContentDisposition!.Name!.Trim('"'));
+            Assert.Equal(envelope, await parts[0].ReadAsStringAsync(cancellationToken));
+            Assert.Equal("file0", parts[1].Headers.ContentDisposition!.Name!.Trim('"'));
+            Assert.Equal(new byte[] { 7, 8, 9 }, await parts[1].ReadAsByteArrayAsync(cancellationToken));
+            var outcomes = includeReceipt ? """[{"clientAttachmentId":"video-1","status":"accepted","attachmentId":3}]""" : "[]";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"status":"accepted","formId":"inspection","formVersion":7,"targetFeatureId":4,"editOutcome":{"succeeded":true},"attachmentOutcomes":""" + outcomes + "}"),
+            };
         }
     }
 

@@ -21,6 +21,9 @@ public sealed record AppSettings
     /// <summary>Feature service id of the editable layer.</summary>
     public required string ServiceId { get; init; }
 
+    /// <summary>Published inspection form to download.</summary>
+    public string FormId { get; init; } = "field_site";
+
     /// <summary>Layer id within the feature service.</summary>
     public required int LayerId { get; init; }
 
@@ -62,6 +65,7 @@ public sealed record AppSettings
             ServerBaseUrl = server.GetProperty("baseUrl").GetString()!,
             ServiceId = server.GetProperty("serviceId").GetString()!,
             LayerId = server.GetProperty("layerId").GetInt32(),
+            FormId = server.TryGetProperty("formId", out var form) ? form.GetString() ?? "field_site" : "field_site",
             DemoApiKey = ReadApiKey(root), // null in source — no credential ships in the binary
             PinnedCertificateSpki = ReadPins(server),
         };
@@ -108,6 +112,22 @@ public sealed record AppSettings
             }
 
             using var document = JsonDocument.Parse(File.ReadAllText(path));
+#if DEBUG
+            if (document.RootElement.TryGetProperty("server", out var server))
+            {
+                var endpoint = new Uri(server.GetProperty("baseUrl").GetString()!, UriKind.Absolute);
+                if (!EndpointSecurity.IsDevelopmentLoopback(endpoint) || endpoint.Scheme is not ("http" or "https"))
+                {
+                    return settings;
+                }
+
+                settings = settings with
+                {
+                    ServerBaseUrl = endpoint.AbsoluteUri,
+                    FormId = server.TryGetProperty("formId", out var id) ? id.GetString() ?? settings.FormId : settings.FormId,
+                };
+            }
+#endif
             return settings with { DemoApiKey = ReadApiKey(document.RootElement) ?? settings.DemoApiKey };
         }
         catch (Exception)

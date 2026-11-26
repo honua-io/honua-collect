@@ -14,6 +14,8 @@ namespace Honua.Field.App.Views;
 public partial class RecordsPage : ContentPage
 {
     private readonly RecordBook _book;
+    private readonly PublishedInspectionPages _inspections;
+    private readonly AppSettings _settings;
     private readonly IRecordHistoryStore _historyStore;
     private readonly RecordRevertService _revertService;
     private readonly IAuthSessionStore _sessionStore;
@@ -24,13 +26,17 @@ public partial class RecordsPage : ContentPage
         IRecordHistoryStore historyStore,
         RecordRevertService revertService,
         IAuthSessionStore sessionStore,
-        IDeviceAuthorization authorization)
+        IDeviceAuthorization authorization,
+        PublishedInspectionPages inspections,
+        AppSettings settings)
     {
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _historyStore = historyStore ?? throw new ArgumentNullException(nameof(historyStore));
         _revertService = revertService ?? throw new ArgumentNullException(nameof(revertService));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
+        _inspections = inspections;
+        _settings = settings;
         InitializeComponent();
     }
 
@@ -53,8 +59,23 @@ public partial class RecordsPage : ContentPage
             return;
         }
 
+        if (row.Entry.PublishedDraft is { } draft)
+        {
+            try
+            {
+                var (package, session) = draft.Open(row.Entry.Record.FormId, row.RecordId, _settings.BaseUri);
+                await Navigation.PushAsync(_inspections.Create(package, session));
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Open draft", ex.Message, "OK");
+            }
+
+            return;
+        }
+
         var editorId = _sessionStore.Current?.UserId;
-        var canEdit = !string.IsNullOrWhiteSpace(editorId)
+        var canEdit = row.Entry.PublishedSubmission is null && !string.IsNullOrWhiteSpace(editorId)
             && _authorization.Can(FieldPermission.EditRecords, row.RecordId);
 
         var historyVm = canEdit

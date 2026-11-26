@@ -14,7 +14,7 @@
             <DataTemplate x:Key="TextEditor">
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
-                    <Entry Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
+                    <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>
             </DataTemplate>
@@ -22,7 +22,7 @@
             <DataTemplate x:Key="NumberEditor">
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
-                    <Entry Text="{Binding Value, Mode=TwoWay}" Keyboard="Numeric" />
+                    <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" Keyboard="Numeric" />
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>
             </DataTemplate>
@@ -50,7 +50,8 @@
                         <BindableLayout.ItemTemplate>
                             <DataTemplate>
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                    <CheckBox AutomationId="{Binding Label, StringFormat='choice_{0}'}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                               SemanticProperties.Description="{Binding Label}" />
                                     <Label Grid.Column="1" Text="{Binding Label}" VerticalOptions="Center" />
                                 </Grid>
@@ -73,7 +74,7 @@
             <DataTemplate x:Key="CalculatedEditor">
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
-                    <Label Text="{Binding Value}" />
+                    <Label AutomationId="{Binding FieldId}" Text="{Binding Value}" />
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>
             </DataTemplate>
@@ -115,7 +116,7 @@
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <Entry Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
+                        <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
                         <Button Grid.Column="1" Text="{Binding CaptureActionLabel}" Clicked="OnScanBarcode" />
                     </Grid>
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
@@ -137,7 +138,7 @@
             <DataTemplate x:Key="FallbackEditor">
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
-                    <Entry Text="{Binding Value, Mode=TwoWay}" />
+                    <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" />
                 </VerticalStackLayout>
             </DataTemplate>
 
@@ -161,12 +162,12 @@
         <VerticalStackLayout Padding="16" Spacing="14">
 
             <!-- Scalar fields -->
-            <VerticalStackLayout Spacing="14"
+            <VerticalStackLayout Spacing="14" IsEnabled="{Binding EditingEnabled}"
                                  BindableLayout.ItemsSource="{Binding Fields}"
                                  BindableLayout.ItemTemplateSelector="{StaticResource WidgetSelector}" />
 
             <!-- Repeatable sections -->
-            <VerticalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding RepeatGroups}">
+            <VerticalStackLayout Spacing="10" IsEnabled="{Binding EditingEnabled}" BindableLayout.ItemsSource="{Binding RepeatGroups}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate>
                         <VerticalStackLayout Spacing="8">
@@ -192,10 +193,10 @@
 
             <Label Text="{Binding ErrorSummary}" TextColor="Red" />
 
-            <Button Text="✨ AI fill from photo" Clicked="OnAiFill" HorizontalOptions="Fill" />
+            <Button Text="✨ AI fill from photo" Clicked="OnAiFill" IsEnabled="{Binding EditingEnabled}" HorizontalOptions="Fill" />
 
             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                <Button Text="Save draft" Command="{Binding SaveDraftCommand}" />
+                <Button Text="Save draft" IsVisible="{Binding CanSaveDraft}" Command="{Binding SaveDraftCommand}" />
                 <Button Grid.Column="1" Text="Submit" Command="{Binding SubmitCommand}" />
             </Grid>
 
