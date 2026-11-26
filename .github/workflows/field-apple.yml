@@ -11,7 +11,7 @@ on:
       - NuGet.config
       - global.json
   push:
-    branches: [trunk]
+    branches: [verify/field-net11-apple]
     paths:
       - .github/workflows/field-apple.yml
       - src/**
