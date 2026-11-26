@@ -1,0 +1,55 @@
+appId: io.honua.collect
+---
+- tapOn: Start New Inspection
+- tapOn:
+    id: '(.*:id/)?name'
+- inputText: ${INSPECTION_NAME}
+- hideKeyboard
+- tapOn:
+    id: '(.*:id/)?choice_Open'
+- tapOn:
+    id: '(.*:id/)?choice_Closed'
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?total'
+      text: '2'
+- tapOn: Add photo
+- tapOn: Choose from gallery
+- tapOn:
+    id: '.*:id/(icon_thumbnail|thumbnail)'
+    index: 0
+- tapOn: Skip
+- assertVisible: 1 attached
+- scrollUntilVisible:
+    element: Capture current location
+- tapOn: Capture current location
+- extendedWaitUntil:
+    visible: '21\.31000, -157\.81000.*'
+    timeout: 25000
+- scrollUntilVisible:
+    element: Add
+- tapOn: Add
+- tapOn: Add
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?note'
+- tapOn:
+    id: '(.*:id/)?note'
+    index: 0
+- inputText: Offline visit one
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?note'
+      index: 1
+- tapOn:
+    id: '(.*:id/)?note'
+    index: 1
+- inputText: Offline visit two
+- hideKeyboard
+- scrollUntilVisible:
+    element: Submit
+- tapOn: Submit
+- extendedWaitUntil:
+    visible: 'Saved to Outbox.*'
+    timeout: 15000

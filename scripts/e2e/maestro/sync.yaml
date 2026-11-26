@@ -1,0 +1,6 @@
+appId: io.honua.collect
+---
+- tapOn: Sync now
+- extendedWaitUntil:
+    visible: 'Outbox 0 .* Sent [1-9][0-9]* .*'
+    timeout: 45000
