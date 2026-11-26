@@ -140,6 +140,14 @@ if [[ -n ${HONUA_E2E_CORRECTED_NAME:-} ]]; then
     "${adb[@]}" shell am force-stop "$app"
     "${adb[@]}" reverse --remove "tcp:${port}"
     run_flow correct-rejection
+    # Move the caret to the end and clear the focused single-line Android editor.
+    # Android's selection toolbar varies with the device keyboard and text classifier.
+    delete_keys=()
+    for ((index = 0; index < ${#name}; ++index)); do
+        delete_keys+=(KEYCODE_DEL)
+    done
+    "${adb[@]}" shell input keyevent KEYCODE_MOVE_END "${delete_keys[@]}"
+    run_flow submit-correction
     "${adb[@]}" shell am force-stop "$app"
     run_flow verify-outbox
     "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
