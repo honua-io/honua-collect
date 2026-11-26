@@ -8,22 +8,11 @@ appId: io.honua.collect
 - assertVisible: Capture geometry
 - tapOn:
     id: GeometryType
-# UIKit exposes only the selected wheel row. The iPhone hierarchy also
-# matches the field behind the picker, so tap the third row by position.
-- runFlow:
-    when:
-      true: ${FAMILY == "iPhone"}
-    commands:
-      - tapOn:
-          point: 50%,95%
-- runFlow:
-    when:
-      true: ${FAMILY == "iPad"}
-    commands:
-      - tapOn:
-          text: Point
-          index: -1
-          point: 50%,70%
+# UIKit exposes only the selected wheel row. Tap the third row
+# relative to the native picker container.
+- tapOn:
+    id: inputView
+    point: 50%,77%
 - assertVisible: Polygon
 - tapOn:
     text: Done

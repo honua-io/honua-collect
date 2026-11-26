@@ -99,7 +99,7 @@ jobs:
             exit 1
           fi
           echo "Running polygon capture on $FAMILY"
-          if ! run_bounded 420 maestro --device "$device" test -e FAMILY="$FAMILY" --format junit \
+          if ! run_bounded 420 maestro --device "$device" test --format junit \
             --output "$results/junit.xml" --test-output-dir "$results" \
             --debug-output "$results" scripts/e2e/maestro/geometry-ios.yaml; then
             run_bounded 60 xcrun simctl io "$device" screenshot "$results/failure.png" || true
