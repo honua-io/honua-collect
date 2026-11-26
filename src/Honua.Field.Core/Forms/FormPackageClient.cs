@@ -111,7 +111,7 @@ public sealed class FormPackageClient
         if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone
             or System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
-            File.Delete(cachePath);
+            RemovePublishedCache(cachePath);
         }
 
         response.EnsureSuccessStatusCode();
@@ -119,7 +119,7 @@ public sealed class FormPackageClient
         var package = PublishedFormPackage.Parse(formId, json);
         if (!package.OfflineEnabled)
         {
-            File.Delete(cachePath);
+            RemovePublishedCache(cachePath);
             return package;
         }
 
@@ -138,6 +138,14 @@ public sealed class FormPackageClient
         }
 
         return package;
+    }
+
+    private static void RemovePublishedCache(string cachePath)
+    {
+        if (File.Exists(cachePath))
+        {
+            File.Delete(cachePath);
+        }
     }
 
     /// <summary>

@@ -315,6 +315,85 @@ public class FormPackageClientTests
         Assert.Equal(["b", "a"], section.Fields.Select(f => f.FieldId));
     }
 
+    private const string PublishedPackage = """
+        {
+          "formId": "inspection",
+          "version": 7,
+          "status": "published",
+          "package": {
+            "formId": "inspection",
+            "schemaVersion": "honua.form-package.v1",
+            "offlinePolicy": { "enabled": true },
+            "submitPolicy": { "requiresGeometry": false },
+            "attachmentPolicy": { "fields": [
+              { "fieldId": "clip", "allowedContentTypes": ["video/mp4"], "maxCount": 1 }
+            ] },
+            "fields": [
+              { "fieldId": "status", "type": "multiChoice", "defaultValue": [1, "ok"],
+                "domain": { "choices": [{ "code": 1 }, { "code": "ok" }] } },
+              { "fieldId": "quantity", "type": "number", "defaultValue": 3,
+                "constraintExpression": ". > 0", "constraintMessage": "Enter a positive number" },
+              { "fieldId": "total", "type": "number", "readOnly": true,
+                "calculatedExpression": "$quantity * 2", "relevanceExpression": "$quantity > 0" },
+              { "fieldId": "clip", "type": "media" }
+            ]
+          }
+        }
+        """;
+
+    [Fact]
+    public async Task DownloadPublishedAsync_maps_actual_envelope_and_reopens_offline_cache()
+    {
+        var cachePath = Path.GetTempFileName();
+        var handler = new StubHandler(PublishedPackage);
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://s.example") };
+
+        try
+        {
+            var package = await new FormPackageClient(client).DownloadPublishedAsync("inspection", cachePath);
+            Assert.Equal("https://s.example/api/v1/forms/inspection", handler.LastRequestUri!.ToString());
+            Assert.Equal(7, package.Version);
+            Assert.False(package.RequiresGeometry);
+            Assert.True(package.OfflineEnabled);
+
+            var cached = Assert.IsType<PublishedFormPackage>(PublishedFormPackage.LoadCached("inspection", cachePath));
+            var fields = Assert.Single(cached.Definition.Sections).Fields.ToDictionary(field => field.FieldId);
+            Assert.Equal(FormFieldType.MultipleChoice, fields["status"].Type);
+            Assert.Equal(FormFieldType.Calculated, fields["total"].Type);
+            Assert.Equal("$quantity * 2", fields["total"].CalculatedExpression);
+            Assert.Equal("$quantity > 0", fields["total"].RelevanceExpression);
+            Assert.Equal(". > 0", fields["quantity"].Validation.ConstraintExpression);
+            Assert.Equal(FormFieldType.Video, fields["clip"].Type);
+            Assert.Equal("[1,\"ok\"]", System.Text.Json.JsonSerializer.Serialize(
+                cached.GetValueForSubmission("status", new[] { "1", "ok" })));
+        }
+        finally
+        {
+            File.Delete(cachePath);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadPublishedAsync_removes_cache_when_offline_policy_changes()
+    {
+        var cachePath = Path.GetTempFileName();
+        await File.WriteAllTextAsync(cachePath, PublishedPackage);
+        var handler = new StubHandler(PublishedPackage.Replace("\"enabled\": true", "\"enabled\": false", StringComparison.Ordinal));
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://s.example") };
+
+        try
+        {
+            var package = await new FormPackageClient(client).DownloadPublishedAsync("inspection", cachePath);
+            Assert.False(package.OfflineEnabled);
+            Assert.Null(PublishedFormPackage.LoadCached("inspection", cachePath));
+            Assert.False(File.Exists(cachePath));
+        }
+        finally
+        {
+            File.Delete(cachePath);
+        }
+    }
+
     private sealed class StubHandler(string body, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
         public Uri? LastRequestUri { get; private set; }

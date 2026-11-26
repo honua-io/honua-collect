@@ -183,11 +183,14 @@ public sealed class PublishedFormPackage
 
         var policy = attachmentPolicy.GetValueOrDefault(fieldId);
         var required = field.Property("required").ValueKind == JsonValueKind.True || policy.Property("required").ValueKind == JsonValueKind.True;
-        var type = field.Text("type")?.ToLowerInvariant() switch
+        var calculatedExpression = field.Text("calculatedExpression");
+        var mediaTypes = policy.Property("allowedContentTypes").Items()
+            .Select(item => item.GetString()).OfType<string>().ToArray();
+        var type = calculatedExpression is not null ? FormFieldType.Calculated : field.Text("type")?.ToLowerInvariant() switch
         {
             "choice" or "singlechoice" => FormFieldType.SingleChoice,
             "multichoice" or "multiplechoice" => FormFieldType.MultipleChoice,
-            "attachment" or "media" => FormFieldType.Photo,
+            "attachment" or "media" => ResolveMediaType(mediaTypes),
             "geometry" => FormFieldType.Location,
             var token => FormPackageClient.MapType(token),
         };
@@ -202,14 +205,35 @@ public sealed class PublishedFormPackage
             Required = required,
             Choices = choices,
             VisibilityRule = MapVisibility(field.Property("visibility")),
+            RelevanceExpression = field.Text("relevanceExpression"),
+            CalculatedExpression = calculatedExpression,
             Validation = new FieldValidationRule
             {
                 MinNumericValue = domain.Property("min").Number(),
                 MaxNumericValue = domain.Property("max").Number(),
                 MinMediaCount = FormFieldTypes.IsMedia(type) && required ? 1 : null,
                 MaxMediaCount = policy.Property("maxCount").Integer(),
+                ConstraintExpression = field.Text("constraintExpression"),
+                ConstraintMessage = field.Text("constraintMessage"),
             },
         };
+    }
+
+    private static FormFieldType ResolveMediaType(string[] types)
+    {
+        if (types.Length == 0 || types.All(type => type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)))
+        {
+            return FormFieldType.Photo;
+        }
+
+        if (types.All(type => type.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
+        {
+            return FormFieldType.Video;
+        }
+
+        return types.All(type => type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+            ? FormFieldType.Audio
+            : FormFieldType.File;
     }
 
     private static FieldVisibilityRule? MapVisibility(JsonElement rule)
