@@ -9,7 +9,7 @@ namespace Honua.Field.Core.Tests.Field.Geometry;
 public class NmeaFixAssemblerTests
 {
     private const string Gga = "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47";
-    private const string Gst = "$GPGST,172814.0,0.006,0.023,0.020,273.6,0.023,0.020,0.031*6A";
+    private static readonly string Gst = Nmea("GPGST,123519.0,0.006,0.023,0.020,273.6,0.023,0.020,0.031");
 
     // Builds a checksum-valid sentence from its body (an independent XOR, so it
     // cross-checks NmeaParser.ValidateChecksum rather than reusing it).
@@ -22,6 +22,43 @@ public class NmeaFixAssemblerTests
         }
 
         return $"${body}*{cs:X2}";
+    }
+
+    [Theory]
+    [InlineData("123519", "123520", "123521")]
+    [InlineData("235959", "000000", "000001")]
+    public void Delayed_position_and_accuracy_cannot_resurrect_a_lost_fix(
+        string fixedTime, string voidTime, string reacquiredTime)
+    {
+        var asm = new NmeaFixAssembler();
+        var fixedGga = Nmea($"GNGGA,{fixedTime},4807.038,N,01131.000,E,4,12,0.6,545.4,M,46.9,M,,");
+        var fixedGst = Nmea($"GNGST,{fixedTime},0.006,0.023,0.020,273.6,0.023,0.020,0.031");
+        asm.Process(fixedGga);
+        asm.Process(fixedGst);
+        Assert.True(asm.Current.MeetsAccuracy(0.05, requireAccuracy: true));
+
+        asm.Process(Nmea($"GNRMC,{voidTime},V,,,,,,,240394,,,N"));
+        Assert.True(asm.Process(fixedGga));
+        Assert.True(asm.Process(fixedGst));
+        Assert.False(asm.HasFix);
+        Assert.False(asm.Current.MeetsAccuracy(0.05, requireAccuracy: true));
+
+        asm.Process(Nmea($"GNGGA,{reacquiredTime},4807.039,N,01131.001,E,4,12,0.6,545.4,M,46.9,M,,"));
+        Assert.True(asm.HasFix);
+        Assert.False(asm.Current.MeetsAccuracy(0.05, requireAccuracy: true));
+    }
+
+    [Fact]
+    public void Future_gst_waits_for_its_position_through_a_valid_prior_epoch()
+    {
+        var asm = new NmeaFixAssembler();
+        asm.Process(Nmea("GNGST,000000,0.006,0.023,0.020,273.6,0.023,0.020,0.031"));
+        asm.Process(Nmea("GNRMC,235959,A,4807.038,N,01131.000,E,,,230394,,,A"));
+        Assert.Null(asm.Current.HorizontalAccuracyMeters);
+
+        asm.Process(Nmea("GNGGA,000000,4807.039,N,01131.001,E,4,12,0.6,545.4,M,46.9,M,,"));
+        Assert.True(asm.Current.MeetsAccuracy(0.05, requireAccuracy: true));
+        Assert.Equal(new DateTimeOffset(1994, 3, 24, 0, 0, 0, TimeSpan.Zero), asm.Current.Timestamp);
     }
 
     [Fact]
@@ -257,6 +294,91 @@ public class NmeaFixAssemblerTests
 
         Assert.Equal(before, asm.Current);
     }
+
+    [Theory]
+    [InlineData("GGA GST RMC")]
+    [InlineData("GGA RMC GST")]
+    [InlineData("GST GGA RMC")]
+    [InlineData("GST RMC GGA")]
+    [InlineData("RMC GGA GST")]
+    [InlineData("RMC GST GGA")]
+    public void Same_epoch_precision_survives_every_sentence_order(string order)
+    {
+        var assembler = new NmeaFixAssembler();
+        foreach (var type in order.Split(' '))
+        {
+            Assert.True(assembler.Process(type switch
+            {
+                "GGA" => RtkGga("123519"),
+                "RMC" => Rmc("123519.00"),
+                _ => Gst,
+            }));
+        }
+
+        Assert.True(assembler.Current.IsRtkFixed);
+        Assert.True(assembler.Current.MeetsAccuracy(0.05, requireAccuracy: true));
+        Assert.Equal(0.031, assembler.Current.VerticalAccuracyMeters);
+    }
+
+    [Theory]
+    [InlineData("GNGGA,123520,,,,,0,00,,,M,,M,,")]
+    [InlineData("GNRMC,123520,V,4807.038,N,01131.000,E,,,230394")]
+    [InlineData("GNGGA,123520,,N,01131.000,E,4,12,0.01,545.4,M,46.9,M,,")]
+    public void Vertex_rejects_loss_of_fix_and_recovers_only_with_fresh_precision(string lostFix)
+    {
+        var assembler = new NmeaFixAssembler();
+        assembler.Process(RtkGga("123519"));
+        assembler.Process(Gst);
+        var average = new GpsAverager();
+        average.Add(assembler.Current.ToFieldGeoPoint());
+        var gate = new VertexQualityGate { MaxAccuracyMeters = 0.05, RequireFixAccuracy = true };
+        Assert.True(gate.Evaluate(average, assembler.Current).Accepted);
+
+        assembler.Process(Nmea(lostFix));
+        assembler.Process(Rmc("123520"));
+        assembler.Process(RtkGga("123520"));
+        Assert.False(assembler.HasFix);
+        Assert.Null(assembler.Current.HorizontalAccuracyMeters);
+        Assert.Equal(VertexQualityRejection.FixBelowAccuracy, gate.Evaluate(average, assembler.Current).Rejection);
+        Assert.False(new VertexQualityGate().Evaluate(average, assembler.Current).Accepted);
+
+        assembler.Process(Rmc("123521"));
+        Assert.Equal(NmeaFixQuality.Autonomous, assembler.Current.Quality);
+        Assert.Null(assembler.Current.HorizontalAccuracyMeters);
+        Assert.False(gate.Evaluate(average, assembler.Current).Accepted);
+
+        assembler.Process(RtkGga("123521"));
+        assembler.Process(Gst);
+        Assert.Equal(3.0, assembler.Current.HorizontalAccuracyMeters);
+        Assert.False(gate.Evaluate(average, assembler.Current).Accepted);
+
+        assembler.Process(Nmea("GNGST,123521,0.006,0.023,0.020,273.6,0.023,0.020,0.031"));
+        Assert.True(gate.Evaluate(average, assembler.Current).Accepted);
+    }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("NaN", "Infinity")]
+    [InlineData("-0.001", "0.001")]
+    public void Unusable_gst_does_not_retain_previous_precision(string latitudeStd, string longitudeStd)
+    {
+        var assembler = new NmeaFixAssembler();
+        assembler.Process(RtkGga("123519"));
+        assembler.Process(Gst);
+        assembler.Process(Nmea($"GPGST,123519,0,0,0,0,{latitudeStd},{longitudeStd},"));
+        Assert.Equal(3.0, assembler.Current.HorizontalAccuracyMeters);
+        Assert.Null(assembler.Current.VerticalAccuracyMeters);
+
+        assembler.Process(Nmea("GNGGA,123520,4807.039,N,01131.001,E,4,12,,545.4,M,46.9,M,,"));
+        Assert.Null(assembler.Current.Hdop);
+        Assert.Null(assembler.Current.HorizontalAccuracyMeters);
+    }
+
+    private static string RtkGga(string time)
+        => Nmea($"GNGGA,{time},4807.038,N,01131.000,E,4,12,0.6,545.4,M,46.9,M,,");
+
+    private static string Rmc(string time)
+        => Nmea($"GNRMC,{time},A,4807.038,N,01131.000,E,,,230394");
 
     [Fact]
     public void Parsed_fixes_feed_the_gps_averager()

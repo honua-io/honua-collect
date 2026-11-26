@@ -10,6 +10,7 @@ namespace Honua.Field.Core.Field.Geometry.Nmea;
 /// horizontal accuracy estimate; RMC supplies the time and a validity flag. Feed
 /// it sentences as they arrive and read <see cref="Current"/>. Talker id is
 /// ignored, so GPS/GLONASS/Galileo/multi-constellation (GP/GL/GA/GN…) all work.
+/// Call <see cref="Reset"/> when reconnecting a receiver or restarting a replay.
 /// </summary>
 public sealed class NmeaFixAssembler
 {
@@ -24,9 +25,12 @@ public sealed class NmeaFixAssembler
     private double? _course;
     private int? _satellites;
     private TimeSpan? _time;
+    private TimeSpan? _lastTimedMeasurement;
     private DateOnly? _date;
+    private bool _invalidEpoch;
+    private (TimeSpan Time, double? Horizontal, double? Vertical)? _pendingGst;
 
-    /// <summary>The fix assembled from everything seen so far.</summary>
+    /// <summary>The fix assembled from sentences for the current UTC measurement time.</summary>
     public NmeaFix Current => new()
     {
         Quality = _quality,
@@ -95,12 +99,78 @@ public sealed class NmeaFixAssembler
     /// <summary>Resets the assembler to begin a fresh fix.</summary>
     public void Reset()
     {
+        ClearMeasurement();
+        _time = _lastTimedMeasurement = null;
+        _date = null;
+        _invalidEpoch = false;
+        _pendingGst = null;
+    }
+
+    private void ClearMeasurement()
+    {
         _quality = NmeaFixQuality.None;
         _latitude = _longitude = _altitude = null;
         _gstHorizontalAccuracy = _verticalAccuracy = _hdop = _speed = _course = null;
         _satellites = null;
-        _time = null;
-        _date = null;
+    }
+
+    private bool TryBeginMeasurement(TimeSpan? time)
+    {
+        if (time is { } timed)
+        {
+            if (time == _time)
+            {
+                return true;
+            }
+
+            if (_lastTimedMeasurement is { } previous)
+            {
+                if (!IsLater(timed, previous))
+                {
+                    return false;
+                }
+
+                if (timed < previous && _date is { } date)
+                {
+                    _date = date.AddDays(1);
+                }
+            }
+
+            _lastTimedMeasurement = timed;
+        }
+
+        ClearMeasurement();
+        _time = time;
+        _invalidEpoch = false;
+        if (_pendingGst is { } pending)
+        {
+            if (pending.Time == time)
+            {
+                _gstHorizontalAccuracy = pending.Horizontal;
+                _verticalAccuracy = pending.Vertical;
+                _pendingGst = null;
+            }
+            else if (time is null || !IsLater(pending.Time, time.Value))
+            {
+                _pendingGst = null;
+            }
+        }
+
+        return true;
+    }
+
+    // In a continuous receiver stream the closest time of day is the measurement
+    // epoch. This handles the UTC midnight rollover in either arrival order.
+    private static bool IsLater(TimeSpan candidate, TimeSpan previous)
+    {
+        var hours = (candidate - previous).TotalHours;
+        return hours is > 0 and <= 12 or < -12;
+    }
+
+    private void InvalidateMeasurement()
+    {
+        ClearMeasurement();
+        _invalidEpoch = true;
     }
 
     private bool ProcessGga(string[] f)
@@ -110,24 +180,28 @@ public sealed class NmeaFixAssembler
             return false;
         }
 
-        _time = NmeaParser.ParseTime(f[1]) ?? _time;
-        _quality = NmeaParser.ParseInt(f[6]) is { } q && Enum.IsDefined((NmeaFixQuality)q)
+        if (!TryBeginMeasurement(NmeaParser.ParseTime(f[1])))
+        {
+            return true;
+        }
+
+        var quality = NmeaParser.ParseInt(f[6]) is { } q && Enum.IsDefined((NmeaFixQuality)q)
             ? (NmeaFixQuality)q
             : NmeaFixQuality.None;
-        _satellites = NmeaParser.ParseInt(f[7]) ?? _satellites;
-        _hdop = NmeaParser.ParseDouble(f[8]) ?? _hdop;
-        _altitude = NmeaParser.ParseDouble(f[9]) ?? _altitude;
-
-        if (_quality != NmeaFixQuality.None)
+        var latitude = NmeaParser.ParseLatitude(f[2], f[3]);
+        var longitude = NmeaParser.ParseLongitude(f[4], f[5]);
+        if (quality == NmeaFixQuality.None || latitude is null || longitude is null)
         {
-            _latitude = NmeaParser.ParseLatitude(f[2], f[3]) ?? _latitude;
-            _longitude = NmeaParser.ParseLongitude(f[4], f[5]) ?? _longitude;
+            InvalidateMeasurement();
         }
-        else
+        else if (!_invalidEpoch)
         {
-            // No fix: drop any stale coordinate so HasPosition reflects reality.
-            _latitude = null;
-            _longitude = null;
+            _quality = quality;
+            _latitude = latitude;
+            _longitude = longitude;
+            _satellites = NmeaParser.ParseInt(f[7]);
+            _hdop = ParseNonNegative(f[8]);
+            _altitude = NmeaParser.ParseDouble(f[9]);
         }
 
         return true;
@@ -140,33 +214,29 @@ public sealed class NmeaFixAssembler
             return false;
         }
 
-        _time = NmeaParser.ParseTime(f[1]) ?? _time;
-
-        // Speed (knots, f[7]), course (degrees true, f[8]) and date (ddmmyy, f[9]) are
-        // optional fields — capture them whenever present, independent of fix validity.
-        if (NmeaParser.ParseDouble(f.Length > 7 ? f[7] : null) is { } knots)
+        if (!TryBeginMeasurement(NmeaParser.ParseTime(f[1])))
         {
-            _speed = knots * KnotsToMetersPerSecond;
+            return true;
         }
 
-        _course = NmeaParser.ParseDouble(f.Length > 8 ? f[8] : null) ?? _course;
         _date = NmeaParser.ParseDate(f.Length > 9 ? f[9] : null) ?? _date;
 
-        var valid = string.Equals(f[2], "A", StringComparison.OrdinalIgnoreCase);
-        if (valid)
+        var latitude = NmeaParser.ParseLatitude(f[3], f[4]);
+        var longitude = NmeaParser.ParseLongitude(f[5], f[6]);
+        if (!string.Equals(f[2], "A", StringComparison.OrdinalIgnoreCase) ||
+            latitude is null || longitude is null)
         {
-            var lat = NmeaParser.ParseLatitude(f[3], f[4]);
-            var lon = NmeaParser.ParseLongitude(f[5], f[6]);
-            if (lat is not null && lon is not null)
+            InvalidateMeasurement();
+        }
+        else if (!_invalidEpoch)
+        {
+            _speed = ParseNonNegative(f.Length > 7 ? f[7] : null) * KnotsToMetersPerSecond;
+            _course = NmeaParser.ParseDouble(f.Length > 8 ? f[8] : null);
+            if (_quality == NmeaFixQuality.None)
             {
-                _latitude = lat;
-                _longitude = lon;
-                // RMC carries no quality indicator; a valid sentence is at least an
-                // autonomous 2D fix, so don't leave the position quality at None.
-                if (_quality == NmeaFixQuality.None)
-                {
-                    _quality = NmeaFixQuality.Autonomous;
-                }
+                _latitude = latitude;
+                _longitude = longitude;
+                _quality = NmeaFixQuality.Autonomous;
             }
         }
 
@@ -180,17 +250,29 @@ public sealed class NmeaFixAssembler
             return false;
         }
 
-        var latStd = NmeaParser.ParseDouble(f[6]);
-        var lonStd = NmeaParser.ParseDouble(f[7]);
-        if (latStd is { } la && lonStd is { } lo)
+        if (NmeaParser.ParseTime(f[1]) is { } time)
         {
-            _gstHorizontalAccuracy = Math.Sqrt((la * la) + (lo * lo));
+            var latStd = ParseNonNegative(f[6]);
+            var lonStd = ParseNonNegative(f[7]);
+            double? horizontal = latStd is { } la && lonStd is { } lo ? double.Hypot(la, lo) : null;
+            var vertical = ParseNonNegative(f[8]);
+            if (time == _time && !_invalidEpoch)
+            {
+                _gstHorizontalAccuracy = horizontal;
+                _verticalAccuracy = vertical;
+            }
+            else if (time != _time &&
+                (_lastTimedMeasurement is not { } previous || IsLater(time, previous)))
+            {
+                _pendingGst = (time, horizontal, vertical);
+            }
         }
-
-        _verticalAccuracy = NmeaParser.ParseDouble(f[8]) ?? _verticalAccuracy;
 
         return true;
     }
+
+    private static double? ParseNonNegative(string? field)
+        => NmeaParser.ParseDouble(field) is >= 0 and var value ? value : null;
 
     // 1 knot = 1 nautical mile (1852 m) per hour.
     private const double KnotsToMetersPerSecond = 1852.0 / 3600.0;

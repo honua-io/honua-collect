@@ -88,7 +88,7 @@ public static class NmeaParser
             return null;
         }
 
-        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var raw) || raw < 0)
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var raw) || !double.IsFinite(raw) || raw < 0)
         {
             return null;
         }
@@ -132,7 +132,7 @@ public static class NmeaParser
             return null;
         }
 
-        if (hours > 23 || minutes > 59 || seconds >= 60)
+        if (hours > 23 || minutes > 59 || !double.IsFinite(seconds) || seconds is < 0 or >= 60)
         {
             return null;
         }
@@ -171,7 +171,7 @@ public static class NmeaParser
 
     /// <summary>Parses an invariant-culture double field, returning null for an empty/invalid field.</summary>
     internal static double? ParseDouble(string? value)
-        => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : null;
+        => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) && double.IsFinite(result) ? result : null;
 
     /// <summary>Parses an invariant-culture integer field, returning null for an empty/invalid field.</summary>
     internal static int? ParseInt(string? value)
