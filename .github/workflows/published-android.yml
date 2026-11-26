@@ -1,0 +1,111 @@
+name: Published forms on Android
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/published-android.yml
+      - .github/workflows/run-published-android-gate.sh
+      - scripts/e2e/**
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+  push:
+    branches: [trunk]
+    paths:
+      - .github/workflows/published-android.yml
+      - .github/workflows/run-published-android-gate.sh
+      - scripts/e2e/**
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  published-android:
+    # External forks do not have read access to the SDK package feed.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      HONUA_E2E_HTTP_PORT: '5189'
+      HONUA_E2E_PG_CONTAINER: honua-field-xlsform-pg
+      MAESTRO_CLI_NO_ANALYTICS: '1'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+      POSTGIS_IMAGE: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: honua-io/honua-server
+          # Candidate with published form, repeat, and attachment support.
+          ref: 5efa7fe1ae2769e8cf6d909c7572ea703597c6f9
+          path: server-candidate
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
+        with:
+          dotnet-version: '10.0.403'
+      - name: Build standalone Debug APK
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
+          "$field_dotnet" workload install maui-android
+          "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
+            -f net10.0-android -c Debug -t:SignAndroidPackage \
+            -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
+            -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
+          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net10.0-android -type f -name '*-Signed.apk' -print0)
+          test "${#apks[@]}" -eq 1
+          cp "${apks[0]}" "$RUNNER_TEMP/honua-field.apk"
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/server-dotnet
+        with:
+          global-json-file: server-candidate/global.json
+      - name: Publish server candidate
+        working-directory: server-candidate
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          "$RUNNER_TEMP/server-dotnet/dotnet" publish src/Honua.Server/Honua.Server.csproj \
+            --runtime linux-x64 --self-contained true --configuration Debug \
+            -p:PublishAot=false -p:PublishTrimmed=false -p:PublishSingleFile=false \
+            --output "$RUNNER_TEMP/published-server"
+
+      - name: Install Maestro 2.12.1
+        run: |
+          cd "$RUNNER_TEMP"
+          curl --fail --silent --show-error --location --retry 3 --output maestro.zip \
+            https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.12.1/maestro.zip
+          echo '54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7  maestro.zip' | sha256sum --check
+          unzip -q maestro.zip
+          printf 'MAESTRO=%s/maestro/bin/maestro\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Enable emulator hardware acceleration
+        run: sudo chmod a+rw /dev/kvm
+      - name: Run offline published inspection gate
+        uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics -camera-back none
+          script: bash .github/workflows/run-published-android-gate.sh
