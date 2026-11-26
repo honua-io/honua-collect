@@ -1,17 +1,19 @@
 # Importing forms and field data
 
-This guide describes how to import common form and field-data formats into Honua Field. Everything described
-here is implemented and unit-tested in `Honua.Field.Core`; nothing requires a
-vendor-specific license or subscription.
-
-> Scope: this covers the data and form layers that Field implements today. The
-> capture widgets that bind those forms to device sensors are tracked separately
-> (see issues #1/#35); this guide is about getting your **definitions and records**
-> in and out.
+Use Honua Server to publish a versioned XLSForm for field workers. For applications that
+already have schema rows or exported records, Honua Field also provides in-process importers.
 
 ## Importing form definitions
 
-### Importing XLSForm
+### Publishing an XLSForm for offline inspections
+
+1. Import the `.xlsx` workbook into Honua Server against the target service and layer. Enable offline collection on the draft package and publish that version. The [integration fixture](../scripts/e2e/publish-field-runtime-fixture.sh) shows the import and publish requests against a disposable server.
+2. Configure Field's `server.formId` for the published form. While connected, tap **Download Latest Form**, then **Start New Inspection**. A worker with access to the target layer can now capture answers, repeat rows, a position and photos offline.
+3. Tap **Save draft** to continue later from **Records**. The draft keeps the version the worker started with, including when a newer version is published. Submit the inspection and sync when connected. A worker can reopen a validation rejection, correct the answer offline and sync again.
+
+Use a WGS 84 point layer for the form's single top-level geopoint. Place photo questions at the top level. A repeat section supports up to 100 ordered rows of scalar or multiple-choice answers and stores them in a writable text attribute matching the section ID. Relevance and calculated expressions can refer to earlier answers, and repeat rows can also use parent answers. When a question becomes hidden, Field keeps its previous answer in the draft and omits it from submission.
+
+### Importing XLSForm sheet rows in an application
 
 XLSForm definitions use `survey` and `choices` sheets, the same sheet model the
 OpenDataKit ecosystem uses. Field imports them directly:
