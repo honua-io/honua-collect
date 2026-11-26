@@ -128,19 +128,22 @@ retention on a populated installation.
 
 The server is set in configuration, not code:
 [`Resources/Raw/appsettings.json`](src/Honua.Field.App/Resources/Raw/appsettings.json)
-(`server.baseUrl`, `server.serviceId`, `server.layerId`, optional
+(`server.baseUrl`, `server.formId`, `server.serviceId`, `server.layerId`, optional
 `server.pinnedCertificates`). It is embedded at build time, so change it before you
 build. Users sign in on the Account tab against that server's token endpoint. The
 [self-hosting guide](docs/self-hosting.md) documents every key.
 
 ### Forms
 
-- **From the server:** "Download Latest Form" on the Capture screen fetches a form
-  package from the configured server's form-package API (served by Honua Server).
-- **Bundled:** the offline fallback and demo forms are C# definitions in
-  [`SampleForms.cs`](src/Honua.Field.App/SampleForms.cs). Edit or replace them
-  to ship your own built-in forms; field ids must match the target layer's
-  attribute names so submissions apply cleanly.
+For a published XLSForm, set `server.formId` to its Honua Server form ID. The
+default is `field_site`. Sign in, then tap **Download Latest Form** on the Capture
+screen and check the version shown. Tap **Start New Inspection** to collect a
+record. Enable offline use when publishing the form so workers can open it after
+disconnecting or restarting Field. **Save draft** keeps the inspection in
+**Records** with its original form version. **Submit** queues it for upload.
+
+**Sample Inspection Demo** opens the bundled form. The [sample definitions](src/Honua.Field.App/SampleForms.cs)
+can also be used to exercise the capture widgets without downloading a form.
 
 ### Basemap
 
@@ -179,10 +182,8 @@ unverified.
 These need a source change today; there is no setting for them yet:
 
 - **Basemap source:** a compile-time constant (`OsmTileUrl.Template`), one source only.
-- **Downloaded form id:** the Capture screen requests the form id `field_site`
-  (`MainPage.xaml.cs`); the bundled forms are compiled in.
-- **One target layer:** the app syncs to the single service and layer in
-  `appsettings.json`.
+- **Bundled inspection target:** the sample inspection uses the single service
+  and layer in `appsettings.json`. Published inspections use the layer bound to the form on Honua Server.
 - **Runtime or MDM configuration:** `ManagedAppConfig` exists in Core but is not
   wired into the app, so the server and branding cannot be changed after the build.
 - **Tile request User-Agent:** hard-coded in `MauiProgram.cs`.

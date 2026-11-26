@@ -40,7 +40,8 @@ bundled asset is
 ```jsonc
 {
   "server": {
-    "baseUrl": "https://collect.example.gov",   // your server's base URL
+    "baseUrl": "https://field.example.gov",   // your server's base URL
+    "formId": "safety_inspection",                // published form ID
     "serviceId": "field_inspections",            // feature service id
     "layerId": 0,                                 // layer id within the service
     "pinnedCertificates": []                      // optional Base64 SPKI pins
@@ -54,12 +55,17 @@ bundled asset is
 | Key | Type | Required | Maps to | Purpose |
 | --- | --- | :---: | --- | --- |
 | `server.baseUrl` | string | ✅ | `AppSettings.ServerBaseUrl` | Base URL of your FeatureServer host. Used as the HTTP client base address and for the GeoServices target. |
+| `server.formId` | string | — | `AppSettings.FormId` | Published form to download on the Capture screen. Defaults to `field_site`. |
 | `server.serviceId` | string | ✅ | `AppSettings.ServiceId` | The feature service id of the editable layer. |
 | `server.layerId` | int | ✅ | `AppSettings.LayerId` | The layer id within that service. |
 | `server.pinnedCertificates` | string[] | — | `AppSettings.PinnedCertificateSpki` | Optional Base64 SPKI public-key pins (see [Certificate pinning](#optional-certificate-pinning)). Empty/absent = standard platform TLS. |
 | `demo.apiKey` | string\|null | — | `AppSettings.DemoApiKey` | Development-only fallback credential used **only when no user has signed in**. `null` in production — no credential ships in the binary. |
 
-The three `server` values become the GeoServices endpoints Field calls
+Published inspections use `GET /api/v1/forms/{formId}` to download the current
+version and `POST /api/v1/forms/{formId}/submissions` to send a record with
+its pinned version. The worker needs read and write access to the target layer.
+
+The configured service and layer select the GeoServices endpoints Field calls
 ([`GeoServicesTarget`](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs)):
 
 ```
@@ -139,7 +145,7 @@ Paid value lives on Honua Server, which is licensed server-side.
 
 2. **Configure Field.** Edit
    [`appsettings.json`](../src/Honua.Field.App/Resources/Raw/appsettings.json)
-   with your `server.baseUrl`, `serviceId`, and `layerId`. Use HTTPS for any
+   with your `server.baseUrl`, `formId`, `serviceId`, and `layerId`. Use HTTPS for any
    non-loopback host; add `pinnedCertificates` if you require pinning.
 
 3. **Build and deploy** the app per the
