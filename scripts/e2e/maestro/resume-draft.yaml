@@ -32,5 +32,5 @@ appId: io.honua.collect
     element: Submit
 - tapOn: Submit
 - extendedWaitUntil:
-    visible: 'Saved to Outbox.*'
+    visible: 'Drafts [0-9]+ · Outbox [1-9][0-9]* .*'
     timeout: 15000
