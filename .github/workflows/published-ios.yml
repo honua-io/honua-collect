@@ -57,6 +57,17 @@ jobs:
           ref: ${{ steps.server.outputs.revision }}
           path: server-candidate
           persist-credentials: false
+      - name: Start fresh iPhone simulator
+        run: |
+          runtime=com.apple.CoreSimulator.SimRuntime.iOS-27-2
+          mkdir -p "$HONUA_E2E_REPORT_DIR"
+          xcrun simctl list devices available --json > "$HONUA_E2E_REPORT_DIR/simulators.json"
+          device_type=$(jq -er --arg runtime "$runtime" '
+            .devices[$runtime] | map(select(.name | startswith("iPhone"))) | first | .deviceTypeIdentifier
+          ' "$HONUA_E2E_REPORT_DIR/simulators.json")
+          device=$(xcrun simctl create 'Field Published Forms iPhone' "$device_type" "$runtime")
+          echo "HONUA_E2E_IOS_DEVICE=$device" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device"
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
@@ -99,6 +110,12 @@ jobs:
           HONUA_E2E_SERVER_REVISION: ${{ steps.server-checkout.outputs.commit }}
           HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
         run: bash .github/workflows/run-published-ios-gate.sh
+      - name: Delete test simulator
+        if: always() && env.HONUA_E2E_IOS_DEVICE != ''
+        timeout-minutes: 3
+        run: |
+          xcrun simctl shutdown "$HONUA_E2E_IOS_DEVICE" || true
+          xcrun simctl delete "$HONUA_E2E_IOS_DEVICE"
       - name: Upload iOS receipt replay evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

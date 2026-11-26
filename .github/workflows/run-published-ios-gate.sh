@@ -7,17 +7,13 @@ candidate="$workspace/server-candidate"
 working_dir=$(mktemp -d "${RUNNER_TEMP:?}/published-ios.XXXXXX")
 report_dir=${HONUA_E2E_REPORT_DIR:?}
 mkdir -p "$report_dir"
-device_created=''
+device=${HONUA_E2E_IOS_DEVICE:?}
 
 run_bounded() {
     python3 -c 'import subprocess, sys; sys.exit(subprocess.run(sys.argv[2:], timeout=int(sys.argv[1])).returncode)' "$@"
 }
 
 cleanup() {
-    if [[ -n $device_created ]]; then
-        run_bounded 90 xcrun simctl shutdown "$device_created" || true
-        run_bounded 90 xcrun simctl delete "$device_created" || true
-    fi
     if [[ -s "$working_dir/server.pid" ]]; then
         kill "$(cat "$working_dir/server.pid")" 2>/dev/null || true
     fi
@@ -101,21 +97,18 @@ chmod 700 "$HONUA_E2E_RESTART_SERVER_COMMAND"
 "$HONUA_E2E_RESTART_SERVER_COMMAND"
 "$workspace/scripts/e2e/publish-field-runtime-fixture.sh" "$candidate" "$working_dir/admin-key"
 
-runtime=com.apple.CoreSimulator.SimRuntime.iOS-27-2
-xcrun simctl list devices available --json > "$report_dir/simulators.json"
-device_type=$(jq -er --arg runtime "$runtime" '
-    .devices[$runtime] | map(select(.name | startswith("iPhone"))) | first | .deviceTypeIdentifier
-' "$report_dir/simulators.json")
-device_created=$(run_bounded 60 xcrun simctl create 'Field Published Forms iPhone' "$device_type" "$runtime")
-run_bounded 540 xcrun simctl bootstatus "$device_created" -b
+echo "Waiting for the prebooted simulator $device"
+run_bounded 540 xcrun simctl bootstatus "$device"
 app=$(find "$workspace/src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64" -maxdepth 1 -name '*.app' -type d)
 test -d "$app"
-run_bounded 480 xcrun simctl install "$device_created" "$app"
+echo "Installing $(basename "$app") on $device ($(du -sh "$app" | cut -f1) uncompressed)"
+run_bounded 480 xcrun simctl install "$device" "$app"
+echo "App install complete. Starting published form journey."
 
 if ! run_bounded 1500 bash "$workspace/scripts/e2e/run-published-ios.sh" \
-    "$device_created" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
+    "$device" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
     if [[ ! -s "$report_dir/failure.png" ]]; then
-        run_bounded 60 xcrun simctl io "$device_created" screenshot "$report_dir/failure.png" || true
+        run_bounded 60 xcrun simctl io "$device" screenshot "$report_dir/failure.png" || true
     fi
     exit 1
 fi
