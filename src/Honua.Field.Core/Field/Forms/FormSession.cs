@@ -45,7 +45,9 @@ public sealed class FormSession : ICaptureHost
     private readonly IReadOnlyList<FormFieldValidationRule> _validationRules;
     private readonly FormDefinition _scalarForm;
     private readonly PublishedXlsFormExpressions? _expressions;
-    private readonly FieldRecord? _parent;
+    private readonly FieldState[]? _publishedFields;
+    private readonly FormSession? _parent;
+    private FieldRecord? _publishedEvaluation;
 
     private FormSession(
         FormDefinition form,
@@ -56,7 +58,7 @@ public sealed class FormSession : ICaptureHost
         IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null,
         IEnumerable<FormFieldValidationRule>? validationRules = null,
         PublishedXlsFormExpressions? expressions = null,
-        FieldRecord? parent = null)
+        FormSession? parent = null)
     {
         // When a localization service is supplied (BACKLOG F2), the runtime binds to
         // the form localized to the active language. Field ids, types, validation,
@@ -104,13 +106,15 @@ public sealed class FormSession : ICaptureHost
             }
         }
 
+        // Published XLSForm expressions use package field order, independently of display order.
+        _publishedFields = expressions?.FieldIds.Where(_states.ContainsKey).Select(id => _states[id]).ToArray();
+        RecomputeScalar();
+
         foreach (var section in form.Sections.Where(s => s.Repeatable))
         {
             var bounds = repeatBounds is not null && repeatBounds.TryGetValue(section.SectionId, out var b) ? b : null;
-            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds, expressions, record);
+            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds, expressions, this);
         }
-
-        RecomputeScalar();
     }
 
     /// <summary>
@@ -312,7 +316,7 @@ public sealed class FormSession : ICaptureHost
         FieldRecord record,
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds,
         PublishedXlsFormExpressions? expressions,
-        FieldRecord? parent = null)
+        FormSession? parent = null)
         => new(form, record, repeatBounds, expressions: expressions, parent: parent);
 
     internal static FormSession CreatePublished(
@@ -362,6 +366,17 @@ public sealed class FormSession : ICaptureHost
         state.Value = value;
         Record.Values[fieldId] = value;
         RecomputeScalar();
+        if (_expressions is not null)
+        {
+            foreach (var group in _groups.Values)
+            {
+                foreach (var row in group.Instances)
+                {
+                    row.Validate();
+                }
+            }
+        }
+
         FieldChanged?.Invoke(this, new FieldChangedEventArgs(fieldId));
     }
 
@@ -508,36 +523,25 @@ public sealed class FormSession : ICaptureHost
 
     private FormValidationResult RecomputeScalar()
     {
-        var evaluationRecord = _expressions?.EvaluationRecord(Record, _parent) ?? Record;
-        CalculatedFieldEvaluator.ApplyCalculatedFields(_scalarForm, evaluationRecord);
+        var evaluationRecord = Record;
         if (_expressions is not null)
         {
+            evaluationRecord = RecomputePublishedScope(_expressions);
+        }
+        else
+        {
+            CalculatedFieldEvaluator.ApplyCalculatedFields(_scalarForm, Record);
             foreach (var state in _ordered)
             {
-                if (state.Field.CalculatedExpression is not null &&
-                    evaluationRecord.Values.TryGetValue(state.FieldId, out var calculated))
+                if (Record.Values.TryGetValue(state.FieldId, out var current))
                 {
-                    Record.Values[state.FieldId] = calculated;
+                    state.Value = current;
                 }
             }
+            RecomputeVisibility(Record.Values);
         }
-
-        // Mirror calculated outputs back into the bound state.
-        foreach (var state in _ordered)
-        {
-            if (Record.Values.TryGetValue(state.FieldId, out var current))
-            {
-                state.Value = current;
-            }
-        }
-
-        RecomputeVisibility(evaluationRecord.Values);
         RecomputeChoices();
 
-        if (_expressions is not null)
-        {
-            evaluationRecord = _expressions.EvaluationRecord(Record, _parent);
-        }
         var validation = FormValidator.Validate(_scalarForm, evaluationRecord);
 
         // The SDK validator uses flat visibility; restrict reported errors to
@@ -575,6 +579,36 @@ public sealed class FormSession : ICaptureHost
         }
 
         return new FormValidationResult(visibleErrors);
+    }
+
+    private FieldRecord RecomputePublishedScope(PublishedXlsFormExpressions expressions)
+    {
+        var evaluation = expressions.CreateScope(Record, _parent?._publishedEvaluation);
+        var resolving = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var state in _publishedFields!)
+        {
+            var field = state.Field;
+            state.IsVisible = ResolveVisibility(state.FieldId, resolving, evaluation.Values);
+            if (field.CalculatedExpression is { } calculation)
+            {
+                state.Value = state.IsVisible
+                    ? ExpressionEvaluator.Evaluate(calculation, evaluation.Values)
+                    : null;
+                Record.Values[state.FieldId] = state.Value;
+            }
+            else if (Record.Values.TryGetValue(state.FieldId, out var current))
+            {
+                state.Value = current;
+            }
+
+            if (state.IsVisible && !FormFieldTypes.IsMedia(field.Type))
+            {
+                expressions.SetAnswer(evaluation.Values, state.FieldId, state.Value);
+            }
+        }
+
+        _publishedEvaluation = evaluation;
+        return evaluation;
     }
 
     private void RecomputeVisibility(IReadOnlyDictionary<string, object?> expressionValues)

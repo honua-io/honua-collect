@@ -36,7 +36,7 @@ public sealed class RepeatGroup
     private readonly FormDefinition _instanceForm;
     private readonly List<RepeatInstance> _instances = [];
     private readonly PublishedXlsFormExpressions? _expressions;
-    private readonly FieldRecord? _parent;
+    private readonly FormSession? _parent;
     private int _nextOrdinal;
 
     internal RepeatGroup(
@@ -45,7 +45,7 @@ public sealed class RepeatGroup
         IEnumerable<IReadOnlyDictionary<string, object?>> seededRows,
         RepeatBounds? bounds = null,
         PublishedXlsFormExpressions? expressions = null,
-        FieldRecord? parent = null)
+        FormSession? parent = null)
     {
         _section = section;
         Bounds = bounds;

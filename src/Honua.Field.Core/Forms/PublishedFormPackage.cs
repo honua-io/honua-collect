@@ -31,7 +31,7 @@ public sealed class PublishedFormPackage
         {
             _expressions = new PublishedXlsFormExpressions(fields.Values
                 .Where(field => field.Text("type")?.ToLowerInvariant() is "multichoice" or "multiplechoice")
-                .Select(field => field.RequiredText("fieldId")));
+                .Select(field => field.RequiredText("fieldId")), fields.Keys);
         }
 
         var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

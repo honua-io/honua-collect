@@ -8,9 +8,11 @@ using Honua.Sdk.Field.Records;
 namespace Honua.Field.Core.Forms;
 
 /// <summary>Adapts the published XLSForm subset to the portable SDK expression evaluator.</summary>
-internal sealed partial class PublishedXlsFormExpressions(IEnumerable<string> multipleChoiceFields)
+internal sealed partial class PublishedXlsFormExpressions(IEnumerable<string> multipleChoiceFields, IEnumerable<string> fieldIds)
 {
     private readonly HashSet<string> _multipleChoiceFields = new(multipleChoiceFields, StringComparer.OrdinalIgnoreCase);
+
+    internal IReadOnlyList<string> FieldIds { get; } = fieldIds.ToArray();
 
     [GeneratedRegex("""'(?:(?:'')|[^'])*'|"[^"]*"|(?<field>\$\{(?<id>[A-Za-z_][A-Za-z0-9_-]*)\})|(?<number>[0-9]+(?:\.[0-9]*)?|\.[0-9]+)|(?<name>[A-Za-z_][A-Za-z0-9_-]*)|(?<self>\.)""", RegexOptions.CultureInvariant)]
     private static partial Regex Tokens();
@@ -49,26 +51,40 @@ internal sealed partial class PublishedXlsFormExpressions(IEnumerable<string> mu
             : token.Groups["boolean"].Success ? token.Groups["boolean"].Value : token.Value);
     }
 
-    internal FieldRecord EvaluationRecord(FieldRecord record, FieldRecord? parent)
+    internal FieldRecord CreateScope(FieldRecord record, FieldRecord? parent) =>
+        new()
+        {
+            RecordId = record.RecordId,
+            FormId = record.FormId,
+            Values = parent is null
+                ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, object?>(parent.Values, StringComparer.OrdinalIgnoreCase),
+            Media = record.Media,
+        };
+
+    internal void SetAnswer(Dictionary<string, object?> values, string fieldId, object? value)
     {
-        var values = parent is null
-            ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, object?>(parent.Values, StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in record.Values)
+        if (value is null or "" or JsonElement { ValueKind: JsonValueKind.Null })
         {
-            values[pair.Key] = pair.Value;
+            return;
         }
-        foreach (string fieldId in _multipleChoiceFields)
+
+        if (_multipleChoiceFields.Contains(fieldId))
         {
-            values[Alias(fieldId)] = values.GetValueOrDefault(fieldId) switch
+            var codes = value switch
             {
-                IEnumerable<string> codes => string.Join(' ', codes),
+                IEnumerable<string> selected => string.Join(' ', selected),
                 JsonElement { ValueKind: JsonValueKind.Array } json =>
                     string.Join(' ', json.EnumerateArray().Select(item => item.GetString())),
                 _ => null,
             };
+            if (string.IsNullOrEmpty(codes))
+            {
+                return;
+            }
+            values[Alias(fieldId)] = codes;
         }
-        return new FieldRecord { RecordId = record.RecordId, FormId = record.FormId, Values = values, Media = record.Media };
+        values[fieldId] = value;
     }
 
     private static string Alias(string fieldId) => $"xlsform:{fieldId}";
