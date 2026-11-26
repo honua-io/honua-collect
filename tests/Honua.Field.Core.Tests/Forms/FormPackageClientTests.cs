@@ -378,6 +378,63 @@ public class FormPackageClientTests
     }
 
     [Fact]
+    public async Task Published_xlsform_evaluates_exact_choice_codes_and_self_constraints()
+    {
+        const string json = """
+            {
+              "formId": "inspection", "version": 7, "status": "published",
+              "package": {
+                "formId": "inspection", "schemaVersion": "honua.form-package.v1",
+                "expressionLanguage": "xlsform",
+                "offlinePolicy": { "enabled": true },
+                "fields": [
+                  { "fieldId": "name", "type": "text", "required": true,
+                    "constraintExpression": "string-length(.) > 2", "constraintMessage": "Name is too short" },
+                  { "fieldId": "status", "type": "multiChoice", "domain": {
+                      "choices": [{ "code": "open" }, { "code": "reopened" }, { "code": "closed" }]
+                  } },
+                  { "fieldId": "total", "type": "number",
+                    "calculatedExpression": "if(selected(${status}, \"open\"), 2, 1)" },
+                  { "fieldId": "photo", "type": "media", "relevanceExpression": "selected(${status}, 'open')" }
+                ]
+              }
+            }
+            """;
+        using var client = new HttpClient(new StubHandler(json)) { BaseAddress = new Uri("https://s.example") };
+        var path = Path.GetTempFileName();
+        try
+        {
+            var package = await new FormPackageClient(client).DownloadPublishedAsync("inspection", path);
+            var session = package.CreateSession("record");
+            Assert.Equal(1d, session.GetValue("total"));
+            Assert.False(session.GetField("photo").IsVisible);
+
+            session.SetValue("status", new[] { "reopened" });
+            Assert.Equal(1d, session.GetValue("total"));
+            Assert.False(session.GetField("photo").IsVisible);
+
+            session.SetValue("status", new[] { "open", "closed" });
+            Assert.Equal(2d, session.GetValue("total"));
+            Assert.True(session.GetField("photo").IsVisible);
+            Assert.Equal(new[] { "open", "closed" }, Assert.IsType<string[]>(session.Record.Values["status"]));
+            Assert.DoesNotContain(session.Record.Values.Keys, key => key.StartsWith("xlsform:", StringComparison.Ordinal));
+
+            session.SetValue("name", "ab");
+            Assert.Contains(session.Validate().Errors, error => error.FieldId == "name");
+            session.SetValue("name", "abc");
+            Assert.True(session.Validate().IsValid);
+
+            session.SetValue("status", new[] { "closed" });
+            Assert.Equal(1d, session.GetValue("total"));
+            Assert.False(session.GetField("photo").IsVisible);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task DownloadPublishedAsync_removes_cache_when_offline_policy_changes()
     {
         var cachePath = Path.GetTempFileName();

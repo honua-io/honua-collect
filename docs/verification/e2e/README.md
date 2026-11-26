@@ -4,7 +4,22 @@ Proof that a form filled in the Honua Field app on an Android emulator is
 submitted over HTTP to a running Honua server and persisted as a row in
 PostgreSQL — the full capture → sync → store loop.
 
-## Topology
+## Published XLSForm Android gate
+
+The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) installs a standalone Debug APK on an Android API 33 emulator, builds the pinned Honua Server revision, starts PostGIS and publishes the inspection workbook. Maestro drives the native Field screens under a layer-scoped worker account.
+
+The gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
+
+To rerun the native flow on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. The script removes its temporary settings and network forwarding on exit.
+
+```bash
+HONUA_E2E_REPORT_DIR=/tmp/field-android-results \
+  scripts/e2e/run-published-android.sh emulator-5554 /path/to/worker-key /path/to/readback-key
+```
+
+The workflow pins Maestro and the emulator version. Failed hosted runs publish a screenshot and JUnit reports for the phases that ran.
+
+## GeoServices capture topology
 
 - **App**: `io.honua.collect` (Release APK) on a KVM-accelerated Android-35 emulator.
 - **Server**: prebuilt `honua-server` image, Development env, on `:18080`, backed by

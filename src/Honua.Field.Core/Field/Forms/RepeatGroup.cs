@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.Core.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
@@ -34,16 +35,22 @@ public sealed class RepeatGroup
     private readonly FormSection _section;
     private readonly FormDefinition _instanceForm;
     private readonly List<RepeatInstance> _instances = [];
+    private readonly PublishedXlsFormExpressions? _expressions;
+    private readonly FieldRecord? _parent;
     private int _nextOrdinal;
 
     internal RepeatGroup(
         FormDefinition parentForm,
         FormSection section,
         IEnumerable<IReadOnlyDictionary<string, object?>> seededRows,
-        RepeatBounds? bounds = null)
+        RepeatBounds? bounds = null,
+        PublishedXlsFormExpressions? expressions = null,
+        FieldRecord? parent = null)
     {
         _section = section;
         Bounds = bounds;
+        _expressions = expressions;
+        _parent = parent;
 
         // A single-section, non-repeatable form that each row is captured against.
         _instanceForm = new FormDefinition
@@ -100,7 +107,7 @@ public sealed class RepeatGroup
             }
         }
 
-        var instance = new RepeatInstance(instanceId, FormSession.Open(_instanceForm, record));
+        var instance = new RepeatInstance(instanceId, FormSession.OpenPublished(_instanceForm, record, repeatBounds: null, _expressions, _parent));
         _instances.Add(instance);
         return instance;
     }
