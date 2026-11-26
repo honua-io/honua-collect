@@ -30,10 +30,17 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
   offline capture with live validation and repeats, SQLite persistence,
   GeoServices feature sync, and attachment upload — with captured evidence in
   [`docs/verification/`](docs/verification/).
-- **Still in progress:** several device "last-mile" bindings (camera/GNSS/map
-  polish, background sync, push, external GNSS) and enterprise auth/admin UX. Android
-  is the verified target; the iOS/Windows/Mac Catalyst targets exist in the MAUI
-  project but are unverified.
+- Field places editing controls below the map in narrow windows and beside it
+  in wide windows, including a phone turned sideways.
+  Rotating or resizing the window preserves the captured vertices. Sign-in and
+  inspection forms use a centered, width-limited column on larger displays.
+  The Records screen keeps Drafts, Outbox and Sent in a single scrolling list.
+- On iPhone and iPad simulators, Field can draw a polygon, show its GeoJSON
+  and undo the last vertex. The Apple workflow also builds Mac Catalyst.
+  [Phone and tablet verification](docs/verification/e2e/README.md#iphone-and-ipad-geometry)
+- Remaining device work includes camera and GNSS integration, map editing,
+  background sync, push notifications and enterprise sign-in. Windows device
+  verification is also pending.
 
 ## Quick start
 
@@ -186,9 +193,8 @@ dotnet publish src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android -c 
 Sideload the resulting `*-Signed.apk` from `bin/Release/net11.0-android/publish/`
 with `adb install -r <file>`, distribute it through your MDM, or build an `.aab`
 (`-p:AndroidPackageFormats=aab`) for an app store. Without the signing properties
-the build signs with the local debug key, which is fine for testing only. Android
-is the verified target; the iOS, Mac Catalyst and Windows targets exist but are
-unverified.
+the build signs with the local debug key, which is fine for testing only.
+Platform verification is summarized under [Status](#status).
 
 ### Not yet configurable
 

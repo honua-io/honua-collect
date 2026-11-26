@@ -23,9 +23,19 @@ HONUA_E2E_REPORT_DIR=/tmp/field-android-results \
 
 The workflow pins Maestro and the emulator version. Its `published-android-results` artifact groups JUnit reports by scenario and capture phase. Compare `upgrade/before.json`, `upgrade/after.json` and `upgrade/recovered-key.json` for installed upgrade evidence. The replay and correction folders contain `server-readback.json` with the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. The correction folder also contains the two submission identities in `correction-ledger.json`. A failed capture or sync run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
 
-The Android gate runs the installed upgrade and receipt replay at a phone window size (411 × 891 dp), and the rejected inspection and correction at a tablet window size (800 × 1280 dp). A separate geometry check draws a polygon on a narrow phone, resizes the running app to tablet portrait and landscape, and checks the same vertices and editing controls. The `adaptive` artifact folder contains the layout evidence.
+The installed upgrade and receipt replay use a phone window (411 × 891 dp). Rejection and correction use a tablet window (800 × 1280 dp). The receipt and correction scenarios each start with an empty local store.
 
-The previous versionCode 2 to 3 [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45872622719) passed all 23 Maestro phases across the installed upgrade (7), receipt replay (7) and rejection correction (9). The [run artifact](https://github.com/honua-io/honua-field/actions/runs/45872622719/artifacts/15144523638) contains the matching upgrade snapshots, both server readbacks and the correction ledger.
+The geometry check draws a three-vertex polygon on a 360 × 720 dp phone window. It rotates the phone, resizes to an 800 × 1280 dp tablet window, rotates the tablet and returns to the original phone window. At each size it checks that the editing controls are visible and the exported GeoJSON has exactly the original coordinates. It also checks Undo and the home form column width. The `adaptive` artifact folder contains screenshots and the bounds of each control.
+
+A separate local Android check typed `field27` into the sample inspection’s Site name. The unsaved answer stayed visible through phone landscape, tablet portrait, tablet landscape and the return to phone portrait. At 240 dpi the entry was 492 pixels wide on the portrait phone and 1,032 pixels wide in both tablet orientations.
+
+A local Records check loaded 175 drafts, five outbox records and five sent records. On a portrait phone and a landscape tablet, the tester scrolled through all three groups and opened the edit history for the last sent record.
+
+The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45895394432) passed the installed .NET 10 to .NET 11 upgrade (versionCode 3 to 4), encryption-key recovery, receipt replay, rejection correction and adaptive geometry checks. For each submission scenario, Honua Server returned exactly one feature, one accepted receipt, two repeat rows and the expected attachment checksum. The [run artifact](https://github.com/honua-io/honua-field/actions/runs/45895394432/artifacts/15155210669) contains the matching upgrade snapshots, device screenshots, both server readbacks and the correction ledger.
+
+## iPhone and iPad geometry
+
+The [Apple workflow](../../../.github/workflows/field-apple.yml) builds Field for the iOS simulator and Mac Catalyst. Separate iPhone and iPad jobs check the app bundle's camera, microphone, photo-library and location permission descriptions before running Maestro. On iOS 27.2, both simulators displayed the empty Drafts, Outbox and Sent groups, captured a polygon, showed its GeoJSON and undid the last vertex. The [iPhone 18 Pro artifact](https://github.com/honua-io/honua-field/actions/runs/45895399423/artifacts/15154032425) and [iPad Pro 13-inch (M5) artifact](https://github.com/honua-io/honua-field/actions/runs/45895399423/artifacts/15153613595) contain the JUnit reports and screenshots.
 
 ## GeoServices capture topology
 
