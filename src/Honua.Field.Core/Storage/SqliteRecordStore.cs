@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Sdk.Field.Records;
 using Microsoft.Data.Sqlite;
@@ -51,11 +53,11 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             INSERT INTO {TableName}
                 (record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                  created_utc, submitted_utc, completed_utc, values_json,
-                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version)
+                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json)
             VALUES
                 ($record_id, $form_id, $status, $assigned_user_id, $lat, $lon, $accuracy,
                  $created_utc, $submitted_utc, $completed_utc, $values_json,
-                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version)
+                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version, $published_submission_json)
             ON CONFLICT(record_id) DO UPDATE SET
                 form_id = excluded.form_id,
                 status = excluded.status,
@@ -72,7 +74,8 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 last_error = excluded.last_error,
                 failed_attempts = excluded.failed_attempts,
                 last_synced_utc = excluded.last_synced_utc,
-                version = excluded.version;
+                version = excluded.version,
+                published_submission_json = excluded.published_submission_json;
             """;
 
         var record = entry.Record;
@@ -95,6 +98,9 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         command.Parameters.AddWithValue("$failed_attempts", entry.FailedAttempts);
         command.Parameters.AddWithValue("$last_synced_utc", ToStorage(entry.LastSyncedUtc));
         command.Parameters.AddWithValue("$version", entry.Version);
+        command.Parameters.AddWithValue("$published_submission_json", entry.PublishedSubmission is { } submission
+            ? JsonSerializer.Serialize(submission, RecordStoreJsonContext.Default.PublishedFormSubmission)
+            : DBNull.Value);
 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
@@ -107,7 +113,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         command.CommandText = $"""
             SELECT record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                    created_utc, submitted_utc, completed_utc, values_json,
-                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version
+                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json
             FROM {TableName};
             """;
 
@@ -170,7 +176,12 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         var lastSyncedUtc = FromStorage(reader, 15);
         var version = reader.IsDBNull(16) ? 0 : reader.GetInt32(16);
 
-        var entry = Rehydrate(record, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc);
+        var submission = reader.IsDBNull(17)
+            ? null
+            : JsonSerializer.Deserialize(reader.GetString(17), RecordStoreJsonContext.Default.PublishedFormSubmission)
+                ?? throw new JsonException("Stored published form submission cannot be null.");
+
+        var entry = Rehydrate(record, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc, submission);
         entry.SetVersion(version);
         return entry;
     }
@@ -186,16 +197,17 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         string? remoteId,
         string? lastError,
         int failedAttempts,
-        DateTimeOffset? lastSyncedUtc)
+        DateTimeOffset? lastSyncedUtc,
+        PublishedFormSubmission? submission)
     {
         // Local records (including drafts) never transitioned; the constructor's
         // default already models that, so leave them untouched.
         if (syncState == RecordSyncState.Local)
         {
-            return new FieldRecordEntry(record, RecordSyncState.Local);
+            return new FieldRecordEntry(record, RecordSyncState.Local) { PublishedSubmission = submission };
         }
 
-        var entry = new FieldRecordEntry(record);
+        var entry = new FieldRecordEntry(record) { PublishedSubmission = submission };
         entry.MarkPending();
 
         switch (syncState)
@@ -244,7 +256,10 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
     /// <inheritdoc />
     protected override async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
+        // Serialize the column probes and ALTERs across independent store instances.
+        await using var transaction = connection.BeginTransaction();
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = $"""
                 CREATE TABLE IF NOT EXISTS {TableName} (
                     record_id TEXT PRIMARY KEY,
@@ -263,34 +278,28 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                     last_error TEXT NULL,
                     failed_attempts INTEGER NOT NULL,
                     last_synced_utc TEXT NULL,
-                    version INTEGER NOT NULL DEFAULT 0
+                    version INTEGER NOT NULL DEFAULT 0,
+                    published_submission_json TEXT NULL
                 );
                 """;
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        await EnsureVersionColumnAsync(connection, ct).ConfigureAwait(false);
+        await EnsureColumnAsync(command, "version", "INTEGER NOT NULL DEFAULT 0", ct).ConfigureAwait(false);
+        await EnsureColumnAsync(command, "published_submission_json", "TEXT NULL", ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Adds the <c>version</c> column to a database created before edit-history
-    /// tracking existed (BACKLOG #38). The <c>CREATE TABLE IF NOT EXISTS</c> above
-    /// only applies to brand-new databases, so an existing field device's table is
-    /// migrated here. SQLite has no <c>ADD COLUMN IF NOT EXISTS</c>, so the column
-    /// is probed first and added only when missing.
-    /// </summary>
-    private static async Task EnsureVersionColumnAsync(SqliteConnection connection, CancellationToken ct)
+    private static async Task EnsureColumnAsync(SqliteCommand command, string column, string definition, CancellationToken ct)
     {
-        await using (var probe = connection.CreateCommand())
+        command.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{TableName}') WHERE name = '{column}';";
+        if (Convert.ToInt32(await command.ExecuteScalarAsync(ct).ConfigureAwait(false)) == 0)
         {
-            probe.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{TableName}') WHERE name = 'version';";
-            var result = await probe.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            if (result is not null and not DBNull && Convert.ToInt32(result) > 0)
-            {
-                return;
-            }
+            command.CommandText = $"ALTER TABLE {TableName} ADD COLUMN {column} {definition};";
+            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
-
-        await using var alter = connection.CreateCommand();
-        alter.CommandText = $"ALTER TABLE {TableName} ADD COLUMN version INTEGER NOT NULL DEFAULT 0;";
-        await alter.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
+}
+
+[JsonSerializable(typeof(PublishedFormSubmission))]
+internal sealed partial class RecordStoreJsonContext : JsonSerializerContext
+{
 }

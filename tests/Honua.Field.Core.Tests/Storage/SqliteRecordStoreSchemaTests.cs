@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text.Json;
+using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
 using Honua.Sdk.Field.Records;
@@ -174,11 +175,49 @@ public sealed class SqliteRecordStoreSchemaTests : IDisposable
             "record_id", "form_id", "status", "assigned_user_id", "lat", "lon",
             "accuracy", "created_utc", "submitted_utc", "completed_utc",
             "values_json", "sync_state", "remote_id", "last_error",
-            "failed_attempts", "last_synced_utc",
+            "failed_attempts", "last_synced_utc", "version", "published_submission_json",
         })
         {
             Assert.Contains(expected, columns);
         }
+    }
+
+    [Fact]
+    public async Task Published_submission_round_trips_after_upgrading_an_existing_record_database()
+    {
+        var connectionString = $"Data Source={_dbPath}";
+        var legacy = Outbox("legacy");
+        legacy.MarkSynced("remote-legacy");
+        await new SqliteRecordStore(connectionString).SaveAsync(legacy);
+
+        await using (var connection = new SqliteConnection(connectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE collect_records DROP COLUMN published_submission_json;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var upgraded = new SqliteRecordStore(connectionString);
+        var existing = Assert.Single(await upgraded.LoadAllAsync());
+        Assert.Equal("remote-legacy", existing.RemoteId);
+        Assert.Null(existing.PublishedSubmission);
+
+        var file = new SubmissionFile("photo", "/media/sample.jpg", "image/jpeg", "inspection.jpg");
+        var submission = new PublishedFormSubmission("inspection", """{"condition":"good"}""", [file]);
+        var entry = new FieldRecordEntry(Outbox("published").Record) { PublishedSubmission = submission };
+        entry.MarkPending();
+        await upgraded.SaveAsync(entry);
+
+        var reopened = new SqliteRecordStore(connectionString);
+        var entries = await reopened.LoadAllAsync();
+        Assert.Equal(2, entries.Count);
+        var pending = Assert.Single(entries, candidate => candidate.Record.RecordId == "published");
+        Assert.Equal(RecordSyncState.Pending, pending.SyncState);
+        var persisted = Assert.IsType<PublishedFormSubmission>(pending.PublishedSubmission);
+        Assert.Equal(submission.FormId, persisted.FormId);
+        Assert.Equal(submission.RequestJson, persisted.RequestJson);
+        Assert.Equal(file, Assert.Single(persisted.Files));
     }
 
     private static FieldRecordEntry Outbox(string id)
