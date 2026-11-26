@@ -83,6 +83,8 @@ run_flow download
 
 run_flow capture
 "${adb[@]}" shell am force-stop "$app"
+run_flow resume-draft
+"${adb[@]}" shell am force-stop "$app"
 run_flow verify-outbox
 
 list_media > "$working_dir/after"

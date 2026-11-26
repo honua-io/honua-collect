@@ -49,8 +49,8 @@ appId: io.honua.collect
 - inputText: Offline visit two
 - hideKeyboard
 - scrollUntilVisible:
-    element: Submit
-- tapOn: Submit
+    element: Save draft
+- tapOn: Save draft
 - extendedWaitUntil:
-    visible: 'Saved to Outbox.*'
+    visible: Start New Inspection
     timeout: 15000
