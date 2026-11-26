@@ -1,6 +1,7 @@
 appId: io.honua.collect
 ---
-- launchApp
+- launchApp:
+    clearState: false
 - extendedWaitUntil:
     visible: Start New Inspection
     timeout: 90000
@@ -63,5 +64,9 @@ appId: io.honua.collect
     element: Save draft
 - tapOn: Save draft
 - extendedWaitUntil:
-    visible: Start New Inspection
+    visible: Draft saved. Open Records to continue.
+    timeout: 15000
+- tapOn: Records
+- extendedWaitUntil:
+    visible: Drafts 1 · Outbox 0 · Conflicts 0 · Sent 0
     timeout: 15000

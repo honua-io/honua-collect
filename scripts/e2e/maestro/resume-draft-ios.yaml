@@ -1,6 +1,7 @@
 appId: io.honua.collect
 ---
-- launchApp
+- launchApp:
+    clearState: false
 - extendedWaitUntil:
     visible: Records
     timeout: 90000
