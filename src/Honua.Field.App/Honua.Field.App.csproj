@@ -93,6 +93,12 @@
 		<PackageReference Include="Honua.Mobile.Maui" />
 	</ItemGroup>
 
+	<ItemGroup Condition="'$([MSBuild]::GetTargetPlatformIdentifier($(TargetFramework)))' == 'ios'">
+		<!-- Keep SQLCipher as the iOS SQLite implementation. The Mobile dependency also
+		     brings in a plain SQLite archive whose exported symbols collide with SQLCipher. -->
+		<PackageReference Include="SQLitePCLRaw.lib.e_sqlite3.ios" ExcludeAssets="all" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<ProjectReference Include="..\Honua.Field.Core\Honua.Field.Core.csproj" />
 		<ProjectReference Include="..\Honua.Field.Presentation\Honua.Field.Presentation.csproj" />
