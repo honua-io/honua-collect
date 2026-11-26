@@ -24,10 +24,13 @@ working_dir=$(mktemp -d)
 fault_proxy_pid=
 settings_written=false
 stage=0
+process_watch_pid=
 
 cleanup() {
     local status=$?
+    stop_process_watch
     if [[ $status -ne 0 && -n $report ]]; then
+        report_crash || true
         "${simctl[@]}" io "$device" screenshot "$report/failure.png" || true
         if [[ -n ${data:-} ]]; then
             report_storage failure || true
@@ -91,6 +94,68 @@ Path(report).write_text(json.dumps({
 PY_STORAGE
 }
 
+watch_process() {
+    local executable=$1
+    while :; do
+        ps -ax -o pid=,comm= | awk -v executable="$executable" '
+            { pid = $1; sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "") }
+            $0 == executable { print pid; found = 1 }
+            END { if (!found) print "absent" }
+        '
+        sleep 1
+    done
+}
+
+stop_process_watch() {
+    [[ -n $process_watch_pid ]] || return 0
+    kill "$process_watch_pid" 2>/dev/null || true
+    wait "$process_watch_pid" 2>/dev/null || true
+    process_watch_pid=
+    python3 - "$working_dir/process-samples" "$report/capture-process.json" <<'PY_PROCESS'
+import json
+from pathlib import Path
+import sys
+
+samples = Path(sys.argv[1]).read_text().splitlines()
+seen = [sample for sample in samples if sample.isdecimal()]
+Path(sys.argv[2]).write_text(json.dumps({
+    "samples": len(samples),
+    "observedAppProcess": bool(seen),
+    "distinctProcessCount": len(set(seen)),
+    "processPresentAtLastSample": bool(samples and samples[-1].isdecimal()),
+}) + "\n")
+PY_PROCESS
+}
+
+report_crash() {
+    [[ -f "$working_dir/capture-start" ]] || return 0
+    python3 - "$working_dir/capture-start" "$report/app-crash.json" "$app" <<'PY_CRASH'
+import json
+from pathlib import Path
+import re
+import sys
+
+start, report, bundle_id = sys.argv[1:]
+threshold = Path(start).stat().st_mtime
+codes = []
+for folder in (Path.home() / "Library/Logs/DiagnosticReports",
+               Path("/Library/Logs/DiagnosticReports")):
+    for path in folder.glob("*.ips"):
+        try:
+            if path.stat().st_mtime < threshold:
+                continue
+            metadata, body = path.read_text().split("\n", 1)
+            if json.loads(metadata).get("bundleID") != bundle_id:
+                continue
+            crash_type = json.loads(body).get("exception", {}).get("type", "")
+            if re.fullmatch(r"EXC_[A-Z_]+", crash_type):
+                codes.append(crash_type)
+        except (OSError, ValueError, AttributeError):
+            continue
+Path(report).write_text(json.dumps({"exceptionTypes": sorted(set(codes))}) + "\n")
+PY_CRASH
+}
+
 if [[ -n $report ]]; then
     mkdir -p -- "$report"
     report=$(cd -- "$report" && pwd)
@@ -150,7 +215,15 @@ if curl --silent --fail --max-time 3 --output /dev/null "$proxy_endpoint/api/v1/
     exit 1
 fi
 test -f "$working_dir/blocked"
+if [[ -n $report ]]; then
+    touch "$working_dir/capture-start"
+    bundle=$("${simctl[@]}" get_app_container "$device" "$app" app)
+    executable=$(plutil -extract CFBundleExecutable raw -o - "$bundle/Info.plist")
+    watch_process "$bundle/$executable" > "$working_dir/process-samples" &
+    process_watch_pid=$!
+fi
 run_flow capture-ios
+stop_process_watch
 report_storage after-draft-save
 "${simctl[@]}" terminate "$device" "$app"
 report_storage after-draft-stop

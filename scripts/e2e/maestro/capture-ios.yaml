@@ -60,14 +60,9 @@ appId: io.honua.collect
     index: 1
 - inputText: Offline visit two
 - pressKey: Enter
-# Keep the action clear of the floating iOS tab bar before tapping.
 - scrollUntilVisible:
     element: Save draft
     visibilityPercentage: 100
-- swipe:
-    start: 90%,76%
-    end: 90%,57%
-    duration: 450
 - assertVisible: Save draft
 - takeScreenshot: capture-ios-before-action
 - tapOn:

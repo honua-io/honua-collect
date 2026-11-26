@@ -43,6 +43,11 @@ public partial class FormPage : ContentPage
         _relatedStore = relatedStore;
         _book = book;
         InitializeComponent();
+#if IOS
+        // Keep the floating Shell tab bar away from the editor actions. The
+        // setting is scoped to this page, so the tabs return after navigation.
+        Shell.SetTabBarIsVisible(this, false);
+#endif
         BindingContext = viewModel;
     }
 
