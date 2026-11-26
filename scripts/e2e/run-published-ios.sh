@@ -28,7 +28,7 @@ process_watch_pid=
 
 cleanup() {
     local status=$?
-    stop_process_watch
+    stop_process_watch || true
     if [[ $status -ne 0 && -n $report ]]; then
         report_crash || true
         "${simctl[@]}" io "$device" screenshot "$report/failure.png" || true
@@ -97,7 +97,7 @@ PY_STORAGE
 watch_process() {
     local executable=$1
     while :; do
-        ps -ax -o pid=,comm= | awk -v executable="$executable" '
+        ps -axww -o pid=,comm= | awk -v executable="$executable" '
             { pid = $1; sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "") }
             $0 == executable { print pid; found = 1 }
             END { if (!found) print "absent" }
