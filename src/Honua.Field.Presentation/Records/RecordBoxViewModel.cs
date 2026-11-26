@@ -37,10 +37,27 @@ public sealed class RecordRowViewModel(FieldRecordEntry entry) : ObservableObjec
     };
 }
 
+/// <summary>A selectable record or an empty-state message in a mailbox.</summary>
+public sealed record RecordBoxItem(RecordRowViewModel? Record, string? EmptyText)
+{
+    /// <summary>Whether this row represents a record.</summary>
+    public bool HasRecord => Record is not null;
+
+    /// <summary>Whether this row displays the empty state.</summary>
+    public bool IsEmpty => Record is null;
+}
+
+/// <summary>A mailbox and its ordered rows. Empty mailboxes retain a message row.</summary>
+public sealed class RecordBoxGroup(string title, IEnumerable<RecordBoxItem> items) : ReadOnlyCollection<RecordBoxItem>(items.ToList())
+{
+    /// <summary>The mailbox name displayed above its rows.</summary>
+    public string Title { get; } = title;
+}
+
 /// <summary>
 /// View-model for the records screen: Drafts, Outbox, and Sent mailboxes (BACKLOG S4).
 /// Groups the tracked records by box and exposes a
-/// summary header; the list screen binds tabs to each box.
+/// summary header.
 /// </summary>
 public sealed class RecordBoxViewModel : ObservableObject
 {
@@ -73,6 +90,9 @@ public sealed class RecordBoxViewModel : ObservableObject
     /// <summary>Records uploaded to the server.</summary>
     public ObservableCollection<RecordRowViewModel> Sent { get; }
 
+    /// <summary>The three mailboxes displayed in the records list.</summary>
+    public IReadOnlyList<RecordBoxGroup> VisibleGroups { get; private set; } = [];
+
     /// <summary>Aggregate counts for the header.</summary>
     public SyncSummary Summary
     {
@@ -90,9 +110,21 @@ public sealed class RecordBoxViewModel : ObservableObject
         FillBox(Outbox, RecordBox.Outbox);
         FillBox(Conflicts, RecordBox.Conflicts);
         FillBox(Sent, RecordBox.Sent);
+        VisibleGroups =
+        [
+            CreateGroup("Drafts", Drafts, "No drafts."),
+            CreateGroup("Outbox", Outbox, "Outbox is empty."),
+            CreateGroup("Sent", Sent, "Nothing sent yet."),
+        ];
         Summary = SyncSummary.From(_entries);
+        OnPropertyChanged(nameof(VisibleGroups));
         OnPropertyChanged(nameof(Header));
     }
+
+    private static RecordBoxGroup CreateGroup(string title, IReadOnlyCollection<RecordRowViewModel> rows, string emptyText) =>
+        new(title, rows.Count == 0
+            ? [new RecordBoxItem(null, emptyText)]
+            : rows.Select(row => new RecordBoxItem(row, null)));
 
     private void FillBox(ObservableCollection<RecordRowViewModel> target, RecordBox box)
     {
