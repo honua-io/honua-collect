@@ -8,6 +8,8 @@ appId: io.honua.collect
 - extendedWaitUntil:
     visible: 'Drafts 1 · Outbox 1 · Conflicts 0 · Sent 0'
     timeout: 15000
+- assertVisible: ${OUTBOX_ID}
+- assertVisible: Ready to send
 - tapOn: ${DRAFT_ID}
 - assertVisible: ${INSPECTION_NAME}
 - scrollUntilVisible:

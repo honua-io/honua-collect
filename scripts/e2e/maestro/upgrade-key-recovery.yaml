@@ -1,0 +1,12 @@
+appId: io.honua.collect
+---
+- launchApp
+- extendedWaitUntil:
+    visible: 'The device key for existing field data is unavailable\..*'
+    timeout: 90000
+- assertVisible: Retry
+- tapOn: Retry
+- extendedWaitUntil:
+    visible: 'The device key for existing field data is unavailable\..*'
+    timeout: 15000
+- assertVisible: Retry
