@@ -23,6 +23,7 @@ working_dir=$(mktemp -d)
 fault_proxy_pid=
 reverse_started=false
 settings_written=false
+latest_version=
 flow_number=0
 umask 077
 
@@ -69,7 +70,7 @@ run_flow() {
         report=(--format junit --output "$HONUA_E2E_REPORT_DIR/$flow_number-$flow.xml")
     fi
     "${maestro[@]}" test "${report[@]}" -e "INSPECTION_NAME=$name" \
-        -e "FORM_VERSION=$version" "$script_dir/maestro/$flow.yaml"
+        -e "CORRECTED_NAME=${HONUA_E2E_CORRECTED_NAME:-}" -e "FORM_VERSION=$version" "$script_dir/maestro/$flow.yaml"
 }
 
 "${adb[@]}" shell run-as "$app" id >/dev/null
@@ -114,6 +115,10 @@ run_flow download
 
 run_flow capture
 "${adb[@]}" shell am force-stop "$app"
+if [[ ${HONUA_E2E_PUBLISH_NEXT_VERSION:-0} == 1 ]]; then
+    # The device is still offline. Only the host has the fixture admin key.
+    latest_version=$("$script_dir/publish-next-inspection-version.sh" "$port" "$version" "${3:?Pass the fixture admin key file to publish another version}")
+fi
 run_flow resume-draft
 "${adb[@]}" shell am force-stop "$app"
 run_flow verify-outbox
@@ -127,26 +132,42 @@ fi
 "${adb[@]}" exec-out run-as "$app" cat "${new_media[0]}" > "$working_dir/attachment"
 test -s "$working_dir/attachment"
 
-# The server commits the first upload, but Field sees a transient network error.
-# Restart with its failed outbox on disk and deliver the real receipt on retry.
-python3 "$script_dir/lose-submission-receipt.py" "$port" "$form" "$working_dir" &
-fault_proxy_pid=$!
-for ((attempt = 0; attempt < 100; ++attempt)); do
-    [[ -s "$working_dir/port" ]] && break
-    kill -0 "$fault_proxy_pid"
-    sleep 0.1
-done
-proxy_port=$(cat "$working_dir/port")
-"${adb[@]}" reverse "tcp:${port}" "tcp:${proxy_port}" >/dev/null
-run_flow retry-outbox
-test -f "$working_dir/withheld"
-"${adb[@]}" shell am force-stop "$app"
-run_flow verify-outbox
-"${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
-run_flow sync
+if [[ -n ${HONUA_E2E_CORRECTED_NAME:-} ]]; then
+    "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
+    run_flow reject-outbox
+    "${adb[@]}" shell am force-stop "$app"
+    "${adb[@]}" reverse --remove "tcp:${port}"
+    run_flow correct-rejection
+    "${adb[@]}" shell am force-stop "$app"
+    run_flow verify-outbox
+    "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
+    run_flow sync
+    name=$HONUA_E2E_CORRECTED_NAME
+else
+    # The server commits the first upload, but Field sees a transient network error.
+    # Restart with its failed outbox on disk and deliver the real receipt on retry.
+    python3 "$script_dir/lose-submission-receipt.py" "$port" "$form" "$working_dir" &
+    fault_proxy_pid=$!
+    for ((attempt = 0; attempt < 100; ++attempt)); do
+        [[ -s "$working_dir/port" ]] && break
+        kill -0 "$fault_proxy_pid"
+        sleep 0.1
+    done
+    proxy_port=$(cat "$working_dir/port")
+    "${adb[@]}" reverse "tcp:${port}" "tcp:${proxy_port}" >/dev/null
+    run_flow retry-outbox
+    test -f "$working_dir/withheld"
+    "${adb[@]}" shell am force-stop "$app"
+    run_flow verify-outbox
+    "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
+    run_flow sync
+fi
 readback_report=()
 if [[ -n ${HONUA_E2E_REPORT_DIR:-} ]]; then
     readback_report=(--report "$HONUA_E2E_REPORT_DIR/server-readback.json")
+fi
+if [[ -n $latest_version ]]; then
+    readback_report+=(--latest-version "$latest_version")
 fi
 python3 "$script_dir/assert-field-record.py" --server "$endpoint" --api-key-file "$readback_key_file" \
     --form "$form" --version "$version" --name "$name" --status open --status closed --total 2 \

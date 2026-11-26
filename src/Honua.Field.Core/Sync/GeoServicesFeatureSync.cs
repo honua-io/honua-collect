@@ -225,7 +225,8 @@ public sealed class GeoServicesFeatureSync
     /// turns a duplicate add into a no-op — the at-most-once guarantee. The
     /// matching server-side dedupe is a honua-server follow-up; until then the
     /// client key is inert but harmless and the suppress-on-ambiguity behaviour
-    /// above still prevents auto-retry duplicates.
+    /// above still prevents auto-retry duplicates. If the server explicitly rejects
+    /// GlobalID editing before writing, the add is sent without that edit mode.
     /// </para>
     /// </remarks>
     public Task<FeatureSyncResult> SubmitAsync(
@@ -1011,6 +1012,15 @@ public sealed class GeoServicesFeatureSync
         using var response = await _http.PostAsync(target.ApplyEditsUrl, content, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
+        if (useGlobalIds && (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            && IsUnsupportedGlobalIdMode(body))
+        {
+            // The server rejected the edit mode before applying any writes. Keep the
+            // same attributes and let the layer allocate its own object ID.
+            return await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds: false, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             // 5xx/429/408 are transient; mark them retryable via the HTTP status code.
@@ -1018,6 +1028,39 @@ public sealed class GeoServicesFeatureSync
         }
 
         return ParseResult(body, resultKey);
+    }
+
+    private static bool IsUnsupportedGlobalIdMode(string body)
+    {
+        static bool IsUnsupportedDetail(string? value) =>
+            string.Equals(value, "useGlobalIds is not supported", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "useGlobalIds is not supported for this layer", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("error", out var error)
+                || error.ValueKind != JsonValueKind.Object
+                || !error.TryGetProperty("code", out var code)
+                || code.ValueKind != JsonValueKind.Number
+                || !code.TryGetInt32(out var status)
+                || status != 400)
+            {
+                return false;
+            }
+
+            return (error.TryGetProperty("message", out var message)
+                    && message.ValueKind == JsonValueKind.String
+                    && IsUnsupportedDetail(message.GetString()))
+                || (error.TryGetProperty("details", out var details)
+                    && details.ValueKind == JsonValueKind.Array
+                    && details.EnumerateArray().Any(detail => detail.ValueKind == JsonValueKind.String
+                        && IsUnsupportedDetail(detail.GetString())));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool IsRetryable(FeatureSyncResult result, bool idempotent)

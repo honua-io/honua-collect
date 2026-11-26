@@ -40,9 +40,13 @@ public class FeatureSyncE2ETests
 
     private static FieldRecord Site(string marker, Action<FieldRecord>? customize = null)
     {
-        var r = new FieldRecord { RecordId = marker, FormId = "field-site", Location = new FieldGeoPoint(21.31, -157.81) };
+        var r = new FieldRecord { RecordId = Guid.NewGuid().ToString("D"), FormId = "field-site", Location = new FieldGeoPoint(21.31, -157.81) };
         r.Values["site_name"] = marker;
         r.Values["status"] = "new";
+        r.Values["priority"] = "medium";
+        r.Values["offline_action"] = "field-e2e";
+        r.Values["inspection_date"] = "2026-05-01T18:00:00Z";
+        r.Values["sync_version"] = 1;
         customize?.Invoke(r);
         return r;
     }
@@ -130,6 +134,7 @@ public class FeatureSyncE2ETests
         var sync = new GeoServicesFeatureSync(http);
         var marker = Marker();
         var added = await sync.SubmitAsync(Site(marker), Target);
+        Assert.True(added.Success, added.Error);
         Assert.Equal(1, await CountByNameAsync(http, marker));
 
         var deleted = await sync.DeleteAsync(added.ObjectId!.Value, Target);
@@ -154,7 +159,7 @@ public class FeatureSyncE2ETests
     }
 
     [SkippableFact]
-    public async Task Delete_of_nonexistent_feature_is_rejected_not_crashing()
+    public async Task Delete_of_nonexistent_feature_succeeds_idempotently()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
@@ -162,8 +167,8 @@ public class FeatureSyncE2ETests
         using var http = Authed();
         var result = await new GeoServicesFeatureSync(http).DeleteAsync(999_000_222, Target);
 
-        Assert.False(result.Success);
-        Assert.Contains("not found", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(999_000_222L, result.ObjectId);
     }
 
     [SkippableFact]
@@ -223,6 +228,7 @@ public class FeatureSyncE2ETests
         var marker = Marker();
 
         var added = await sync.SubmitAsync(Site(marker), Target);
+        Assert.True(added.Success, added.Error);
         var oid = added.ObjectId!.Value;
 
         // N concurrent writers each set notes to a distinct value — a write
@@ -243,7 +249,7 @@ public class FeatureSyncE2ETests
     }
 
     [SkippableFact]
-    public async Task Duplicate_submissions_create_distinct_rows_server_side()
+    public async Task Separate_records_with_identical_capture_data_create_distinct_rows()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
 
@@ -253,13 +259,11 @@ public class FeatureSyncE2ETests
         var marker = Marker();
 
         var r1 = await sync.SubmitAsync(Site(marker), Target);
-        var r2 = await sync.SubmitAsync(Site(marker), Target); // identical capture submitted twice
+        var r2 = await sync.SubmitAsync(Site(marker), Target);
 
-        Assert.True(r1.Success && r2.Success);
+        Assert.True(r1.Success, r1.Error);
+        Assert.True(r2.Success, r2.Error);
         Assert.NotEqual(r1.ObjectId, r2.ObjectId);
-        // The Feature Server is not a dedup authority — both adds persist as
-        // distinct rows; duplicate suppression is a client-side concern
-        // (SDK DuplicateDetector), not the transport's.
         Assert.Equal(2, await CountByNameAsync(http, marker));
     }
 }
