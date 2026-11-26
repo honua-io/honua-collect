@@ -69,14 +69,24 @@ def installed(device, apk):
 
 
 def run_flow(args, phase, flow, **variables):
-    subprocess.run(
-        [os.environ.get("MAESTRO", "maestro"), "--device", args.serial, "test",
-         "--format", "junit", "--output", str(args.report / f"{phase}-{flow}.xml"),
-         *[item for key, value in variables.items() for item in ("-e", f"{key}={value}")],
-         str(HERE / "maestro" / f"{flow}.yaml")],
-        check=True,
-        timeout=360,
-    )
+    command = [
+        os.environ.get("MAESTRO", "maestro"), "--device", args.serial, "test",
+        "--format", "junit", "--output", str(args.report / f"{phase}-{flow}.xml"),
+        *[item for key, value in variables.items() for item in ("-e", f"{key}={value}")],
+        str(HERE / "maestro" / f"{flow}.yaml"),
+    ]
+    try:
+        subprocess.run(command, check=True, timeout=360)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        adb = [os.environ.get("ADB", "adb"), "-s", args.serial]
+        try:
+            subprocess.run([*adb, "get-state"], check=False, timeout=10)
+            with (args.report / "failure.png").open("wb") as screenshot:
+                subprocess.run([*adb, "exec-out", "screencap", "-p"], stdout=screenshot,
+                               check=False, timeout=10)
+        except subprocess.TimeoutExpired:
+            print("Emulator did not respond while collecting failure evidence.", flush=True)
+        raise
 
 
 def records(device):
@@ -180,8 +190,13 @@ def seed(args, device):
     device.adb("reverse", f"tcp:{port}", f"tcp:{port}")
     try:
         run_flow(args, "before", "download", FORM_VERSION=form["version"])
-    finally:
-        device.adb("reverse", "--remove", f"tcp:{port}")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        try:
+            device.adb("reverse", "--remove", f"tcp:{port}")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            print("Emulator reverse cleanup also failed after download failure.", flush=True)
+        raise
+    device.adb("reverse", "--remove", f"tcp:{port}")
 
     for flow, name in (("capture", QUEUE_NAME), ("resume-draft", QUEUE_NAME), ("capture", DRAFT_NAME)):
         stop(device)
