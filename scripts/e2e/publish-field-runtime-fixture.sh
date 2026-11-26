@@ -8,7 +8,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-server_seed=$1/tests/seed/client-compat-v1.sql
+server_seed=$1/tests/seed/base-schema.sql
 admin_key_file=$2
 port=${HONUA_E2E_HTTP_PORT:-5189}
 base="http://127.0.0.1:$port"
@@ -23,10 +23,7 @@ umask 077
 
 db=(docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U "$user" -d "$database")
 "${db[@]}" < "$script_dir/fixtures/field-runtime-inspection.sql" >/dev/null
-# The upstream compatibility seed omits string lengths from versioned layer metadata.
-sed -n '/^CREATE OR REPLACE FUNCTION honua\.seed_metadata_v2_compat_snapshot()/,/^\$\$;/p' "$server_seed" |
-    sed "/'description', lf.description,/a\\                                'length', lf.max_length," |
-    "${db[@]}" >/dev/null
+sed -n '/^CREATE OR REPLACE FUNCTION honua\.seed_metadata_v2_compat_snapshot()/,/^\$\$;/p' "$server_seed" | "${db[@]}" >/dev/null
 "${db[@]}" -c 'SELECT honua.seed_metadata_v2_compat_snapshot();' >/dev/null
 
 if [[ -n ${HONUA_E2E_RESTART_SERVER_COMMAND:-} ]]; then
