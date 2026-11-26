@@ -50,6 +50,7 @@ run_flow() {
     local flow=$1
     local options=()
     stage=$((stage + 1))
+    echo "Running iOS flow $stage ($flow)"
     if [[ -n $report ]]; then
         local output="$report/$stage-$flow"
         mkdir -p -- "$output"
@@ -70,6 +71,7 @@ if [[ -n $report ]]; then
     mkdir -p -- "$report"
     report=$(cd -- "$report" && pwd)
 fi
+echo "Preparing the installed Field app and local test proxy."
 data=$("${simctl[@]}" get_app_container "$device" "$app" data)
 settings="$data/Library/appsettings.local.json"
 "${simctl[@]}" terminate "$device" "$app" >/dev/null 2>&1 || true
@@ -101,11 +103,13 @@ Path(settings).write_text(json.dumps({
 }))
 PY
 
+echo "Setting simulator location and seeding the photo library."
 "${simctl[@]}" privacy "$device" grant location "$app"
 "${simctl[@]}" privacy "$device" grant photos "$app"
 "${simctl[@]}" location "$device" set 21.31,-157.81
 "${simctl[@]}" addmedia "$device" "$script_dir/maestro/inspection.png"
 
+echo "Checking the published fixture through the proxy."
 printf 'X-API-Key: %s\n' "$(cat "$worker_key")" > "$working_dir/worker-header"
 version=$(curl --fail --silent --show-error -H @"$working_dir/worker-header" \
     "$proxy_endpoint/api/v1/forms/$form" | jq -er '
