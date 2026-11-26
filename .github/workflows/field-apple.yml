@@ -67,25 +67,40 @@ jobs:
           results="$RUNNER_TEMP/field-ios-results"
           mkdir -p "$results"
           xcrun simctl list devices available --json > "$results/simulators.json"
+          run_bounded() {
+            python3 -c 'import subprocess, sys; sys.exit(subprocess.run(sys.argv[2:], timeout=int(sys.argv[1])).returncode)' "$@"
+          }
           failed=0
           for family in iPhone iPad; do
-            device=$(jq -er --arg family "$family" '
+            mkdir -p "$results/$family"
+            if ! device=$(jq -er --arg family "$family" '
               .devices["com.apple.CoreSimulator.SimRuntime.iOS-27-2"]
               | map(select(.name | startswith($family)))
               | first
               | .udid
-            ' "$results/simulators.json")
-            xcrun simctl boot "$device"
-            xcrun simctl bootstatus "$device" -b
-            xcrun simctl install "$device" "$app"
-            mkdir -p "$results/$family"
-            if ! maestro --device "$device" test --format junit \
-              --output "$results/$family/junit.xml" --test-output-dir "$results/$family" \
-              --debug-output "$results/$family" scripts/e2e/maestro/geometry-ios.yaml; then
+            ' "$results/simulators.json"); then
+              echo "::error::No iOS 27.2 $family simulator found"
               failed=1
-              xcrun simctl io "$device" screenshot "$results/$family/failure.png"
+              continue
             fi
-            xcrun simctl shutdown "$device"
+            echo "Booting $family simulator $device"
+            if ! run_bounded 30 xcrun simctl boot "$device" ||
+               ! run_bounded 180 xcrun simctl bootstatus "$device" -b; then
+              echo "::error::$family simulator failed to boot"
+              failed=1
+            elif ! run_bounded 90 xcrun simctl install "$device" "$app"; then
+              echo "::error::Field installation failed on $family"
+              failed=1
+            else
+              echo "Running polygon capture on $family"
+              if ! run_bounded 240 maestro --device "$device" test --format junit \
+                --output "$results/$family/junit.xml" --test-output-dir "$results/$family" \
+                --debug-output "$results/$family" scripts/e2e/maestro/geometry-ios.yaml; then
+                failed=1
+                run_bounded 20 xcrun simctl io "$device" screenshot "$results/$family/failure.png" || true
+              fi
+            fi
+            run_bounded 20 xcrun simctl shutdown "$device" || true
           done
           exit "$failed"
       - name: Upload iPhone and iPad smoke evidence
