@@ -1,0 +1,20 @@
+{
+  "package": "io.honua.collect",
+  "version_code": 3,
+  "version_name": "1.1",
+  "android_build": "google/sdk_gphone64_x86_64/emu64x:13/TE1A.240213.009/12342917:userdebug/dev-keys",
+  "map_fixture": "osm-honolulu-z12-offline-cache",
+  "gesture": {
+    "endpoints_px": [
+      250,
+      1500,
+      1100,
+      1500
+    ],
+    "swipes": 10,
+    "duration_ms": 400
+  },
+  "frames": 61.0,
+  "panning_p95_ms": 300.0,
+  "panning_jank_percent": 100.0
+}

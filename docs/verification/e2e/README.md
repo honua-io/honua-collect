@@ -6,20 +6,24 @@ PostgreSQL — the full capture → sync → store loop.
 
 ## Published XLSForm Android gate
 
-The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) installs a standalone Debug APK on an Android API 33 emulator, builds the pinned Honua Server revision, starts PostGIS and publishes the inspection workbook. Maestro drives the native Field screens under a layer-scoped worker account.
+The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) builds two signed Debug APKs, starts the pinned Honua Server revision with PostGIS and publishes the inspection workbook. Maestro drives the native Field screens on Android API 33 under a layer-scoped worker account.
 
-The gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. In CI the host publishes a newer revision while the draft is offline. The original version must still be used when the draft resumes and uploads. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
+The first scenario installs Field versionCode 2 from commit `ff0a2c4`, downloads the workbook, disconnects the server and saves two inspections. One stays editable and one is queued. The gate installs the candidate APK over the older app and compares the Android UID, signing certificate, record IDs, queue state, cached form version and both attachment hashes. It then temporarily removes access to the device key, taps Retry, verifies that the local database files have identical hashes and restores the key. The saved draft must reopen and the queued inspection must still be ready to send.
 
-A second inspection exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
+After clearing Field’s local data on the emulator, the gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. In CI the host publishes a newer revision while the draft is offline. The original version must still be used when the draft resumes and uploads. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
 
-To rerun the native flow on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. To exercise the version change locally, set `HONUA_E2E_PUBLISH_NEXT_VERSION=1` and pass the disposable fixture admin key as the third argument. The script removes its temporary settings and network forwarding on exit.
+The final scenario exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
+
+To rerun the dropped-response scenario on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. To exercise the version change locally, set `HONUA_E2E_PUBLISH_NEXT_VERSION=1` and pass the disposable fixture admin key as the third argument. The script removes its temporary settings and network forwarding on exit.
 
 ```bash
 HONUA_E2E_REPORT_DIR=/tmp/field-android-results \
   scripts/e2e/run-published-android.sh emulator-5554 /path/to/worker-key /path/to/readback-key
 ```
 
-The workflow pins Maestro and the emulator version. Its `published-android-results` artifact groups JUnit reports by scenario and capture phase. On success, `server-readback.json` records the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. A failed run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
+The workflow pins Maestro and the emulator version. Its `published-android-results` artifact groups JUnit reports by scenario and capture phase. Compare `upgrade/before.json`, `upgrade/after.json` and `upgrade/recovered-key.json` for installed upgrade evidence. The replay and correction folders contain `server-readback.json` with the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. The correction folder also contains the two submission identities in `correction-ledger.json`. A failed capture or sync run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
+
+The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45872622719) passed all 23 Maestro phases across the installed upgrade (7), receipt replay (7) and rejection correction (9). The [run artifact](https://github.com/honua-io/honua-field/actions/runs/45872622719/artifacts/15144523638) contains the matching upgrade snapshots, both server readbacks and the correction ledger.
 
 ## GeoServices capture topology
 
@@ -80,5 +84,7 @@ and "feature not found", so `GeoServicesFeatureSync` now retries with backoff,
 classifying permanence by message; contended submissions all succeed. Separately,
 integer attributes in the shared `features` JSONB column round-trip as strings
 (asserted tolerantly; a server-side storage-mapping item).
+
+All nine tests passed on Field `889b8d1` against the repository’s seeded layer 68910, Honua Server `83127df`, PostgreSQL 18.6 and PostGIS 3.6.4. This live suite exercises Field’s GeoServices client directly. The Maestro workflow above covers the installed Android app and published XLSForm path.
 
 Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.
