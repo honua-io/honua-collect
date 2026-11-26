@@ -11,7 +11,7 @@ namespace Honua.Field.App.Services;
 /// <see cref="RecordBook"/> and <see cref="Core.History.RecordRevertService"/> share
 /// one encrypted SQLite store without blocking startup.
 /// </summary>
-internal sealed class LazyRecordStore : IRecordStore
+public sealed class LazyRecordStore : IRecordStore
 {
     private readonly Func<Task<IRecordStore>> _factory;
     private readonly SemaphoreSlim _initGate = new(1, 1);
@@ -29,7 +29,7 @@ internal sealed class LazyRecordStore : IRecordStore
     public async Task DeleteAsync(string recordId, CancellationToken ct = default)
         => await (await GetStoreAsync(ct).ConfigureAwait(false)).DeleteAsync(recordId, ct).ConfigureAwait(false);
 
-    private async Task<IRecordStore> GetStoreAsync(CancellationToken ct)
+    internal async Task<IRecordStore> GetStoreAsync(CancellationToken ct = default)
     {
         var existing = Volatile.Read(ref _inner);
         if (existing is not null)
