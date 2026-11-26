@@ -4,6 +4,7 @@
 using Honua.Field.Core.Field.Forms.Cascade;
 using Honua.Field.Core.Field.Forms.Validation;
 using Honua.Field.Core.Field.Related;
+using Honua.Field.Core.Forms;
 using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Forms.Expressions;
 using Honua.Sdk.Field.Records;
@@ -43,6 +44,8 @@ public sealed class FormSession : ICaptureHost
     private readonly Dictionary<string, RelatedRecords> _related = new(StringComparer.OrdinalIgnoreCase);
     private readonly IReadOnlyList<FormFieldValidationRule> _validationRules;
     private readonly FormDefinition _scalarForm;
+    private readonly PublishedXlsFormExpressions? _expressions;
+    private readonly FieldRecord? _parent;
 
     private FormSession(
         FormDefinition form,
@@ -51,7 +54,9 @@ public sealed class FormSession : ICaptureHost
         IEnumerable<ChoiceCascadeRule>? cascadeRules = null,
         Localization.FormLocalization? localization = null,
         IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null,
-        IEnumerable<FormFieldValidationRule>? validationRules = null)
+        IEnumerable<FormFieldValidationRule>? validationRules = null,
+        PublishedXlsFormExpressions? expressions = null,
+        FieldRecord? parent = null)
     {
         // When a localization service is supplied (BACKLOG F2), the runtime binds to
         // the form localized to the active language. Field ids, types, validation,
@@ -61,6 +66,8 @@ public sealed class FormSession : ICaptureHost
 
         Form = form;
         Record = record;
+        _expressions = expressions;
+        _parent = parent;
         _validationRules = validationRules is null ? [] : validationRules.ToList();
 
         if (cascadeRules is not null)
@@ -100,7 +107,7 @@ public sealed class FormSession : ICaptureHost
         foreach (var section in form.Sections.Where(s => s.Repeatable))
         {
             var bounds = repeatBounds is not null && repeatBounds.TryGetValue(section.SectionId, out var b) ? b : null;
-            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds);
+            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds, expressions, record);
         }
 
         RecomputeScalar();
@@ -300,6 +307,27 @@ public sealed class FormSession : ICaptureHost
         return new FormSession(form, record, repeatBounds, cascadeRules, localization, linkBehaviors, validationRules);
     }
 
+    internal static FormSession OpenPublished(
+        FormDefinition form,
+        FieldRecord record,
+        IReadOnlyDictionary<string, RepeatBounds>? repeatBounds,
+        PublishedXlsFormExpressions? expressions,
+        FieldRecord? parent = null)
+        => new(form, record, repeatBounds, expressions: expressions, parent: parent);
+
+    internal static FormSession CreatePublished(
+        FormDefinition form,
+        string recordId,
+        IReadOnlyDictionary<string, RepeatBounds> repeatBounds,
+        IReadOnlyDictionary<string, object?> defaults,
+        PublishedXlsFormExpressions? expressions)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
+        var record = new FieldRecord { RecordId = recordId, FormId = form.FormId };
+        ApplyResolvedDefaults(form, record, defaults);
+        return OpenPublished(form, record, repeatBounds, expressions);
+    }
+
     /// <summary>Gets the live state for a field.</summary>
     /// <param name="fieldId">Field identifier.</param>
     /// <returns>The field state.</returns>
@@ -480,7 +508,19 @@ public sealed class FormSession : ICaptureHost
 
     private FormValidationResult RecomputeScalar()
     {
-        CalculatedFieldEvaluator.ApplyCalculatedFields(_scalarForm, Record);
+        var evaluationRecord = _expressions?.EvaluationRecord(Record, _parent) ?? Record;
+        CalculatedFieldEvaluator.ApplyCalculatedFields(_scalarForm, evaluationRecord);
+        if (_expressions is not null)
+        {
+            foreach (var state in _ordered)
+            {
+                if (state.Field.CalculatedExpression is not null &&
+                    evaluationRecord.Values.TryGetValue(state.FieldId, out var calculated))
+                {
+                    Record.Values[state.FieldId] = calculated;
+                }
+            }
+        }
 
         // Mirror calculated outputs back into the bound state.
         foreach (var state in _ordered)
@@ -491,10 +531,14 @@ public sealed class FormSession : ICaptureHost
             }
         }
 
-        RecomputeVisibility();
+        RecomputeVisibility(evaluationRecord.Values);
         RecomputeChoices();
 
-        var validation = FormValidator.Validate(_scalarForm, Record);
+        if (_expressions is not null)
+        {
+            evaluationRecord = _expressions.EvaluationRecord(Record, _parent);
+        }
+        var validation = FormValidator.Validate(_scalarForm, evaluationRecord);
 
         // The SDK validator uses flat visibility; restrict reported errors to
         // fields this session considers visible so cascaded-hidden fields never
@@ -533,13 +577,13 @@ public sealed class FormSession : ICaptureHost
         return new FormValidationResult(visibleErrors);
     }
 
-    private void RecomputeVisibility()
+    private void RecomputeVisibility(IReadOnlyDictionary<string, object?> expressionValues)
     {
         var resolving = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var state in _ordered)
         {
-            state.IsVisible = ResolveVisibility(state.FieldId, resolving);
+            state.IsVisible = ResolveVisibility(state.FieldId, resolving, expressionValues);
         }
     }
 
@@ -568,7 +612,7 @@ public sealed class FormSession : ICaptureHost
         }
     }
 
-    private bool ResolveVisibility(string fieldId, HashSet<string> resolving)
+    private bool ResolveVisibility(string fieldId, HashSet<string> resolving, IReadOnlyDictionary<string, object?> expressionValues)
     {
         if (!_states.TryGetValue(fieldId, out var state))
         {
@@ -580,7 +624,7 @@ public sealed class FormSession : ICaptureHost
         var relevance = state.Field.RelevanceExpression;
         if (!string.IsNullOrWhiteSpace(relevance))
         {
-            return ExpressionEvaluator.EvaluateBoolean(relevance, Record.Values);
+            return ExpressionEvaluator.EvaluateBoolean(relevance, expressionValues);
         }
 
         var rule = state.Field.VisibilityRule;
@@ -600,7 +644,7 @@ public sealed class FormSession : ICaptureHost
             // A field is hidden if the field it depends on is itself hidden,
             // so visibility cascades through chains (A controls B controls C).
             if (_states.ContainsKey(rule.DependsOnFieldId) &&
-                !ResolveVisibility(rule.DependsOnFieldId, resolving))
+                !ResolveVisibility(rule.DependsOnFieldId, resolving, expressionValues))
             {
                 return false;
             }

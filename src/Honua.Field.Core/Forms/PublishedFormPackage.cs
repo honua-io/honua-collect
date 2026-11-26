@@ -12,6 +12,7 @@ namespace Honua.Field.Core.Forms;
 /// <summary>A published server form version and the settings needed to capture a record.</summary>
 public sealed class PublishedFormPackage
 {
+    private readonly PublishedXlsFormExpressions? _expressions;
     private readonly Dictionary<string, RepeatBounds> _repeatBounds = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, object?> _defaults = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Dictionary<string, JsonElement>> _choiceCodes = new(StringComparer.OrdinalIgnoreCase);
@@ -26,6 +27,13 @@ public sealed class PublishedFormPackage
             .ToDictionary(field => field.RequiredText("fieldId"), StringComparer.OrdinalIgnoreCase);
         var fields = package.Property("fields").Items()
             .ToDictionary(field => field.RequiredText("fieldId"), StringComparer.OrdinalIgnoreCase);
+        if (package.Text("expressionLanguage") == "xlsform")
+        {
+            _expressions = new PublishedXlsFormExpressions(fields.Values
+                .Where(field => field.Text("type")?.ToLowerInvariant() is "multichoice" or "multiplechoice")
+                .Select(field => field.RequiredText("fieldId")));
+        }
+
         var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sections = new List<FormSection>();
         foreach (var section in package.Property("sections").Items())
@@ -78,7 +86,7 @@ public sealed class PublishedFormPackage
 
     internal string EnvelopeJson { get; }
 
-    internal FormSession OpenRecord(FieldRecord record) => FormSession.Open(Definition, record, repeatBounds: _repeatBounds);
+    internal FormSession OpenRecord(FieldRecord record) => FormSession.OpenPublished(Definition, record, _repeatBounds, _expressions);
 
     /// <summary>The form definition for the capture runtime.</summary>
     public FormDefinition Definition { get; }
@@ -94,7 +102,7 @@ public sealed class PublishedFormPackage
 
     /// <summary>Starts a new record with the form's defaults and repeat bounds.</summary>
     public FormSession CreateSession(string recordId) =>
-        FormSession.CreateForNewRecord(Definition, recordId, repeatBounds: _repeatBounds, seedDefaults: _defaults);
+        FormSession.CreatePublished(Definition, recordId, _repeatBounds, _defaults, _expressions);
 
     /// <summary>Reopens a cached published version when it permits offline use.</summary>
     public static PublishedFormPackage? LoadCached(string formId, string cachePath)
@@ -189,7 +197,10 @@ public sealed class PublishedFormPackage
 
         var policy = attachmentPolicy.GetValueOrDefault(fieldId);
         var required = field.Property("required").ValueKind == JsonValueKind.True || policy.Property("required").ValueKind == JsonValueKind.True;
-        var calculatedExpression = field.Text("calculatedExpression");
+        string? Expression(string property) => _expressions is null
+            ? field.Text(property)
+            : _expressions.Compile(field.Text(property), fieldId);
+        var calculatedExpression = Expression("calculatedExpression");
         var mediaTypes = policy.Property("allowedContentTypes").Items()
             .Select(item => item.GetString()).OfType<string>().ToArray();
         var type = calculatedExpression is not null ? FormFieldType.Calculated : field.Text("type")?.ToLowerInvariant() switch
@@ -211,7 +222,7 @@ public sealed class PublishedFormPackage
             Required = required,
             Choices = choices,
             VisibilityRule = MapVisibility(field.Property("visibility")),
-            RelevanceExpression = field.Text("relevanceExpression"),
+            RelevanceExpression = Expression("relevanceExpression"),
             CalculatedExpression = calculatedExpression,
             Validation = new FieldValidationRule
             {
@@ -219,7 +230,7 @@ public sealed class PublishedFormPackage
                 MaxNumericValue = domain.Property("max").Number(),
                 MinMediaCount = FormFieldTypes.IsMedia(type) && required ? 1 : null,
                 MaxMediaCount = policy.Property("maxCount").Integer(),
-                ConstraintExpression = field.Text("constraintExpression"),
+                ConstraintExpression = Expression("constraintExpression"),
                 ConstraintMessage = field.Text("constraintMessage"),
             },
         };
