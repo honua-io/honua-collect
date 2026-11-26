@@ -515,6 +515,7 @@ public class FormPackageClientTests
     [InlineData(7, HttpStatusCode.BadRequest, true)]
     [InlineData(8, HttpStatusCode.BadRequest, false)]
     [InlineData(7, HttpStatusCode.UnprocessableEntity, false)]
+    [InlineData(7, HttpStatusCode.ServiceUnavailable, false)]
     public async Task Rejection_only_allows_correction_for_a_matching_definitive_receipt(
         int version, HttpStatusCode statusCode, bool canCorrect)
     {

@@ -9,7 +9,7 @@ namespace Honua.Field.Core.Records;
 /// many have failed, and how many have been sent.
 /// </summary>
 /// <param name="Drafts">Records still being edited.</param>
-/// <param name="Outbox">Finished records waiting to upload or retry.</param>
+/// <param name="Outbox">Finished records waiting to upload, retry, or be corrected.</param>
 /// <param name="Sent">Records confirmed on the server.</param>
 /// <param name="Failed">Subset of <paramref name="Outbox"/> whose last attempt failed.</param>
 /// <param name="Conflicts">Records held for manual conflict review (BACKLOG S1).</param>
@@ -20,7 +20,10 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
     public int Total => Drafts + Outbox + Conflicts + Sent;
 
     /// <summary>Whether anything is waiting to upload or retry.</summary>
-    public bool HasPendingWork => Outbox > 0;
+    public bool HasPendingWork => Outbox > Rejected;
+
+    /// <summary>Published submissions parked after a definitive rejection.</summary>
+    public int Rejected { get; init; }
 
     /// <summary>Whether any records are waiting on manual conflict review.</summary>
     public bool HasConflicts => Conflicts > 0;
@@ -36,6 +39,7 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
         var outbox = 0;
         var sent = 0;
         var failed = 0;
+        var rejected = 0;
         var conflicts = 0;
         DateTimeOffset? lastSynced = null;
 
@@ -48,9 +52,14 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
                     break;
                 case RecordBox.Outbox:
                     outbox++;
-                    if (entry.SyncState == RecordSyncState.Failed)
+                    if (entry.SyncState is RecordSyncState.Failed or RecordSyncState.SubmissionRejected)
                     {
                         failed++;
+                    }
+
+                    if (entry.SyncState == RecordSyncState.SubmissionRejected)
+                    {
+                        rejected++;
                     }
 
                     break;
@@ -68,6 +77,6 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
             }
         }
 
-        return new SyncSummary(drafts, outbox, sent, failed, conflicts, lastSynced);
+        return new SyncSummary(drafts, outbox, sent, failed, conflicts, lastSynced) { Rejected = rejected };
     }
 }

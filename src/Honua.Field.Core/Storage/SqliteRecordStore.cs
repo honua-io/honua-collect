@@ -236,10 +236,20 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 entry.MarkEditedAfterSync();
                 break;
 
+            case RecordSyncState.SubmissionRejected:
             case RecordSyncState.Failed:
                 // Replay each recorded failure so FailedAttempts matches storage.
                 var attempts = Math.Max(1, failedAttempts);
-                for (var i = 0; i < attempts; i++)
+                for (var i = 0; i < attempts - 1; i++)
+                {
+                    entry.MarkFailed(lastError ?? "Upload failed.");
+                }
+
+                if (syncState == RecordSyncState.SubmissionRejected)
+                {
+                    entry.MarkSubmissionRejected(lastError ?? "The server rejected this inspection.");
+                }
+                else
                 {
                     entry.MarkFailed(lastError ?? "Upload failed.");
                 }

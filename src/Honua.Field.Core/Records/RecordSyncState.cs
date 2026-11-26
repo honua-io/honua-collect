@@ -44,4 +44,7 @@ public enum RecordSyncState
     /// as a server-side update instead of duplicating the record.
     /// </summary>
     PendingUpdate = 6,
+
+    /// <summary>The server rejected the submission before committing an edit.</summary>
+    SubmissionRejected = 7,
 }

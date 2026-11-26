@@ -79,7 +79,12 @@ public sealed class FieldRecordEntry
     public RecordBox Box => RecordBoxClassifier.Classify(Record.Status, SyncState);
 
     /// <summary>Whether the record is finished and waiting to upload (or retry).</summary>
-    public bool IsPendingUpload => Box == RecordBox.Outbox;
+    public bool IsPendingUpload => Box == RecordBox.Outbox && SyncState != RecordSyncState.SubmissionRejected;
+
+    /// <summary>Whether the captured editor can safely open for changes.</summary>
+    public bool CanOpenPublishedEditor => PublishedDraft is not null
+        && (SyncState == RecordSyncState.SubmissionRejected
+            || (PublishedSubmission is null && Record.Status == RecordStatus.Draft));
 
     /// <summary>Whether the record is waiting on manual conflict review.</summary>
     public bool IsConflicted => SyncState == RecordSyncState.Conflicted;
@@ -182,6 +187,18 @@ public sealed class FieldRecordEntry
         LastError = error;
         LastAttemptUtc = attemptTimeUtc ?? DateTimeOffset.UtcNow;
         FailedAttempts++;
+    }
+
+    /// <summary>Parks a published submission after the server confirms a pre-edit rejection.</summary>
+    public void MarkSubmissionRejected(string error)
+    {
+        if (PublishedSubmission is null)
+        {
+            throw new InvalidOperationException("Only published submissions can receive a form rejection.");
+        }
+
+        MarkFailed(error);
+        SyncState = RecordSyncState.SubmissionRejected;
     }
 
     /// <summary>

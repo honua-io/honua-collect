@@ -15,7 +15,8 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
     IHttpClientFactory clients, IRelatedRecordStore related)
 {
     /// <summary>Creates the inspection page using the selected published package.</summary>
-    public FormPage Create(PublishedFormPackage package, FormSession session, Action<string>? onSaved = null)
+    public FormPage Create(PublishedFormPackage package, FormSession session, Action<string>? onSaved = null,
+        bool isCorrection = false)
     {
         var model = new FormPageViewModel(session, package.OfflineEnabled);
         var page = new FormPage(model, clients, related, book);
@@ -53,7 +54,8 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
         {
             model.DraftSaved += async (_, record) => await SaveAsync(async () =>
             {
-                await book.SaveDraftAsync(record, PublishedFormDraft.Capture(package, session, settings.BaseUri));
+                var draft = PublishedFormDraft.Capture(package, session, settings.BaseUri) with { ReplacesRejectedSubmission = isCorrection };
+                await book.SaveDraftAsync(record, draft);
                 return "Draft saved. Open Records to continue.";
             });
         }
@@ -64,7 +66,10 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
             {
                 try
                 {
-                    await book.AddSubmittedAsync(record, PublishedFormSubmission.Capture(package, session, settings.BaseUri));
+                    var snapshot = PublishedFormDraft.Capture(package, session, settings.BaseUri);
+                    var key = isCorrection ? Guid.NewGuid().ToString("N") : null;
+                    var submission = PublishedFormSubmission.Capture(package, session, settings.BaseUri, idempotencyKey: key);
+                    await book.AddSubmittedAsync(record, submission, snapshot);
                 }
                 catch
                 {
