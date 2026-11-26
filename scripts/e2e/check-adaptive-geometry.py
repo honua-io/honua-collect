@@ -19,6 +19,8 @@ from pathlib import Path
 
 helper = runpy.run_path(str(Path(__file__).with_name("run-installed-android-upgrade.py")))
 Android, PACKAGE = helper["Android"], helper["PACKAGE"]
+PHONE = (540, 1080)
+TABLET = (1200, 1920)
 
 
 def check(condition, message):
@@ -45,8 +47,9 @@ def snapshot(device, directory, name):
     return struct.unpack_from(">II", data, 16)
 
 
-def layout(device, directory, name, *, landscape, side_by_side, count):
+def layout(device, directory, name, size, *, landscape, side_by_side, count):
     observed = {}
+    expected_size = size[::-1] if landscape else size
 
     def read(root):
         observed.clear()
@@ -69,7 +72,12 @@ def layout(device, directory, name, *, landscape, side_by_side, count):
             _, _, right, bottom = observed["map"]
             if all((left >= right if side_by_side else top >= bottom)
                    for left, top, _, _ in observed["controls"].values()):
-                return dict(observed)
+                # WindowManager can report the new rotation before the display
+                # compositor presents its first frame at the requested size.
+                width, height = snapshot(device, directory, name)
+                observed.update(width=width, height=height)
+                if (width, height) == expected_size:
+                    return dict(observed)
         return None
 
     try:
@@ -77,13 +85,10 @@ def layout(device, directory, name, *, landscape, side_by_side, count):
     except RuntimeError as error:
         snapshot(device, directory, name + "-failed")
         raise RuntimeError(f"{error}. Observed {observed}") from error
-    width, height = snapshot(device, directory, name)
-    check((width > height if landscape else width < height),
-          f"{name} screenshot dimensions were {width}×{height}")
+    width, height = expected_size
     for left, top, right, bottom in (result["map"], *result["controls"].values()):
         check(0 <= left < right <= width and 0 <= top < bottom <= height,
               f"{name} has out-of-screen bounds {(left, top, right, bottom)}")
-    result.update(width=width, height=height)
     return result
 
 
@@ -154,7 +159,7 @@ def run(device, directory, serial):
         device.shell("wm", "size", "540x1080")
         check_home_width(device, directory, "phone-home-return", 468)
         device.tap("Geometry")
-        phone = layout(device, directory, "phone-empty", landscape=False, side_by_side=False, count=0)
+        phone = layout(device, directory, "phone-empty", PHONE, landscape=False, side_by_side=False, count=0)
         l, t, r, b = phone["controls"]["geometryType"]
         device.shell("input", "tap", str((l + r) // 2), str((t + b) // 2))
         device.tap("Polygon")
@@ -165,24 +170,24 @@ def run(device, directory, serial):
                          str(int(top + y * (bottom - top))))
             device.element(f"Polygon: {count} vertex(es)" + (" ✓" if count == 3 else ""))
         report["layouts"]["phone-portrait"] = layout(
-            device, directory, "phone-portrait", landscape=False, side_by_side=False, count=3)
+            device, directory, "phone-portrait", PHONE, landscape=False, side_by_side=False, count=3)
         expected = captured_polygon(device)
         report["polygon"] = expected
 
         for name, size, rotation, landscape, expanded in (
-            ("phone-landscape", "540x1080", "1", True, True),
-            ("tablet-portrait", "1200x1920", "0", False, True),
-            ("tablet-landscape", "1200x1920", "1", True, True),
-            ("phone-portrait-return", "540x1080", "0", False, False),
+            ("phone-landscape", PHONE, "1", True, True),
+            ("tablet-portrait", TABLET, "0", False, True),
+            ("tablet-landscape", TABLET, "1", True, True),
+            ("phone-portrait-return", PHONE, "0", False, False),
         ):
-            device.shell("wm", "size", size)
-            device.shell("settings", "put", "system", "user_rotation", rotation)
+            device.shell("wm", "user-rotation", "lock", rotation)
+            device.shell("wm", "size", f"{size[0]}x{size[1]}")
             report["layouts"][name] = layout(
-                device, directory, name, landscape=landscape, side_by_side=expanded, count=3)
+                device, directory, name, size, landscape=landscape, side_by_side=expanded, count=3)
             check(captured_polygon(device) == expected, f"{name} changed the captured polygon")
         device.tap("Undo")
         report["layouts"]["phone-portrait-undo"] = layout(
-            device, directory, "phone-portrait-undo", landscape=False, side_by_side=False, count=2)
+            device, directory, "phone-portrait-undo", PHONE, landscape=False, side_by_side=False, count=2)
         report["passed"] = True
     except (RuntimeError, ValueError, subprocess.SubprocessError) as error:
         report["passed"] = False
