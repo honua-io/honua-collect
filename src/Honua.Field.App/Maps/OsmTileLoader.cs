@@ -37,6 +37,7 @@ public sealed class OsmTileLoader : IDisposable
     private readonly LruImageCache _cache = new(MaxCachedTiles);
     private readonly ConcurrentDictionary<string, byte> _inFlight = new();
     private readonly SemaphoreSlim _gate = new(6); // be polite to the tile server
+    private volatile bool _disposed;
 
     /// <summary>Raised on the thread pool when a requested tile finishes loading.</summary>
     public event EventHandler? TileLoaded;
@@ -77,9 +78,11 @@ public sealed class OsmTileLoader : IDisposable
             return image;
         }
 
-        if (_inFlight.TryAdd(key, 0))
+        if (!_disposed && _inFlight.TryAdd(key, 0))
         {
-            _ = LoadAsync(key, zoom, x, y);
+            // Draw calls Get on the UI thread. Disk access and bitmap decoding
+            // must run off that thread even when the tile is already on disk.
+            _ = Task.Run(() => LoadAsync(key, zoom, x, y));
         }
 
         return null;
@@ -89,19 +92,26 @@ public sealed class OsmTileLoader : IDisposable
     {
         try
         {
-            // Disk first: an offline-cached tile decodes without the network.
-            if (_disk.TryGetPath(zoom, x, y, out var path))
+            if (_disposed)
             {
-                if (TryDecodeInto(key, path))
-                {
-                    TileLoaded?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
+                return;
+            }
+
+            // A cached tile can load while all the network slots are busy.
+            if (_disk.TryGetPath(zoom, x, y, out var path) && TryDecodeInto(key, path))
+            {
+                TileLoaded?.Invoke(this, EventArgs.Empty);
+                return;
             }
 
             await _gate.WaitAsync().ConfigureAwait(false);
             try
             {
+                if (_disposed)
+                {
+                    return;
+                }
+
                 var bytes = await DownloadAsync(zoom, x, y).ConfigureAwait(false);
                 if (bytes is null)
                 {
@@ -113,9 +123,8 @@ public sealed class OsmTileLoader : IDisposable
 
                 using var ms = new MemoryStream(bytes, writable: false);
                 var img = PlatformImage.FromStream(ms);
-                if (img is not null)
+                if (img is not null && _cache.TrySet(key, img))
                 {
-                    _cache.Set(key, img);
                     TileLoaded?.Invoke(this, EventArgs.Empty);
                 }
             }
@@ -141,11 +150,7 @@ public sealed class OsmTileLoader : IDisposable
         {
             using var fs = File.OpenRead(path);
             var img = PlatformImage.FromStream(fs);
-            if (img is not null)
-            {
-                _cache.Set(key, img);
-                return true;
-            }
+            return img is not null && _cache.TrySet(key, img);
         }
         catch
         {
@@ -272,7 +277,8 @@ public sealed class OsmTileLoader : IDisposable
     public void Dispose()
     {
         // The HttpClient is owned by IHttpClientFactory, not this type.
-        _gate.Dispose();
+        _disposed = true;
+        // Pending workers can still release the gate. The semaphore uses no wait handle.
         _cache.Dispose();
     }
 
@@ -287,6 +293,7 @@ public sealed class OsmTileLoader : IDisposable
         private readonly object _sync = new();
         private readonly Dictionary<string, LinkedListNode<Entry>> _map;
         private readonly LinkedList<Entry> _lru = new();
+        private bool _disposed;
 
         public LruImageCache(int capacity)
         {
@@ -312,11 +319,17 @@ public sealed class OsmTileLoader : IDisposable
             return false;
         }
 
-        public void Set(string key, IImage image)
+        public bool TrySet(string key, IImage image)
         {
             IImage? toDispose = null;
             lock (_sync)
             {
+                if (_disposed)
+                {
+                    image.Dispose();
+                    return false;
+                }
+
                 if (_map.TryGetValue(key, out var existing))
                 {
                     if (!ReferenceEquals(existing.Value.Image, image))
@@ -346,12 +359,14 @@ public sealed class OsmTileLoader : IDisposable
 
             // Dispose the evicted/replaced bitmap outside the lock.
             toDispose?.Dispose();
+            return true;
         }
 
         public void Dispose()
         {
             lock (_sync)
             {
+                _disposed = true;
                 foreach (var entry in _lru)
                 {
                     entry.Image.Dispose();
