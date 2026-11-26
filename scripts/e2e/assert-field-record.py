@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--service", default="field_inspections")
     parser.add_argument("--layer", type=int, default=68950)
     parser.add_argument("--form", default="field_runtime_inspection")
-    parser.add_argument("--version", type=int, default=1)
+    parser.add_argument("--version", type=int)
     parser.add_argument("--name", required=True)
     parser.add_argument("--status", action="append", required=True)
     parser.add_argument("--total", type=int, required=True)
@@ -48,6 +48,10 @@ def main():
 
     def get_json(path, params=None):
         return json.loads(get(path, params or {"f": "json"}))
+
+    version = args.version
+    if version is None:
+        version = get_json(f"/api/v1/forms/{quote(args.form, safe='')}")["version"]
 
     layer = f"/rest/services/{quote(args.service, safe='')}/FeatureServer/{args.layer}"
     escaped_name = args.name.replace("'", "''")
@@ -93,9 +97,9 @@ def main():
         WHERE service_id = :'service' AND layer_id = :'layer'
           AND target_feature_id = :'object_id' AND status = 'accepted';
     """, check=True, text=True, stdout=subprocess.PIPE).stdout.splitlines()
-    require([json.loads(row) for row in receipts] == [[args.form, args.version]],
+    require([json.loads(row) for row in receipts] == [[args.form, version]],
             "Expected one accepted receipt for the captured form and version")
-    print(f"Verified feature {object_id}, attachment {attachment_id}, form version {args.version}")
+    print(f"Verified feature {object_id}, attachment {attachment_id}, form version {version}")
 
 
 if __name__ == "__main__":
