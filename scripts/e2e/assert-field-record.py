@@ -47,7 +47,9 @@ def main():
             return response.read()
 
     def get_json(path, params=None):
-        return json.loads(get(path, params or {"f": "json"}))
+        result = json.loads(get(path, params or {"f": "json"}))
+        require("error" not in result, f"Honua request failed for {path}: {result.get('error')}")
+        return result
 
     version = args.version
     if version is None:

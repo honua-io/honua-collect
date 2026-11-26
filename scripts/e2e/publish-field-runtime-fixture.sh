@@ -52,14 +52,28 @@ if ! curl --fail --silent -H @"$working_dir/admin-header" "$base/api/v1/forms/$f
         jq -c . "$working_dir/draft" >&2
         exit 1
     fi
+elif ! jq -e '.package.offlinePolicy.enabled == true' "$working_dir/published" >/dev/null; then
+    version=$(jq -er '.version' "$working_dir/published")
+    curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
+        "$base/api/v1/admin/forms/$form/versions/$version/reopen" > "$working_dir/draft"
+fi
+if [[ -s $working_dir/draft ]]; then
     version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/draft")
+    printf 'If-Match: %s\n' "$(jq -er '.etag' "$working_dir/draft")" > "$working_dir/etag-header"
+    jq -e '.package.offlinePolicy.enabled = true | .package' "$working_dir/draft" > "$working_dir/package"
+    if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -H @"$working_dir/etag-header" \
+        -H 'Content-Type: application/json' -X PUT --data-binary @"$working_dir/package" \
+        "$base/api/v1/admin/forms/$form/versions/$version" > "$working_dir/updated"; then
+        jq -c . "$working_dir/updated" >&2
+        exit 1
+    fi
     if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
         "$base/api/v1/admin/forms/$form/versions/$version/publish" > "$working_dir/published"; then
         jq -c . "$working_dir/published" >&2
         exit 1
     fi
 fi
-version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/published")
+version=$(jq -er 'select(.package.offlinePolicy.enabled == true) | .version | select(type == "number" and . > 0)' "$working_dir/published")
 echo "Published $form version $version at $base."
 
 # Only the disposable fixture worker key goes to the Android runner.

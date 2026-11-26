@@ -1,3 +1,13 @@
+-- The default-schema FeatureServer reads the shared store through honua.features.
+-- A freshly migrated disposable database can place the underlying table in public.
+DO $$
+BEGIN
+    IF to_regclass('honua.features') IS NULL AND to_regclass('public.features') IS NOT NULL THEN
+        CREATE VIEW honua.features AS SELECT * FROM public.features;
+    END IF;
+END
+$$;
+
 INSERT INTO honua.services(service_name,description,srid,capabilities,metadata)
 VALUES ('field_inspections','Field inspections',4326,ARRAY['Query','Create'],
     '{"accessPolicy":{"allowAnonymous":true,"allowAnonymousWrite":true}}')

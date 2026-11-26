@@ -447,9 +447,13 @@ public class FormPackageClientTests
     }
 
     [Theory]
-    [InlineData(7, 422)]
-    [InlineData(8, null)]
-    public async Task Replayed_rejection_only_allows_correction_for_matching_version(int version, int? expectedError)
+    [InlineData(7, HttpStatusCode.OK, true)]
+    [InlineData(8, HttpStatusCode.OK, false)]
+    [InlineData(7, HttpStatusCode.BadRequest, true)]
+    [InlineData(8, HttpStatusCode.BadRequest, false)]
+    [InlineData(7, HttpStatusCode.UnprocessableEntity, false)]
+    public async Task Rejection_only_allows_correction_for_a_matching_definitive_receipt(
+        int version, HttpStatusCode statusCode, bool canCorrect)
     {
         var cache = Path.GetTempFileName();
         PublishedFormPackage package;
@@ -471,15 +475,17 @@ public class FormPackageClientTests
             {"formId":"inspection","formVersion":{{version}},"status":"rejected","targetFeatureId":null,
              "retry":{"retryable":false},"validationIssues":[{"message":"Quantity is too low."}]}
             """;
-        using var http = new HttpClient(new StubHandler(rejected)) { BaseAddress = server };
+        using var http = new HttpClient(new StubHandler(rejected, statusCode)) { BaseAddress = server };
         var result = await original.UploadAsync(http);
         Assert.False(result.Success);
-        Assert.Equal(expectedError, result.ErrorCode);
-        if (expectedError == 422)
+        Assert.Equal(canCorrect, result.CanCorrectSubmission);
+        if (canCorrect)
         {
             Assert.Equal("Quantity is too low.", result.Error);
         }
 
+        using var proxy = new HttpClient(new StubHandler("Bad request", HttpStatusCode.BadRequest)) { BaseAddress = server };
+        Assert.False((await original.UploadAsync(proxy)).CanCorrectSubmission);
         session.SetValue("quantity", "10");
         var corrected = PublishedFormSubmission.Capture(package, session, server, idempotencyKey: "attempt-2");
         using var sent = JsonDocument.Parse(original.RequestJson);

@@ -82,7 +82,7 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
             var receipt = await pending.UploadAsync(http);
             if (!receipt.Success)
             {
-                if (receipt.ErrorCode is 400 or 422)
+                if (receipt.CanCorrectSubmission)
                 {
                     pending = null;
                     attemptKey = Guid.NewGuid().ToString("N");

@@ -102,7 +102,11 @@ else
 fi
 printf 'X-API-Key: %s\n' "$(cat "$key_file")" > "$working_dir/worker-header"
 version=$(curl --fail --silent --show-error -H @"$working_dir/worker-header" "$endpoint/api/v1/forms/$form" \
-    | jq -er '.version | select(type == "number" and . >= 1)')
+    | jq -er 'if .package.offlinePolicy.enabled != true then
+                  error("The published fixture must allow offline capture.")
+              else
+                  .version | select(type == "number" and . >= 1)
+              end')
 list_media > "$working_dir/before"
 run_flow download
 "${adb[@]}" reverse --remove "tcp:${port}"

@@ -34,8 +34,11 @@ public sealed class PublishedFormDraftTests
         }
         """;
 
-    [Fact]
-    public async Task Encrypted_draft_reopens_with_original_version_values_rows_and_media_then_is_replaced_on_submit()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Encrypted_draft_reopens_with_original_version_values_rows_and_media_then_is_replaced_on_submit(
+        bool hasNewerCachedVersion)
     {
         var directory = Directory.CreateTempSubdirectory();
         try
@@ -77,7 +80,26 @@ public sealed class PublishedFormDraftTests
             selected[0] = "unsaved";
             session.SetValue("total", 99m);
             Assert.Equal(20.25m, Assert.Single(book.All).Record.Values["total"]);
-            File.Delete(packageFile);
+            if (hasNewerCachedVersion)
+            {
+                await File.WriteAllTextAsync(packageFile, """
+                    {
+                      "formId": "inspection", "version": 8, "status": "published",
+                      "package": {
+                        "formId": "inspection", "schemaVersion": "honua.form-package.v1",
+                        "offlinePolicy": {"enabled": true},
+                        "fields": [{"fieldId": "replacement", "type": "text"}]
+                      }
+                    }
+                    """);
+                var latest = PublishedFormPackage.LoadCached("inspection", packageFile)!;
+                Assert.Equal(8, latest.Version);
+                Assert.Equal("replacement", Assert.Single(Assert.Single(latest.Definition.Sections).Fields).FieldId);
+            }
+            else
+            {
+                File.Delete(packageFile);
+            }
 
             var reopenedBook = new RecordBook(new SqliteRecordStore(database, "draft-test-key"));
             await reopenedBook.InitializeAsync();
