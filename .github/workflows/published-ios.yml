@@ -1,0 +1,103 @@
+name: Published forms on iOS
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/published-ios.yml
+      - .github/workflows/run-published-ios-gate.sh
+      - scripts/e2e/**
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+      - global.json
+  push:
+    branches: [trunk]
+    paths:
+      - .github/workflows/published-ios.yml
+      - .github/workflows/run-published-ios-gate.sh
+      - scripts/e2e/**
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+      - global.json
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  published-ios:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 55
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      HONUA_E2E_HTTP_PORT: '5189'
+      HONUA_E2E_PUBLISH_NEXT_VERSION: '1'
+      HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
+      MAESTRO_CLI_NO_ANALYTICS: '1'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: honua-io/honua-server
+          # Same offline published forms and layer-scoped authorization candidate as Android.
+          ref: cbe5ccc3cc729c4e50c6212004d8981951bfd863
+          path: server-candidate
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install pinned Maestro
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --location --silent --show-error --retry 3 -o maestro.zip \
+            https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.12.1/maestro.zip
+          echo '54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7  maestro.zip' | shasum -a 256 --check
+          unzip -q maestro.zip
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Install native PostgreSQL and PostGIS
+        run: |
+          brew install postgresql@18 postgis
+          echo "$(brew --prefix postgresql@18)/bin" >> "$GITHUB_PATH"
+      - name: Install MAUI iOS workload
+        run: dotnet workload install maui-ios
+      - name: Build Field iOS simulator app
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+            --configuration Debug --disable-build-servers
+      - name: Publish the candidate server for macOS
+        working-directory: server-candidate
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet publish src/Honua.Server/Honua.Server.csproj \
+            --runtime osx-arm64 --self-contained true --configuration Debug \
+            -p:PublishAot=false -p:PublishTrimmed=false -p:PublishSingleFile=false \
+            --output "$RUNNER_TEMP/published-server"
+      - name: Verify offline capture and receipt replay on iPhone
+        run: bash .github/workflows/run-published-ios-gate.sh
+      - name: Upload iOS receipt replay evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: published-ios-results
+          path: |
+            ${{ runner.temp }}/published-ios-report/*.xml
+            ${{ runner.temp }}/published-ios-report/*.json
+            ${{ runner.temp }}/published-ios-report/*.png
+          if-no-files-found: warn
+          retention-days: 7

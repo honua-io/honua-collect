@@ -21,7 +21,11 @@ working_dir=$(mktemp -d)
 trap 'rm -r -- "$working_dir"' EXIT
 umask 077
 
-db=(docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U "$user" -d "$database")
+if [[ ${HONUA_E2E_PG_NATIVE:-0} == 1 ]]; then
+    db=(psql -X -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -p "${PGPORT:?}" -U "$user" -d "$database")
+else
+    db=(docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U "$user" -d "$database")
+fi
 "${db[@]}" < "$script_dir/fixtures/field-runtime-inspection.sql" >/dev/null
 sed -n '/^CREATE OR REPLACE FUNCTION honua\.seed_metadata_v2_compat_snapshot()/,/^\$\$;/p' "$server_seed" | "${db[@]}" >/dev/null
 "${db[@]}" -1 -f - < "$script_dir/fixtures/activate-field-runtime-metadata.sql" >/dev/null
@@ -77,11 +81,11 @@ fi
 version=$(jq -er 'select(.package.offlinePolicy.enabled == true) | .version | select(type == "number" and . > 0)' "$working_dir/published")
 echo "Published $form version $version at $base."
 
-# Only the disposable fixture worker key goes to the Android runner.
+# Only the disposable fixture worker key goes to the device.
 if [[ -n ${HONUA_E2E_WORKER_KEY_FILE:-} ]]; then
     if [[ ! -s $HONUA_E2E_WORKER_KEY_FILE ]]; then
         curl --fail --silent --show-error -H @"$working_dir/admin-header" -H 'Content-Type: application/json' \
-            --data-binary '{"name":"Android fixture worker","permissions":["read:field_inspections/Field Inspections","write:field_inspections/Field Inspections"]}' \
+            --data-binary '{"name":"Field fixture worker","permissions":["read:field_inspections/Field Inspections","write:field_inspections/Field Inspections"]}' \
             "$base/api/v1/admin/api-keys" > "$working_dir/worker-response"
         jq -er '.data.key | select(type == "string" and length > 0)' "$working_dir/worker-response" > "$working_dir/worker-key"
         install -m 600 "$working_dir/worker-key" "$HONUA_E2E_WORKER_KEY_FILE"
