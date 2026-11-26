@@ -96,6 +96,50 @@ public sealed class FormPackageClient
         return Map(json);
     }
 
+    /// <summary>Downloads the current published version and updates its offline cache.</summary>
+    public async Task<PublishedFormPackage> DownloadPublishedAsync(
+        string formId,
+        string cachePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(formId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
+
+        using var response = await _httpClient
+            .GetAsync($"/api/v1/forms/{Uri.EscapeDataString(formId)}", HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+        if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone
+            or System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            File.Delete(cachePath);
+        }
+
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var package = PublishedFormPackage.Parse(formId, json);
+        if (!package.OfflineEnabled)
+        {
+            File.Delete(cachePath);
+            return package;
+        }
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(cachePath))!;
+        Directory.CreateDirectory(directory);
+        var temporaryPath = Path.Combine(directory, Path.GetRandomFileName());
+        try
+        {
+            await File.WriteAllTextAsync(temporaryPath, json, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporaryPath, cachePath, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporaryPath);
+        }
+
+        return package;
+    }
+
     /// <summary>
     /// Maps a form-package JSON document to a <see cref="FormDefinition"/>.
     /// Exposed internally so the mapping can be unit-tested without HTTP.
@@ -242,7 +286,7 @@ public sealed class FormPackageClient
         };
     }
 
-    private static FormFieldType MapType(string? type)
+    internal static FormFieldType MapType(string? type)
         => (type ?? string.Empty).Trim().ToLower(CultureInfo.InvariantCulture) switch
         {
             "text" => FormFieldType.Text,
