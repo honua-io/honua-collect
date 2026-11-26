@@ -119,9 +119,11 @@ public static class MauiProgram
 		// a durable, tamper-evident SQLite trail in the same encrypted at-rest posture
 		// as the record store. Secrets are scrubbed before persisting; the trail can be
 		// queried/exported off-device for SIEM/audit.
+		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-records.db");
 		var auditDbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-audit.db");
+		var databaseKey = DbKeyProvider.Create(dbPath, auditDbPath);
 		builder.Services.AddSingleton<IAuditStore>(_ => new LazyAuditStore(async _ =>
-			new SqliteAuditStore(auditDbPath, await DbKeyProvider.GetOrCreateKeyAsync().ConfigureAwait(false))));
+			new SqliteAuditStore(auditDbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false))));
 		builder.Services.AddSingleton(sp => new AuditTrail(sp.GetRequiredService<IAuditStore>()));
 		builder.Services.AddSingleton<IAuditSink>(sp => sp.GetRequiredService<AuditTrail>());
 
@@ -250,13 +252,14 @@ public static class MauiProgram
 		// The shared, thread-safe record book over a SQLCipher-encrypted store. The
 		// book builds the store lazily so the encryption key is fetched from secure
 		// storage off the UI thread (no startup blocking).
-		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "collect-records.db");
-		builder.Services.AddSingleton<IRecordStore>(_ => new LazyRecordStore(() => OpenEncryptedStoreAsync(dbPath)));
+		builder.Services.AddSingleton(_ => new LazyRecordStore(async () =>
+			await SqliteRecordStore.OpenEncryptedAsync(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false)).ConfigureAwait(false)));
+		builder.Services.AddSingleton<IRecordStore>(sp => sp.GetRequiredService<LazyRecordStore>());
 		builder.Services.AddSingleton(sp => new RecordBook(sp.GetRequiredService<IRecordStore>()));
 		builder.Services.AddSingleton<IRelatedRecordStore>(_ => new LazyRelatedRecordStore(async _ =>
-			new SqliteRelatedRecordStore(dbPath, await DbKeyProvider.GetOrCreateKeyAsync().ConfigureAwait(false))));
+			new SqliteRelatedRecordStore(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false))));
 		builder.Services.AddSingleton<IRecordHistoryStore>(_ => new LazyRecordHistoryStore(async _ =>
-			new SqliteRecordHistoryStore(dbPath, await DbKeyProvider.GetOrCreateKeyAsync().ConfigureAwait(false))));
+			new SqliteRecordHistoryStore(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false))));
 		builder.Services.AddSingleton(sp => new RecordRevertService(
 			sp.GetRequiredService<IRecordStore>(),
 			sp.GetRequiredService<IRecordHistoryStore>()));
@@ -276,74 +279,5 @@ public static class MauiProgram
 		builder.Logging.AddDebug();
 
 		return builder.Build();
-	}
-
-	/// <summary>
-	/// SQLite primary result code for "file is not a database" (SQLITE_NOTADB). This is
-	/// what SQLCipher reports when the on-disk bytes are a legacy *unencrypted* cache or
-	/// cannot be decrypted with the current key — i.e. the only case where recreating
-	/// the store is the right self-heal.
-	/// </summary>
-	private const int SqliteNotADatabase = 26;
-
-	/// <summary>
-	/// Opens the SQLCipher-encrypted record store, self-healing past a legacy
-	/// unencrypted or undecryptable local cache by quarantining it and starting fresh.
-	/// </summary>
-	/// <remarks>
-	/// The self-heal is deliberately narrow. The local DB holds field captures that may
-	/// not yet have synced to the server, so it must NOT be wiped on a transient or
-	/// environmental fault — a locked/busy DB, an I/O error, low disk, or a rotated key
-	/// would all otherwise permanently destroy un-uploaded data (those records do not
-	/// "re-sync from the server"). We therefore only recreate on SQLITE_NOTADB (the
-	/// legacy-unencrypted / undecryptable case, whose bytes are unreadable with our key
-	/// regardless); every other <see cref="Microsoft.Data.Sqlite.SqliteException"/> is
-	/// surfaced to the caller instead of silently dropping the store. Even in the
-	/// recreate case the old file is moved aside, not deleted, so it can be recovered.
-	/// </remarks>
-	private static async Task<IRecordStore> OpenEncryptedStoreAsync(string dbPath)
-	{
-		var key = await DbKeyProvider.GetOrCreateKeyAsync();
-		var store = new SqliteRecordStore(dbPath, key);
-		try
-		{
-			await store.LoadAllAsync(); // probe: opens + applies the key
-			return store;
-		}
-		catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == SqliteNotADatabase)
-		{
-			// Legacy-unencrypted or undecryptable-with-current-key cache: unreadable
-			// with our key in any case, so quarantine it and start fresh.
-			QuarantineUnreadableStore(dbPath);
-			return new SqliteRecordStore(dbPath, key);
-		}
-	}
-
-	/// <summary>
-	/// Moves an unreadable record DB aside (rather than deleting it) so a fresh store can
-	/// be created while the old bytes remain available for manual/forensic recovery. If
-	/// the file can't be renamed, it is deleted as a last resort — it is already
-	/// undecryptable with our key, so nothing the app can read is lost.
-	/// </summary>
-	private static void QuarantineUnreadableStore(string dbPath)
-	{
-		if (!File.Exists(dbPath))
-		{
-			return;
-		}
-
-		try
-		{
-			var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssfffZ");
-			File.Move(dbPath, $"{dbPath}.unreadable-{stamp}.bak");
-		}
-		catch (IOException)
-		{
-			File.Delete(dbPath);
-		}
-		catch (UnauthorizedAccessException)
-		{
-			File.Delete(dbPath);
-		}
 	}
 }

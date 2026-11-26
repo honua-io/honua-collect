@@ -42,7 +42,7 @@ public abstract class SqliteStoreBase
     /// is not already a <c>key=value</c> connection string is treated as the file path.
     /// </param>
     /// <param name="encryptionKey">
-    /// Optional SQLCipher key. When non-empty (and a file path was supplied), the
+    /// Optional SQLCipher key. When non-empty, the
     /// database is encrypted at rest — the key is applied as the connection
     /// <c>Password</c> (SQLCipher's <c>PRAGMA key</c>) — and the open fails closed
     /// unless the cipher is actually engaged.
@@ -50,19 +50,15 @@ public abstract class SqliteStoreBase
     protected SqliteStoreBase(string connectionStringOrPath, string? encryptionKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringOrPath);
-        if (LooksLikeConnectionString(connectionStringOrPath))
-        {
-            _connectionString = connectionStringOrPath;
-            return;
-        }
-
-        var builder = new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
+        var builder = LooksLikeConnectionString(connectionStringOrPath)
+            ? new SqliteConnectionStringBuilder(connectionStringOrPath)
+            : new SqliteConnectionStringBuilder { DataSource = connectionStringOrPath };
         if (!string.IsNullOrEmpty(encryptionKey))
         {
             builder.Password = encryptionKey; // SQLCipher: applied as PRAGMA key on open
-            _encryptionRequested = true;
         }
 
+        _encryptionRequested = !string.IsNullOrEmpty(builder.Password);
         _connectionString = builder.ToString();
     }
 

@@ -39,6 +39,25 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
     {
     }
 
+    /// <summary>Opens the device database and validates its key before making the store available.</summary>
+    public static async Task<SqliteRecordStore> OpenEncryptedAsync(string path, string key, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        var connection = new SqliteConnectionStringBuilder { DataSource = path, Password = key };
+        var store = new SqliteRecordStore(connection.ToString());
+        try
+        {
+            await using var probe = await store.OpenAsync(ct).ConfigureAwait(false);
+            return store;
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 26) // SQLITE_NOTADB includes wrong keys.
+        {
+            throw new InvalidOperationException(
+                "Field could not unlock the record database. Keep the app installed and contact your administrator to recover access.", ex);
+        }
+    }
+
     /// <inheritdoc />
     protected override string StoreDescription => "field database";
 

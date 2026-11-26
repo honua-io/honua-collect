@@ -45,6 +45,26 @@ public class SqliteRecordStoreEncryptionTests : IDisposable
         await Assert.ThrowsAsync<SqliteException>(() => wrong.LoadAllAsync());
     }
 
+    [Theory]
+    [InlineData("original-key")]
+    [InlineData(null)] // Legacy plaintext database.
+    public async Task App_open_preserves_pending_records_for_recovery(string? originalKey)
+    {
+        var entry = new FieldRecordEntry(Record("inspection-27"));
+        entry.MarkPending();
+        await new SqliteRecordStore(_dbPath, originalKey).SaveAsync(entry);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => SqliteRecordStore.OpenEncryptedAsync(_dbPath, "different-key"));
+        Assert.Contains("unlock", error.Message);
+        var store = originalKey is null ? new SqliteRecordStore(_dbPath)
+            : await SqliteRecordStore.OpenEncryptedAsync(_dbPath, originalKey);
+        var recovered = Assert.Single(await store.LoadAllAsync());
+        Assert.Equal("inspection-27", recovered.Record.RecordId);
+        Assert.Equal(RecordSyncState.Pending, recovered.SyncState);
+        Assert.Equal("Encrypted Site", recovered.Record.Values["site_name"]?.ToString());
+    }
+
     [Fact]
     public async Task Encrypted_file_is_not_openable_without_a_key()
     {
