@@ -418,7 +418,7 @@ public partial class FormPage : ContentPage
             if (!string.Equals(previousPath, sourcePath, StringComparison.Ordinal)
                 && !string.Equals(previousPath, result.ImagePath, StringComparison.Ordinal))
             {
-                TryDelete(previousPath);
+                TryDeleteRemovedEvidence(previousPath);
             }
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException or IOException)
@@ -472,14 +472,12 @@ public partial class FormPage : ContentPage
             return;
         }
 
-        // A removed attachment is no longer part of the record, so its files
-        // (the evidence copy and any unannotated original) are deleted with it.
         if (field.RemoveMedia(item.AttachmentId))
         {
-            TryDelete(item.LocalPath);
+            TryDeleteRemovedEvidence(item.LocalPath);
             if (item.Metadata?.OriginalLocalPath is { } original)
             {
-                TryDelete(original);
+                TryDeleteRemovedEvidence(original);
             }
         }
     }
@@ -599,6 +597,16 @@ public partial class FormPage : ContentPage
         catch (IOException)
         {
             return null;
+        }
+    }
+
+    private void TryDeleteRemovedEvidence(string path)
+    {
+        // An offline draft or outbox entry can still reference a file removed
+        // by the editor. Cleanup needs to account for all persisted references.
+        if (BindingContext is FormPageViewModel { CanDeleteRemovedEvidence: true })
+        {
+            TryDelete(path);
         }
     }
 
