@@ -17,14 +17,19 @@ if [[ ! $original =~ ^([0-9]+|NULL)$ ]]; then
     echo "Fixture layer name metadata is missing." >&2
     exit 1
 fi
+set_limit() {
+    local max_length=$1
+    "${db[@]}" -c "UPDATE honua.layer_fields SET max_length = $max_length WHERE $filter"
+    "${db[@]}" -c "SELECT honua.seed_metadata_v2_compat_snapshot();" >/dev/null
+}
 restore() {
-    "${db[@]}" -c "UPDATE honua.layer_fields SET max_length = $original WHERE $filter"
+    set_limit "$original"
     "$HONUA_E2E_RESTART_SERVER_COMMAND"
 }
 trap restore EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-"${db[@]}" -c "UPDATE honua.layer_fields SET max_length = 16 WHERE $filter"
+set_limit 16
 "$HONUA_E2E_RESTART_SERVER_COMMAND"
 started=$("${db[@]}" -c 'SELECT clock_timestamp()')
 export HONUA_E2E_CORRECTED_NAME="Fix$(date +%s)"
