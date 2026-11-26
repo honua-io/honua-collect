@@ -46,7 +46,7 @@ jobs:
         with:
           repository: honua-io/honua-server
           # Candidate with offline published forms and layer-scoped authorization.
-          ref: 34240309c87db887d6167f40915adc76b3eee6c0
+          ref: e5a625dbbf15962aa35bf25bfb3033064947d746
           path: server-candidate
           persist-credentials: false
 
