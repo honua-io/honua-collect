@@ -37,7 +37,7 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 
 ## Quick start
 
-Prerequisites: .NET 10 SDK. The `Honua.Sdk.*` / `Honua.Mobile.*` packages come
+Prerequisites: .NET 11 SDK (pinned in `global.json`). The `Honua.Sdk.*` / `Honua.Mobile.*` packages come
 from the github-honua NuGet feed, which requires an authenticated GitHub token
 with `read:packages`:
 
@@ -57,21 +57,24 @@ dotnet test tests/Honua.Field.Presentation.Tests/Honua.Field.Presentation.Tests.
 
 ### Run the app on an Android emulator
 
-Building and deploying the MAUI app needs an Android SDK + JDK. The full
-bootstrap (Temurin JDK 17 + Android SDK into `$HOME`, AVD creation, and the
-install/launch commands) is documented in
-[`docs/verification/README.md`](docs/verification/README.md). On a
-KVM-accelerated emulator (`/dev/kvm` must be accessible to your user):
+Building and deploying the MAUI app needs Android SDK tooling and Temurin
+JDK 21. Field runs on Android API 24 or newer. On a KVM-accelerated
+emulator (`/dev/kvm` must be accessible to your user):
 
 ```bash
-export JAVA_HOME=$HOME/jdk17 ANDROID_HOME=$HOME/android-sdk
+export JAVA_HOME=$HOME/jdk21 ANDROID_HOME=$HOME/android-sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
+
+dotnet workload install maui-android
+dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
+  -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True \
+  -p:AndroidSdkDirectory=$ANDROID_HOME -p:JavaSdkDirectory=$JAVA_HOME
 
 emulator -avd honua -no-window -gpu swiftshader_indirect &
 adb wait-for-device
 
 # Debug deploy to the running emulator:
-dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net10.0-android -t:Install \
+dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android -t:Install \
   -p:AndroidSdkDirectory=$ANDROID_HOME -p:JavaSdkDirectory=$JAVA_HOME \
   -p:AdbTarget="-s emulator-5554"
 adb shell am start -n io.honua.collect/crc6490b85cd101108deb.MainActivity
@@ -171,7 +174,7 @@ Follow [Quick start](#quick-start) for the toolchain and package feed, then buil
 a signed, self-contained Android package:
 
 ```bash
-dotnet publish src/Honua.Field.App/Honua.Field.App.csproj -f net10.0-android -c Release \
+dotnet publish src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android -c Release \
   -p:AndroidPackageFormats=apk \
   -p:AndroidKeyStore=true \
   -p:AndroidSigningKeyStore=/path/to/your.keystore \
@@ -180,7 +183,7 @@ dotnet publish src/Honua.Field.App/Honua.Field.App.csproj -f net10.0-android -c 
   -p:AndroidSigningStorePass=env:ANDROID_STORE_PASS
 ```
 
-Sideload the resulting `*-Signed.apk` from `bin/Release/net10.0-android/publish/`
+Sideload the resulting `*-Signed.apk` from `bin/Release/net11.0-android/publish/`
 with `adb install -r <file>`, distribute it through your MDM, or build an `.aab`
 (`-p:AndroidPackageFormats=aab`) for an app store. Without the signing properties
 the build signs with the local debug key, which is fine for testing only. Android

@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Authenticate package feed
         run: >-
@@ -43,8 +43,13 @@ jobs:
           --store-password-in-clear-text
           --configfile NuGet.config
 
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install MAUI Android workload
-        # Required to restore the App project (net10.0-android) for the scan.
+        # Required to restore the App project (net11.0-android) for the scan.
         run: dotnet workload install maui-android
 
       - name: Vulnerable dependency scan
@@ -98,7 +103,7 @@ jobs:
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       # The Honua.Sdk.* packages come from the private github-honua feed.
       - name: Authenticate package feed
@@ -158,7 +163,7 @@ jobs:
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Authenticate package feed
         run: >-
@@ -187,7 +192,7 @@ jobs:
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Authenticate package feed
         run: >-
@@ -197,8 +202,16 @@ jobs:
           --store-password-in-clear-text
           --configfile NuGet.config
 
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install MAUI Android workload
-        run: dotnet workload install maui-android
+        run: |
+          dotnet workload install maui-android
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
+            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
 
       - name: Build Android app
         # The app is intentionally not lockfile-enforced (its SDK/workload-implicit
@@ -206,14 +219,14 @@ jobs:
         # the csproj), so no -p:RestoreLockedMode here.
         run: >-
           dotnet build src/Honua.Field.App/Honua.Field.App.csproj
-          -f net10.0-android -c Release -t:SignAndroidPackage
+          -f net11.0-android -c Release -t:SignAndroidPackage
           -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false
 
       - name: Prepare Android verification artifact
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Release/net10.0-android -type f -name '*-Signed.apk' -print0)
+          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Release/net11.0-android -type f -name '*-Signed.apk' -print0)
           if [[ ${#apks[@]} -ne 1 ]]; then
             echo "Expected exactly one signed APK; found ${#apks[@]}" >&2
             exit 1

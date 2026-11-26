@@ -1,0 +1,57 @@
+name: Field on Apple platforms
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/field-apple.yml
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+      - global.json
+  push:
+    branches: [trunk]
+    paths:
+      - .github/workflows/field-apple.yml
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+      - global.json
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  apple:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Install MAUI Apple workloads
+        run: dotnet workload install maui-ios maui-maccatalyst
+      - name: Build iOS simulator and Mac Catalyst apps
+        run: |
+          project=src/Honua.Field.App/Honua.Field.App.csproj
+          dotnet build "$project" -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64
+          dotnet build "$project" -p:FieldTargetFramework=net11.0-maccatalyst -p:RuntimeIdentifier=maccatalyst-arm64
+      - name: Launch Field on the iOS simulator
+        run: |
+          device=$(xcrun simctl list devices available --json | jq -er '.devices["com.apple.CoreSimulator.SimRuntime.iOS-27-2"] | map(select(.name == "iPhone 17")) | first | .udid')
+          app=$(find src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64 -maxdepth 1 -name '*.app' -type d)
+          test -d "$app"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" "$app"
+          xcrun simctl launch "$device" io.honua.collect

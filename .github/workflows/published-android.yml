@@ -11,6 +11,7 @@ on:
       - Directory.Build.*
       - Directory.Packages.props
       - NuGet.config
+      - global.json
   push:
     branches: [trunk]
     paths:
@@ -21,6 +22,7 @@ on:
       - Directory.Build.*
       - Directory.Packages.props
       - NuGet.config
+      - global.json
 
 permissions:
   contents: read
@@ -46,7 +48,7 @@ jobs:
       - name: Check out the previous Field Android version
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ff0a2c40a295c75fb71a7592a9aac4486d20367c # Android versionCode 2
+          ref: fb16d0bccaba7c48c6982f3bea4c0c013e5b31b1 # Android versionCode 3
           path: field-previous
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -63,27 +65,49 @@ jobs:
           java-version: '17'
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         env:
-          DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-previous-dotnet
         with:
           dotnet-version: '10.0.403'
-      - name: Build previous and current standalone Debug APKs
+      - name: Build historical standalone .NET 10 Debug APK
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd field-previous
+          printf '%s\n' '{"sdk":{"version":"10.0.403","rollForward":"disable"}}' > global.json
+          field_dotnet="$RUNNER_TEMP/field-previous-dotnet/dotnet"
+          "$field_dotnet" workload install maui-android
+          "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
+            -f net10.0-android -c Debug -t:SignAndroidPackage \
+            -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
+            -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
+          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net10.0-android -type f -name '*-Signed.apk' -print0)
+          test "${#apks[@]}" -eq 1
+          cp "${apks[0]}" "$RUNNER_TEMP/honua-field-previous.apk"
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
+        with:
+          global-json-file: global.json
+      - name: Build current standalone .NET 11 Debug APK
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
-          build_apk() (
-            cd "$1"
-            "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
-              -f net10.0-android -c Debug -t:SignAndroidPackage \
-              -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
-              -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
-            mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net10.0-android -type f -name '*-Signed.apk' -print0)
-            test "${#apks[@]}" -eq 1
-            cp "${apks[0]}" "$RUNNER_TEMP/$2"
-          )
-          build_apk field-previous honua-field-previous.apk
-          build_apk . honua-field.apk
+          "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
+            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
+          "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
+            -f net11.0-android -c Debug -t:SignAndroidPackage \
+            -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
+            -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
+          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net11.0-android -type f -name '*-Signed.apk' -print0)
+          test "${#apks[@]}" -eq 1
+          cp "${apks[0]}" "$RUNNER_TEMP/honua-field.apk"
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         env:

@@ -17,7 +17,7 @@ The .NET package table is verified against `Directory.Packages.props` and `src/*
 | Microsoft.Data.Sqlite.Core | 11.0.0 | MIT | https://docs.microsoft.com/dotnet/standard/data/sqlite/ |
 | Microsoft.Extensions.Http | 11.0.0 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Debug | 11.0.0 | MIT | https://dot.net/ |
-| Microsoft.Maui.Controls | 10.0.130 | MIT | https://github.com/dotnet/maui |
+| Microsoft.Maui.Controls | 11.0.10 | MIT | https://github.com/dotnet/maui |
 | Plugin.Maui.Audio | 4.0.0 | MIT | https://github.com/jfversluis/Plugin.Maui.Audio |
 | SkiaSharp | 4.156.1 | MIT | https://go.microsoft.com/fwlink/?linkid=868515 |
 | SQLitePCLRaw.bundle_e_sqlcipher | 2.1.11 | Apache-2.0 | https://github.com/ericsink/SQLitePCL.raw |
