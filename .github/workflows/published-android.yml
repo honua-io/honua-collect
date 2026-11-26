@@ -12,7 +12,7 @@ on:
       - Directory.Packages.props
       - NuGet.config
   push:
-    branches: [trunk]
+    branches: [trunk, verify/field-published-android]
     paths:
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
