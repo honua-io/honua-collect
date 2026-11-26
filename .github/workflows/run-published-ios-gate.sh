@@ -114,6 +114,8 @@ run_bounded 480 xcrun simctl install "$device_created" "$app"
 
 if ! run_bounded 1500 bash "$workspace/scripts/e2e/run-published-ios.sh" \
     "$device_created" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
-    run_bounded 60 xcrun simctl io "$device_created" screenshot "$report_dir/failure.png" || true
+    if [[ ! -s "$report_dir/failure.png" ]]; then
+        run_bounded 60 xcrun simctl io "$device_created" screenshot "$report_dir/failure.png" || true
+    fi
     exit 1
 fi
