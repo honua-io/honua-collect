@@ -91,7 +91,30 @@ def records(device):
             return {"draftId": ids[0], "outboxId": ids[1], "summary": SUMMARY}
         return None
 
-    return device.screen(read, SUMMARY + " and two record IDs")
+    try:
+        return device.screen(read, SUMMARY + " and two record IDs")
+    except RuntimeError as error:
+        observed = {}
+
+        def describe(root):
+            nodes = [node for node in root.iter("node") if node.get("package") == PACKAGE]
+            labels = [node.get("text", "") for node in nodes]
+            observed.update(
+                recordCount=sum(bool(re.fullmatch(r"[0-9a-f]{32}", label)) for label in labels),
+                matchingLabels=[label for label in labels if label in {
+                    "Drafts", "Outbox", "Sent", "No drafts.", "Outbox is empty.",
+                    "Nothing sent yet.", "Ready to send", "Retry",
+                } or re.fullmatch(r"Drafts \d+ · Outbox \d+ · Conflicts \d+ · Sent \d+", label)],
+                missingKey=any(label.startswith(MISSING_KEY) for label in labels),
+                appNodeCount=len(nodes),
+            )
+            return True
+
+        try:
+            device.screen(describe, "a diagnostic UI hierarchy", timeout=5)
+        except RuntimeError:
+            pass
+        raise RuntimeError(f"{error}. Final app UI: {json.dumps(observed)}") from error
 
 
 def private_files(device):
