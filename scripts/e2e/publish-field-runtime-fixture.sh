@@ -24,7 +24,7 @@ umask 077
 db=(docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U "$user" -d "$database")
 "${db[@]}" < "$script_dir/fixtures/field-runtime-inspection.sql" >/dev/null
 sed -n '/^CREATE OR REPLACE FUNCTION honua\.seed_metadata_v2_compat_snapshot()/,/^\$\$;/p' "$server_seed" | "${db[@]}" >/dev/null
-"${db[@]}" -c 'SELECT honua.seed_metadata_v2_compat_snapshot();' >/dev/null
+"${db[@]}" -1 -f - < "$script_dir/fixtures/activate-field-runtime-metadata.sql" >/dev/null
 
 if [[ -n ${HONUA_E2E_RESTART_SERVER_COMMAND:-} ]]; then
     "$HONUA_E2E_RESTART_SERVER_COMMAND"
@@ -33,7 +33,8 @@ elif [[ -n ${HONUA_E2E_RESTART_SERVER_CONTAINER:-} ]]; then
 fi
 for ((attempt = 0; attempt < 45; ++attempt)); do
     if curl --fail --silent "$base/healthz/ready" > /dev/null &&
-        curl --fail --silent "$base/rest/services/field_inspections/FeatureServer/68950?f=json" > /dev/null; then
+        curl --fail --silent "$base/rest/services/field_inspections/FeatureServer/68950?f=json" |
+        jq -e '.hasAttachments == true' > /dev/null; then
         break
     fi
     sleep 2

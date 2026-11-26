@@ -3,16 +3,17 @@
 set -euo pipefail
 limit=${1:?Missing fixture name length}
 [[ $limit =~ ^([0-9]+|NULL)$ ]]
+script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 container=${HONUA_E2E_TEST_POSTGIS_CONTAINER:?Specify the disposable fixture PostGIS container}
 db=(docker exec -i "$container" psql -XAtq -v ON_ERROR_STOP=1 -U postgres -d honua)
-"${db[@]}" -v limit="$limit" <<'SQL' >/dev/null
-BEGIN;
+{
+    cat <<'SQL'
 UPDATE honua.layer_fields
 SET max_length = NULLIF(:'limit', 'NULL')::integer
 WHERE layer_id = 68950 AND field_name = 'name';
-SELECT honua.seed_metadata_v2_compat_snapshot();
-COMMIT;
 SQL
+    cat "$script_dir/fixtures/activate-field-runtime-metadata.sql"
+} | "${db[@]}" -1 -v limit="$limit" -f - >/dev/null
 "${HONUA_E2E_RESTART_SERVER_COMMAND:?Specify the executable that restarts the fixture server}"
 
 if [[ $# == 2 ]]; then

@@ -121,8 +121,18 @@ same distribution signing identity to retain existing app data and credentials.
 Run `python3 scripts/check-upgrade-identity.py` to check the source identity, or
 pass `--apk Field.apk --previous-apk Collect.apk` with the Android build tools
 on PATH to also compare APK identities, version codes and signing certificates.
-The [offline adoption journey](docs/mobile-offline-adoption.md) covers data
-retention on a populated installation.
+
+To exercise an installed upgrade on a fresh Android emulator, supply signed
+Debug APKs for Collect 1.0 and Field from the same signing key:
+
+```bash
+python3 scripts/e2e/run-installed-android-upgrade.py emulator-5554 Collect.apk Field.apk
+```
+
+The harness creates a queued inspection and a separate sketch in Collect,
+upgrades in place, opens Field, and checks the app UID, record ID and sketch
+hash. The [offline adoption journey](docs/mobile-offline-adoption.md) covers
+the broader migration, including drafts, assignments and sync history.
 
 ### Server connection
 
