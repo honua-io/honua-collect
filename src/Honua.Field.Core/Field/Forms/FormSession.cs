@@ -440,8 +440,6 @@ public sealed class FormSession : ICaptureHost
 
         foreach (var group in _groups.Values)
         {
-            group.PersistInto(Record);
-
             // Row-count bounds (min/max repeats) are enforced at the section level
             // (BACKLOG F-depth). Errors are keyed to the section id so the UI can
             // surface them on the repeat group header rather than a single row.
@@ -469,6 +467,8 @@ public sealed class FormSession : ICaptureHost
                     errors.Add(new FormValidationError($"{group.SectionId}[{index}].{error.FieldId}", error.Message));
                 }
             }
+
+            group.PersistInto(Record);
         }
 
         return new FormValidationResult(errors);
