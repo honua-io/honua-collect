@@ -23,9 +23,18 @@ working_dir=$(mktemp -d)
 fault_proxy_pid=
 reverse_started=false
 settings_written=false
+flow_number=0
 umask 077
 
 cleanup() {
+    local result=$?
+    if [[ $result -ne 0 && -n ${HONUA_E2E_REPORT_DIR:-} ]]; then
+        local screenshot="$HONUA_E2E_REPORT_DIR/failure.png"
+        mkdir -p -- "$HONUA_E2E_REPORT_DIR"
+        if ! "${adb[@]}" exec-out screencap -p > "$screenshot" || [[ ! -s $screenshot ]]; then
+            rm -f -- "$screenshot"
+        fi
+    fi
     if [[ -n $fault_proxy_pid ]]; then
         kill "$fault_proxy_pid" 2>/dev/null || true
         wait "$fault_proxy_pid" 2>/dev/null || true
@@ -52,7 +61,15 @@ list_media() {
 }
 
 run_flow() {
-    "${maestro[@]}" test -e "INSPECTION_NAME=$name" -e "FORM_VERSION=$version" "$script_dir/maestro/$1.yaml"
+    local flow=$1
+    local report=()
+    if [[ -n ${HONUA_E2E_REPORT_DIR:-} ]]; then
+        mkdir -p -- "$HONUA_E2E_REPORT_DIR"
+        flow_number=$((flow_number + 1))
+        report=(--format junit --output "$HONUA_E2E_REPORT_DIR/$flow_number-$flow.xml")
+    fi
+    "${maestro[@]}" test "${report[@]}" -e "INSPECTION_NAME=$name" \
+        -e "FORM_VERSION=$version" "$script_dir/maestro/$flow.yaml"
 }
 
 "${adb[@]}" shell run-as "$app" id >/dev/null
