@@ -87,6 +87,10 @@ jobs:
 
   build-test:
     runs-on: ubuntu-latest
+    # These portable net11.0 projects require only the base SDK. The mobile
+    # jobs below install and exercise the MAUI workload set pinned in global.json.
+    env:
+      MSBuildEnableWorkloadResolver: 'false'
     permissions:
       contents: read
       packages: read
@@ -158,6 +162,10 @@ jobs:
     # the Core test project per stryker-config.json. See docs/mutation-testing.md.
     runs-on: ubuntu-latest
     continue-on-error: true
+    # These portable net11.0 projects require only the base SDK. The mobile
+    # jobs below install and exercise the MAUI workload set pinned in global.json.
+    env:
+      MSBuildEnableWorkloadResolver: 'false'
     permissions:
       contents: read
       packages: read
