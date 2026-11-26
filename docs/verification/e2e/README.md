@@ -8,16 +8,18 @@ PostgreSQL — the full capture → sync → store loop.
 
 The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) installs a standalone Debug APK on an Android API 33 emulator, builds the pinned Honua Server revision, starts PostGIS and publishes the inspection workbook. Maestro drives the native Field screens under a layer-scoped worker account.
 
-The gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
+The gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. In CI the host publishes a newer revision while the draft is offline. The original version must still be used when the draft resumes and uploads. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
 
-To rerun the native flow on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. The script removes its temporary settings and network forwarding on exit.
+A second inspection exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
+
+To rerun the native flow on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. To exercise the version change locally, set `HONUA_E2E_PUBLISH_NEXT_VERSION=1` and pass the disposable fixture admin key as the third argument. The script removes its temporary settings and network forwarding on exit.
 
 ```bash
 HONUA_E2E_REPORT_DIR=/tmp/field-android-results \
   scripts/e2e/run-published-android.sh emulator-5554 /path/to/worker-key /path/to/readback-key
 ```
 
-The workflow pins Maestro and the emulator version. Its `published-android-results` artifact contains a JUnit report for each completed phase. On success, `server-readback.json` records the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. A failed run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
+The workflow pins Maestro and the emulator version. Its `published-android-results` artifact groups JUnit reports by scenario and capture phase. On success, `server-readback.json` records the verified form version, feature and attachment IDs, attachment SHA-256, repeat count and accepted receipt count. A failed run includes an emulator screenshot when available. Setting `HONUA_E2E_REPORT_DIR` retains the same evidence locally.
 
 ## GeoServices capture topology
 

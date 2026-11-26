@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--layer", type=int, default=68950)
     parser.add_argument("--form", default="field_runtime_inspection")
     parser.add_argument("--version", type=int)
+    parser.add_argument("--latest-version", type=int, help="Newer version published while the device was offline")
     parser.add_argument("--name", required=True)
     parser.add_argument("--status", action="append", required=True)
     parser.add_argument("--total", type=int, required=True)
@@ -55,6 +56,11 @@ def main():
     version = args.version
     if version is None:
         version = get_json(f"/api/v1/forms/{quote(args.form, safe='')}")["version"]
+
+    if args.latest_version is not None:
+        latest = get_json(f"/api/v1/forms/{quote(args.form, safe='')}")["version"]
+        require(latest == args.latest_version and latest > version,
+                "The server must have a newer published version than the captured draft")
 
     layer = f"/rest/services/{quote(args.service, safe='')}/FeatureServer/{args.layer}"
     escaped_name = args.name.replace("'", "''")
@@ -109,6 +115,8 @@ def main():
             "matchedFeatures": len(features), "acceptedReceipts": len(receipts),
             "repeatRows": len(args.repeat_note),
         }
+        if args.latest_version is not None:
+            evidence["latestFormVersion"] = args.latest_version
         args.report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"Verified feature {object_id}, attachment {attachment_id}, form version {version}")
 

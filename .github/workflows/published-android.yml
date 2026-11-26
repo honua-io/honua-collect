@@ -34,6 +34,7 @@ jobs:
     timeout-minutes: 60
     env:
       HONUA_E2E_HTTP_PORT: '5189'
+      HONUA_E2E_PUBLISH_NEXT_VERSION: '1'
       HONUA_E2E_PG_CONTAINER: honua-field-xlsform-pg
       MAESTRO_CLI_NO_ANALYTICS: '1'
       MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
@@ -118,8 +119,8 @@ jobs:
         with:
           name: published-android-results
           path: |
-            ${{ runner.temp }}/published-android-report/failure.png
-            ${{ runner.temp }}/published-android-report/server-readback.json
-            ${{ runner.temp }}/published-android-report/[1-7]-*.xml
+            ${{ runner.temp }}/published-android-report/*/failure.png
+            ${{ runner.temp }}/published-android-report/*/server-readback.json
+            ${{ runner.temp }}/published-android-report/*/[0-9]-*.xml
           if-no-files-found: ignore
           retention-days: 7

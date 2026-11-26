@@ -2,10 +2,8 @@
 set -euo pipefail
 
 workspace="$GITHUB_WORKSPACE"
-port=${HONUA_E2E_HTTP_PORT:?}
 container=${HONUA_E2E_PG_CONTAINER:?}
 candidate="$workspace/server-candidate"
-base_url="http://127.0.0.1:$port"
 working_dir=$(mktemp -d "$RUNNER_TEMP/published-android.XXXXXX")
 umask 077
 
@@ -25,9 +23,6 @@ docker run --detach --name "$container" --publish 127.0.0.1:55488:5432 \
     --env-file "$working_dir/postgres.env" "${POSTGIS_IMAGE:?}" >/dev/null
 database_ready() {
     docker exec "$container" pg_isready -h 127.0.0.1 -U postgres -d honua >/dev/null 2>&1
-}
-server_ready() {
-    curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null
 }
 wait_for() {
     local check=$1
@@ -82,12 +77,29 @@ export Geocoding__Enabled=false
 cd "$RUNNER_TEMP/published-server"
 nohup ./Honua.Server </dev/null >> "$HONUA_E2E_SERVER_STATE/server.log" 2>&1 &
 echo "$!" > "$pid_file"
+for ((attempt = 0; attempt < 90; ++attempt)); do
+    if curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null; then
+        exit 0
+    fi
+    kill -0 "$(cat "$pid_file")" || exit 1
+    sleep 2
+done
+echo "::error::Timed out waiting for the restarted fixture server" >&2
+exit 1
 RESTART
 chmod 700 "$HONUA_E2E_RESTART_SERVER_COMMAND"
 "$HONUA_E2E_RESTART_SERVER_COMMAND"
-wait_for server_ready
 "$workspace/scripts/e2e/publish-field-runtime-fixture.sh" "$candidate" "$working_dir/admin-key"
 
 serial=emulator-5554
 adb -s "$serial" install "$RUNNER_TEMP/honua-field.apk"
+report_root=${HONUA_E2E_REPORT_DIR:?}
+export HONUA_E2E_REPORT_DIR="$report_root/receipt-replay"
 "$workspace/scripts/e2e/run-published-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
+
+# This emulator is created for this job. Start the independent inspection with
+# an empty outbox while retaining the live server and the first receipt.
+adb -s "$serial" shell pm clear io.honua.collect
+export HONUA_E2E_REPORT_DIR="$report_root/rejection-correction"
+export HONUA_E2E_TEST_POSTGIS_CONTAINER="$container"
+"$workspace/scripts/e2e/run-rejected-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
