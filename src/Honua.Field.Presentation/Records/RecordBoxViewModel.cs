@@ -28,6 +28,9 @@ public sealed class RecordRowViewModel(FieldRecordEntry entry) : ObservableObjec
         RecordBox.Drafts => "Draft",
         RecordBox.Sent => $"Sent — {Entry.RemoteId ?? "synced"}",
         RecordBox.Conflicts => "Conflict — needs review",
+        _ when Entry.SyncState == RecordSyncState.SubmissionRejected => Entry.CanOpenPublishedEditor
+            ? $"Rejected. Open to correct. {Entry.LastError}"
+            : $"Rejected. {Entry.LastError}",
         _ => Entry.SyncState == RecordSyncState.Failed
             ? $"Failed — {Entry.LastError}"
             : "Ready to send",

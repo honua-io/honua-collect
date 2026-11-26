@@ -156,12 +156,16 @@ public sealed class SyncCenterViewModel : ObservableObject
             if (SetProperty(ref _summary, value))
             {
                 OnPropertyChanged(nameof(Header));
+                OnPropertyChanged(nameof(HasRejectedSubmissions));
             }
         }
     }
 
     /// <summary>A formatted one-line status: "Outbox 1 · Conflicts 0 · Sent 0 · Failed 1".</summary>
     public string Header => $"Outbox {Summary.Outbox} · Conflicts {Summary.Conflicts} · Sent {Summary.Sent} · Failed {Summary.Failed}";
+
+    /// <summary>Whether Records contains a submission that received a definitive rejection.</summary>
+    public bool HasRejectedSubmissions => Summary.Rejected > 0;
 
     /// <summary>Records currently waiting to upload or retry.</summary>
     public ObservableCollection<FieldRecordEntry> Pending { get; }
@@ -462,7 +466,15 @@ public sealed class SyncCenterViewModel : ObservableObject
             return true;
         }
 
-        entry.MarkFailed(result.FailureDescription);
+        if (entry.PublishedSubmission is not null && result.CanCorrectSubmission)
+        {
+            entry.MarkSubmissionRejected(result.FailureDescription);
+        }
+        else
+        {
+            entry.MarkFailed(result.FailureDescription);
+        }
+
         return false;
     }
 

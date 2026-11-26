@@ -15,14 +15,17 @@ namespace Honua.Field.Core.Forms;
 /// <summary>Local editor state and the immutable package version required to resume it.</summary>
 public sealed record PublishedFormDraft(string FormId, string RecordId, string ServerBaseUrl, string PackageJson, string EditorJson)
 {
-    /// <summary>Snapshots an unfinished session, including attachments and repeat rows.</summary>
+    /// <summary>Whether submission must use a fresh key after the prior attempt was rejected.</summary>
+    public bool ReplacesRejectedSubmission { get; init; }
+
+    /// <summary>Snapshots an inspection editor, including attachments and repeat rows.</summary>
     public static PublishedFormDraft Capture(PublishedFormPackage package, FormSession session, Uri server)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(server);
         var record = session.Record;
-        if (!package.OfflineEnabled || record.Status != RecordStatus.Draft
+        if (!package.OfflineEnabled || record.Status is not (RecordStatus.Draft or RecordStatus.Submitted)
             || session.Form.FormId != package.Definition.FormId || session.Form.Version != package.Definition.Version)
         {
             throw new InvalidOperationException("This form session cannot be saved as an offline draft.");

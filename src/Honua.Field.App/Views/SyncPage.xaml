@@ -21,9 +21,10 @@
 
         <CollectionView Grid.Row="2" ItemsSource="{Binding Pending}"
                         ItemTemplate="{StaticResource PendingItem}"
-                        EmptyView="Nothing pending — everything is synced." />
+                        EmptyView="Nothing waiting to upload." />
 
         <VerticalStackLayout Grid.Row="3" Padding="16,8" Spacing="8">
+            <Label IsVisible="{Binding HasRejectedSubmissions}" Text="Review rejected submissions in Records." />
             <Label x:Name="ResultLabel" />
             <Button Text="Sync now" Command="{Binding SyncCommand}" />
             <Button Text="Pull from server" Clicked="OnPull" />
