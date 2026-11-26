@@ -133,6 +133,8 @@ fi
 test -s "$working_dir/attachment"
 
 if [[ -n ${HONUA_E2E_CORRECTED_NAME:-} ]]; then
+    touch "${HONUA_E2E_REJECTION_LIMIT_MARKER:?Use run-rejected-android.sh}"
+    "$script_dir/set-inspection-name-limit.sh" 16 "$key_file"
     "${adb[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null
     run_flow reject-outbox
     "${adb[@]}" shell am force-stop "$app"
