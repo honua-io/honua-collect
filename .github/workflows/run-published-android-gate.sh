@@ -134,7 +134,7 @@ fi
 # Use the candidate even if the upgrade failed before installing it. A failed
 # candidate install stops these checks, which must never run on the historical APK.
 if ! install_result=$("${adb_device[@]}" install --no-streaming -r "$apk") ||
-    [[ $install_result != Success ]]; then
+    ! grep -Fxq Success <<<"${install_result//$'\r'/}"; then
     echo "::error::Candidate Android install failed. Independent checks cannot run." >&2
     exit 1
 fi
