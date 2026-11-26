@@ -104,4 +104,16 @@
 		<ProjectReference Include="..\Honua.Field.Presentation\Honua.Field.Presentation.csproj" />
 	</ItemGroup>
 
+
+	<PropertyGroup Condition="'$([MSBuild]::GetTargetPlatformIdentifier($(TargetFramework)))' == 'ios'">
+		<CodesignConfigureDependsOn>$(CodesignConfigureDependsOn);ConfigureSimulatorKeychain</CodesignConfigureDependsOn>
+	</PropertyGroup>
+
+	<Target Name="ConfigureSimulatorKeychain" Condition="'$(SdkIsSimulator)' == 'true'">
+		<PropertyGroup>
+			<CodesignEntitlements>Platforms/iOS/Entitlements-Simulator.plist</CodesignEntitlements>
+			<CodesignRequireProvisioningProfile>false</CodesignRequireProvisioningProfile>
+		</PropertyGroup>
+	</Target>
+
 </Project>

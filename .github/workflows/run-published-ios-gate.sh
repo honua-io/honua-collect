@@ -101,6 +101,27 @@ echo "Waiting for the prebooted simulator $device"
 run_bounded 540 xcrun simctl bootstatus "$device"
 app=$(find "$workspace/src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64" -maxdepth 1 -name '*.app' -type d)
 test -d "$app"
+# The Apple workload links simulator entitlements into the executable.
+# The ad-hoc code signature does not carry these simulator entitlements.
+executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+xcrun otool -s __TEXT __entitlements "$app/$executable" > "$working_dir/simulator-entitlements.txt"
+python3 - "$working_dir/simulator-entitlements.txt" "$bundle_id" <<'PYTHON'
+import pathlib
+import plistlib
+import re
+import sys
+
+dump = pathlib.Path(sys.argv[1]).read_text()
+rows = re.findall(r"^[0-9a-fA-F]+[ \t]+([0-9a-fA-F \t]+)$", dump, re.MULTILINE)
+try:
+    entitlements = plistlib.loads(bytes.fromhex(" ".join(rows)).rstrip(b"\0"))
+except ValueError as error:
+    sys.exit(f"Could not read embedded simulator entitlements: {error}")
+if sys.argv[2] not in entitlements.get("keychain-access-groups", []):
+    sys.exit(f"Missing simulator Keychain access group for {sys.argv[2]}")
+print(f"Verified embedded simulator Keychain access group for {sys.argv[2]}")
+PYTHON
 echo "Installing $(basename "$app") on $device ($(du -sh "$app" | cut -f1) uncompressed)"
 run_bounded 480 xcrun simctl install "$device" "$app"
 echo "App install complete. Starting published form journey."
