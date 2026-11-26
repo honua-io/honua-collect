@@ -46,12 +46,31 @@ jobs:
           project=src/Honua.Field.App/Honua.Field.App.csproj
           dotnet build "$project" -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64
           dotnet build "$project" -p:FieldTargetFramework=net11.0-maccatalyst -p:RuntimeIdentifier=maccatalyst-arm64
-      - name: Launch Field on the iOS simulator
+      - name: Launch Field on iPhone and iPad simulators
         run: |
-          device=$(xcrun simctl list devices available --json | jq -er '.devices["com.apple.CoreSimulator.SimRuntime.iOS-27-2"] | map(select(.name == "iPhone 17")) | first | .udid')
           app=$(find src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64 -maxdepth 1 -name '*.app' -type d)
           test -d "$app"
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
-          xcrun simctl install "$device" "$app"
-          xcrun simctl launch "$device" io.honua.collect
+          results="$RUNNER_TEMP/field-ios-results"
+          mkdir -p "$results"
+          xcrun simctl list devices available --json > "$results/simulators.json"
+          for family in iPhone iPad; do
+            device=$(jq -er --arg family "$family" '
+              .devices["com.apple.CoreSimulator.SimRuntime.iOS-27-2"]
+              | map(select(.name | startswith($family)))
+              | first
+              | .udid
+            ' "$results/simulators.json")
+            xcrun simctl boot "$device"
+            xcrun simctl bootstatus "$device" -b
+            xcrun simctl install "$device" "$app"
+            xcrun simctl launch "$device" io.honua.collect | tee "$results/$family-launch.txt"
+            xcrun simctl io "$device" screenshot "$results/$family.png"
+            xcrun simctl shutdown "$device"
+          done
+      - name: Upload iPhone and iPad smoke evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: field-ios-results
+          path: ${{ runner.temp }}/field-ios-results
+          if-no-files-found: warn
