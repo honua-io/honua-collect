@@ -96,27 +96,75 @@ report_root=${HONUA_E2E_REPORT_DIR:?}
 APKSIGNER=$(find "${ANDROID_HOME:?}/build-tools" -name apksigner -type f | sort -V | tail -n 1)
 export APKSIGNER
 test -x "$APKSIGNER"
-# Phone portrait, 411 x 891 dp.
-adb -s "$serial" shell wm size 822x1782
-adb -s "$serial" shell wm density 320
+adb_device=(adb -s "$serial")
+test "$("${adb_device[@]}" shell getprop ro.kernel.qemu)" = 1
+package=io.honua.collect
+apk="$RUNNER_TEMP/honua-field.apk"
+failed=0
+
+fail_gate() {
+    echo "::error::$1" >&2
+    failed=1
+}
+
+# Each candidate check starts with an empty sandbox, an explicit display size,
+# and no stale reverse forwarding from a failed upgrade or prior check.
+prepare_candidate_check() {
+    local size=$1 density=$2 output
+    output=$("${adb_device[@]}" shell pm clear "$package") &&
+        [[ $output == Success ]] &&
+        "${adb_device[@]}" reverse --remove-all &&
+        "${adb_device[@]}" shell wm size "$size" &&
+        "${adb_device[@]}" shell wm density "$density"
+}
+
+# Upgrade phases depend on the preceding phase. Leave historical data intact
+# until upgrade/recovery completes or fails and captures its evidence.
+"${adb_device[@]}" shell wm size 822x1782
+"${adb_device[@]}" shell wm density 320
 upgrade=(python3 "$workspace/scripts/e2e/run-installed-published-android-upgrade.py" "$serial" "$report_root/upgrade")
-"${upgrade[@]}" seed "$RUNNER_TEMP/honua-field-previous.apk" "$HONUA_E2E_WORKER_KEY_FILE"
-"${upgrade[@]}" verify "$RUNNER_TEMP/honua-field.apk"
-"${upgrade[@]}" recover-key
+if ! "${upgrade[@]}" seed "$RUNNER_TEMP/honua-field-previous.apk" "$HONUA_E2E_WORKER_KEY_FILE"; then
+    fail_gate "Historical Android seed failed"
+elif ! "${upgrade[@]}" verify "$apk"; then
+    fail_gate "In-place Android upgrade failed"
+elif ! "${upgrade[@]}" recover-key; then
+    fail_gate "Installed Android key recovery failed"
+fi
 
-python3 "$workspace/scripts/e2e/check-adaptive-geometry.py" "$serial" "$report_root/adaptive"
+# Use the candidate even if the upgrade failed before installing it. A failed
+# candidate install stops these checks, which must never run on the historical APK.
+if ! install_result=$("${adb_device[@]}" install --no-streaming -r "$apk") ||
+    [[ $install_result != Success ]]; then
+    echo "::error::Candidate Android install failed. Independent checks cannot run." >&2
+    exit 1
+fi
 
-# Start the receipt test with a fresh outbox on the upgraded app.
-adb -s "$serial" shell pm clear io.honua.collect
-export HONUA_E2E_REPORT_DIR="$report_root/receipt-replay"
-"$workspace/scripts/e2e/run-published-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
+if prepare_candidate_check 822x1782 320; then
+    if ! python3 "$workspace/scripts/e2e/check-adaptive-geometry.py" "$serial" "$report_root/adaptive"; then
+        fail_gate "Android adaptive geometry failed"
+    fi
+else
+    fail_gate "Android adaptive geometry setup failed"
+fi
 
-# This emulator is created for this job. Start the independent inspection with
-# an empty outbox while retaining the live server and the first receipt.
-adb -s "$serial" shell pm clear io.honua.collect
-# Tablet portrait, 800 x 1280 dp.
-adb -s "$serial" shell wm size 1200x1920
-adb -s "$serial" shell wm density 240
-export HONUA_E2E_REPORT_DIR="$report_root/rejection-correction"
-export HONUA_E2E_TEST_POSTGIS_CONTAINER="$container"
-"$workspace/scripts/e2e/run-rejected-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"
+if prepare_candidate_check 822x1782 320; then
+    if ! HONUA_E2E_REPORT_DIR="$report_root/receipt-replay" \
+        "$workspace/scripts/e2e/run-published-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
+        fail_gate "Android receipt replay failed"
+    fi
+else
+    fail_gate "Android receipt replay setup failed"
+fi
+
+# Tablet portrait, 800 x 1280 dp. The correction check scopes its own server
+# ledger assertions to this run, even if receipt replay failed.
+if prepare_candidate_check 1200x1920 240; then
+    if ! HONUA_E2E_REPORT_DIR="$report_root/rejection-correction" HONUA_E2E_TEST_POSTGIS_CONTAINER="$container" \
+        "$workspace/scripts/e2e/run-rejected-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
+        fail_gate "Android rejection and correction failed"
+    fi
+else
+    fail_gate "Android rejection and correction setup failed"
+fi
+
+exit "$failed"
