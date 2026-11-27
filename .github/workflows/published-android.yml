@@ -173,6 +173,7 @@ jobs:
             ${{ runner.temp }}/published-android-report/*/[0-9]-*.xml
             ${{ runner.temp }}/published-android-report/upgrade/*.xml
             ${{ runner.temp }}/published-android-report/adaptive/*
+            ${{ runner.temp }}/published-android-report/gps-geometry/*
             ${{ runner.temp }}/published-android-report/feature-sync/feature-sync.trx
             ${{ runner.temp }}/published-android-report/*/failure-state.json
             ${{ runner.temp }}/published-android-report/upgrade/before.json

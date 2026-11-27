@@ -150,6 +150,14 @@ else
 fi
 
 if prepare_candidate_check 822x1782 320; then
+    if ! python3 "$workspace/scripts/e2e/check-gps-geometry.py" "$serial" "$report_root/gps-geometry"; then
+        fail_gate "Android GPS geometry failed"
+    fi
+else
+    fail_gate "Android GPS geometry setup failed"
+fi
+
+if prepare_candidate_check 822x1782 320; then
     if ! HONUA_E2E_REPORT_DIR="$report_root/receipt-replay" \
         "$workspace/scripts/e2e/run-published-android.sh" "$serial" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
         fail_gate "Android receipt replay failed"

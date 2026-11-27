@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Honua.Field.Core.Maps;
 
@@ -19,7 +21,32 @@ public static class OsmTileUrl
     /// The OSM tile URL template: <c>{0}=zoom</c>, <c>{1}=x</c>, <c>{2}=y</c>.
     /// Public so a caller can identify the source; format with <see cref="For"/>.
     /// </summary>
-    public const string Template = "https://tile.openstreetmap.org/{0}/{1}/{2}.png";
+    public const string Template = PublicTemplate;
+
+    /// <summary>Opt in only when the configured provider authorizes offline prefetch.</summary>
+    public const bool AllowOfflinePrefetch = false;
+
+    private const string PublicTemplate = "https://tile.openstreetmap.org/{0}/{1}/{2}.png";
+
+    /// <summary>Checks explicit permission and excludes public OpenStreetMap hosts.</summary>
+    public static bool AllowsOfflinePrefetch(string template, bool optedIn)
+    {
+        if (!optedIn || !Uri.TryCreate(template, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("https" or "http"))
+        {
+            return false;
+        }
+
+        var host = uri.IdnHost.TrimEnd('.');
+        return !host.Equals("openstreetmap.org", StringComparison.OrdinalIgnoreCase)
+            && !host.EndsWith(".openstreetmap.org", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Separates alternate tile URLs while retaining the existing public cache.</summary>
+    public static string CacheDirectory(string root, string template) =>
+        string.Equals(template, PublicTemplate, StringComparison.Ordinal)
+            ? root
+            : Path.Combine(root, "sources", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(template))));
 
     /// <summary>
     /// Builds the absolute URL for an XYZ slippy-map tile on the public OSM tile

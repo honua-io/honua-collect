@@ -17,6 +17,10 @@ self-hosted [Honua server](https://github.com/honua-io/honua-server) — or an
 existing GeoServices REST feature service — with **no third-party license and no vendor cloud** in
 between.
 
+From the geometry screen, choose **Add GPS vertex** to average three fresh
+location fixes with reported accuracy of 25 m or better. Use it for a point
+or for each vertex of a line or polygon.
+
 ## Status
 
 🚧 **Early stage, active development — not yet a GA field app.** The honest
@@ -188,13 +192,15 @@ sent after it confirms the feature and all queued photos on the original layer.
 
 ### Basemap
 
-The embedded map draws OpenStreetMap raster tiles. The tile URL template is
-`OsmTileUrl.Template` in
-[`src/Honua.Field.Core/Maps/OsmTileUrl.cs`](src/Honua.Field.Core/Maps/OsmTileUrl.cs)
-(any XYZ `{z}/{x}/{y}` PNG source works). Point a distributed build at a tile
-server you operate or license: the public OSM tile servers have a usage policy
-that does not allow heavy or bulk use. The tile request User-Agent is set in
-`MauiProgram.cs`.
+The embedded map uses the XYZ raster URL in
+[`OsmTileUrl.Template`](src/Honua.Field.Core/Maps/OsmTileUrl.cs).
+With the public OpenStreetMap source, **Check offline area** checks tiles already
+cached at the current zoom. The public service's policy prohibits offline area
+prefetch. For **Download area**, configure a source you operate or license for
+offline use. Set its XYZ URL in `OsmTileUrl.Template` and set the adjacent
+`AllowOfflinePrefetch` to `true` before building. Alternate URL templates
+use separate caches. The app reports ready only when every planned tile is readable
+from disk. [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
 
 ### Build and distribute your own build
 

@@ -1,5 +1,20 @@
 # Shared offline runtime adoption
 
+## Offline basemap coverage
+
+In geometry capture, frame the work area before selecting **Download area** on a
+source whose provider authorizes prefetch. Set the source URL in
+`OsmTileUrl.Template` and the adjacent `AllowOfflinePrefetch` to `true` before
+building. Each alternate URL template uses its own cache. The plan covers the visible extent at the
+current zoom and up to two finer levels, within the tile cap. For the public
+OpenStreetMap source, **Check offline area** verifies the existing cache at the
+current zoom. Advance your map views normally to populate that cache.
+
+Readiness refers to the checked extent and zoom levels at the time of the
+check. Cancelled or incomplete downloads keep the usable tiles. Retry the
+same area to reuse those tiles, then verify the intended map view with
+connectivity disabled.
+
 Implementation tracking: [Field #173](https://github.com/honua-io/honua-field/issues/173)
 and [mobile #421](https://github.com/honua-io/honua-mobile/issues/421).
 This document defines the migration boundary and installation acceptance
