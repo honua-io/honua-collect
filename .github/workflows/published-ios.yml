@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - '.github/actions/mobile-validation-feed/**'
       - .github/workflows/published-ios.yml
       - .github/workflows/run-published-ios-gate.sh
       - scripts/e2e/**

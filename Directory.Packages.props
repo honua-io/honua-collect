@@ -19,15 +19,10 @@
     in #31), then re-run restore to refresh the lockfiles.
   -->
   <PropertyGroup>
-    <HonuaSdkDotNetTrainVersion>5.1.1-fieldforms.3</HonuaSdkDotNetTrainVersion>
-    <!-- Validation only. Replace with the signed published Mobile version and remove the artifact feed before merge. -->
+    <!-- Validation only. Replace both pins with signed published versions and remove the artifact feed before merge. -->
+    <HonuaSdkDotNetTrainVersion>5.1.1-fieldcombined.1</HonuaSdkDotNetTrainVersion>
     <HonuaMobileVersion>0.1.0-operationqueue.2</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(EnableAssignedWorkPilot)' == 'true'">
-    <HonuaSdkDotNetTrainVersion>5.1.1-fieldtasks.3</HonuaSdkDotNetTrainVersion>
-    <HonuaMobileVersion>0.1.0-fieldtasks.45963856191.1</HonuaMobileVersion>
   </PropertyGroup>
 
   <!-- First-party Honua platform packages (private github-honua feed). -->

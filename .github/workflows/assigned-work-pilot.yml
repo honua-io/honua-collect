@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/assigned-work-pilot.yml'
-      - '.github/actions/assigned-work-validation-feed/**'
+      - '.github/actions/mobile-validation-feed/**'
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/run-assigned-work-android-gate.sh'
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-      - uses: ./.github/actions/assigned-work-validation-feed
+      - uses: ./.github/actions/mobile-validation-feed
         with:
           token: ${{ github.token }}
       - name: Build and test against the opt-in package graph
@@ -84,10 +84,16 @@ jobs:
           path: ${{ runner.temp }}/assigned-work-apk/io.honua.collect-Signed.apk
           if-no-files-found: error
 
+      - name: Read the shared installed-test server revision
+        id: server-revision
+        run: |
+          revision="$(cat scripts/e2e/fixtures/server-revision.txt)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$revision" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: honua-io/honua-server
-          ref: 91fbdee76924225b22ae432249999d8d4e98ae9e
+          ref: ${{ steps.server-revision.outputs.sha }}
           path: server-candidate
           persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0

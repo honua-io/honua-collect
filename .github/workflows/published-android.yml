@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - '.github/actions/mobile-validation-feed/**'
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
       - scripts/e2e/**
@@ -79,16 +80,16 @@ jobs:
           DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
         with:
           global-json-file: global.json
-      - name: Build current standalone .NET 11 Debug APK
+      - name: Build current standalone .NET 11 Debug APK with assigned work
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
           "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
-            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
+            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True -p:EnableAssignedWorkPilot=true
           "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
-            -f net11.0-android -c Debug -t:SignAndroidPackage \
+            -f net11.0-android -c Debug -t:SignAndroidPackage -p:EnableAssignedWorkPilot=true \
             -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
             -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
           mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net11.0-android -type f -name '*-Signed.apk' -print0)

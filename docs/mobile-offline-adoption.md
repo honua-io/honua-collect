@@ -100,13 +100,15 @@ acceptance.
 ## Assigned-work pilot
 
 Build with `-p:EnableAssignedWorkPilot=true` to compile the assigned-work lifecycle
-integration. Restore this build using a NuGet configuration with the versioned
-candidate packages from Mobile PR #456 (`0.1.0-fieldtasks.45963856191.1`) and SDK PR #596
-(`5.1.1-fieldtasks.3`), alongside the normal public dependencies. Default builds
-exclude the pilot and its package dependencies. The pilot adds no Today screen.
-The hosted Assigned work pilot job verifies the package archive digests recorded
-in `.github/actions/assigned-work-validation-feed/artifacts.json`. These
-validation artifacts expire and require replacement by approved packages before rollout.
+integration. Both build modes use the same combined Mobile and SDK package
+versions. Only pilot builds add the assigned-work package and register the
+assigned-work runtime. The pilot adds no Today screen.
+
+The hosted validation feed verifies the immutable archives and packages recorded
+in `.github/actions/mobile-validation-feed/artifacts.json`. These archives
+expire. Replace both package pins with approved published versions and remove
+the validation feed before rollout. The Android published-form upgrade gate
+builds the pilot-enabled candidate against the unchanged historical APK.
 
 The pilot restores the saved authenticated session after encrypted storage opens.
 Use the canonical service ID from server metadata and the authenticated user ID
