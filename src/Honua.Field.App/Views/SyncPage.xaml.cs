@@ -52,7 +52,10 @@ public partial class SyncPage : ContentPage
         // persister durably saves each entry's post-upload state so a restart does
         // not re-upload (and duplicate) an already-synced record.
         BindingContext = new SyncCenterViewModel(
-            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync, logger: _logger);
+            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync,
+            logger: _logger,
+            canDispatchOrdinaryAdd: () => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
+                != Microsoft.Maui.Networking.NetworkAccess.None);
     }
 
     private async Task<FeatureSyncResult> UploadAsync(Core.Records.FieldRecordEntry entry, CancellationToken cancellationToken)
@@ -80,8 +83,7 @@ public partial class SyncPage : ContentPage
         //  - a re-edited, already-synced record (PendingUpdate carrying its RemoteId)
         //    -> applyEdits UPDATE against the existing object id (an add would
         //    duplicate the server feature).
-        //  - a brand-new record -> applyEdits ADD (carrying its stable client
-        //    GlobalID so a retried/lost-response add cannot duplicate).
+        //  - a brand-new record -> applyEdits ADD under the durable verification hold.
         // The result flows straight to the sync center, which surfaces the server's
         // error message/code verbatim.
         if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted)
@@ -95,8 +97,14 @@ public partial class SyncPage : ContentPage
             return FeatureSyncResult.Ok(null);
         }
 
-        if (long.TryParse(entry.RemoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
+        if (entry.RemoteId is { } storedObjectId)
         {
+            if (!long.TryParse(storedObjectId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId)
+                || objectId <= 0)
+            {
+                return FeatureSyncResult.Fail("This feature has an invalid server object ID. Check the server layer before retrying.");
+            }
+
             return await sync.UpdateAsync(objectId, entry.Record, _settings.Target, cancellationToken: cancellationToken);
         }
 
