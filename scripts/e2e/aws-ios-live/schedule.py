@@ -1,4 +1,5 @@
 import concurrent.futures
+import hashlib
 import json
 import os
 import re
@@ -58,6 +59,25 @@ def upload_artifact(project_arn, artifact_path, artifact_type):
     raise TimeoutError(f"Timed out validating {artifact_type}")
 
 
+def app_checksum():
+    with Path(UPLOADS[0][0]).open("rb") as app:
+        return hashlib.file_digest(app, "sha256").hexdigest()
+
+
+def reuse_app_upload(project_arn, receipt_file, checksum):
+    receipt = json.loads(Path(receipt_file).read_text())
+    if receipt["sha256"] != checksum:
+        raise ValueError("Previous upload receipt does not match the staged IPA")
+    upload_arn = receipt["uploadArn"]
+    project_prefix = project_arn.replace(":project:", ":upload:") + "/"
+    if not upload_arn.startswith(project_prefix):
+        raise ValueError("Previous app upload does not belong to the configured project")
+    upload = devicefarm("get-upload", "--arn", upload_arn)["upload"]
+    if upload["type"] != "IOS_APP" or upload["status"] != "SUCCEEDED":
+        raise ValueError("Previous upload must be a validated iOS app")
+    return upload_arn
+
+
 def main():
     previous_revision, field_revision, server_revision, upgrade_state = (
         Path("provenance.txt").read_text().splitlines()
@@ -74,14 +94,23 @@ def main():
         f"Server {server_revision[:8]} {uuid.uuid4().hex[:12]}"
     )
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(UPLOADS)) as executor:
+    checksum = app_checksum()
+    receipt_file = os.environ.get("HONUA_DEVICEFARM_APP_RECEIPT")
+    if receipt_file:
+        app_arn = reuse_app_upload(project_arn, receipt_file, checksum)
+    else:
+        app_path, app_type = UPLOADS[0]
+        app_arn = upload_artifact(project_arn, app_path, app_type)
+    Path("app-upload.json").write_text(
+        json.dumps({"uploadArn": app_arn, "sha256": checksum}, indent=2) + "\n"
+    )
+    test_uploads = UPLOADS[1:]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(test_uploads)) as executor:
         upload_futures = [
             executor.submit(upload_artifact, project_arn, artifact_path, artifact_type)
-            for artifact_path, artifact_type in UPLOADS
+            for artifact_path, artifact_type in test_uploads
         ]
-        app_arn, test_package_arn, test_spec_arn = [
-            future.result() for future in upload_futures
-        ]
+        test_package_arn, test_spec_arn = [future.result() for future in upload_futures]
 
     request = {
         "projectArn": project_arn,
