@@ -5,7 +5,7 @@ const stops = [
 const modes = { inspect: "Asset inspection v7", request: "Asset work request v2" };
 const storageKey = "honua-field-today-practice-v1";
 const element = (id) => document.getElementById(id);
-const emptySession = () => ({ selected: null, mode: "inspect", online: false, records: {}, receipts: {} });
+const emptySession = () => ({ selected: null, mode: "inspect", online: false, requestContract: "full", records: {}, receipts: {} });
 let session = JSON.parse(localStorage.getItem(storageKey)) || emptySession();
 const save = () => localStorage.setItem(storageKey, JSON.stringify(session));
 const recordKey = () => session.selected + "/" + session.mode;
@@ -18,6 +18,11 @@ const statusText = {
 };
 function currentRecord() {
   return session.records[recordKey()] ||= { notes: "", photo: "", status: "draft" };
+}
+function canQueue(record) {
+  return record.status === "draft" && (session.mode === "request"
+    ? Boolean(record.title?.trim())
+    : Boolean(record.notes.trim() || record.photo));
 }
 function drawDetail() {
   const stop = stops.find((item) => item.id === session.selected);
@@ -32,13 +37,24 @@ function drawDetail() {
     element(mode).setAttribute("aria-pressed", String(mode === session.mode));
   }
   element("form-title").textContent = modes[session.mode];
+  const isRequest = session.mode === "request";
+  element("request-title-field").hidden = !isRequest;
+  element("request-title").value = record.title || "";
+  element("request-title").readOnly = !editable;
+  const titleOnly = (record.requestContract || session.requestContract) === "title-only";
+  const evidenceStatus = element("evidence-status");
+  evidenceStatus.hidden = !isRequest || !titleOnly;
+  evidenceStatus.textContent = "Notes and the sample photo stay on this device in this scenario.";
   element("notes").value = record.notes;
   element("notes").readOnly = !editable;
   element("attachment").textContent = record.photo ? "Attached: " + record.photo : "No photo attached";
   element("photo").hidden = !editable || Boolean(record.photo);
   element("queue").hidden = !editable;
-  element("queue").disabled = !editable || !(record.notes.trim() || record.photo);
-  element("record-status").textContent = statusText[record.status] +
+  element("queue").disabled = !canQueue(record);
+  const status = isRequest && titleOnly && record.status === "accepted"
+    ? "Request accepted · asset location used"
+    : statusText[record.status];
+  element("record-status").textContent = status +
     (record.status === "accepted" ? " · receipt " + session.receipts[record.command] : "");
 }
 function draw() {
@@ -91,10 +107,22 @@ for (const mode of Object.keys(modes)) {
     save();
   };
 }
+element("request-contract").value = session.requestContract || "full";
+element("request-contract").onchange = () => {
+  session.requestContract = element("request-contract").value;
+  save();
+  drawDetail();
+};
+element("request-title").oninput = () => {
+  const record = currentRecord();
+  record.title = element("request-title").value;
+  element("queue").disabled = !canQueue(record);
+  save();
+};
 element("notes").oninput = () => {
   const record = currentRecord();
   record.notes = element("notes").value;
-  element("queue").disabled = !(record.notes.trim() || record.photo);
+  element("queue").disabled = !canQueue(record);
   save();
 };
 element("photo").onclick = () => {
@@ -105,7 +133,11 @@ element("photo").onclick = () => {
 element("capture").onsubmit = (event) => {
   event.preventDefault();
   const record = currentRecord();
-  if (record.status !== "draft" || !(record.notes.trim() || record.photo)) return;
+  if (!canQueue(record)) return;
+  if (session.mode === "request") {
+    record.title = record.title.trim();
+    record.requestContract = session.requestContract || "full";
+  }
   record.command = Array.from(crypto.getRandomValues(new Uint8Array(16)),
     (byte) => byte.toString(16).padStart(2, "0")).join("");
   record.status = "queued";
@@ -143,6 +175,7 @@ element("reset").onclick = () => {
   localStorage.removeItem(storageKey);
   element("list-view").click();
   element("response").value = "accepted";
+  element("request-contract").value = "full";
   element("announcement").textContent = "Practice session reset.";
   draw();
 };
