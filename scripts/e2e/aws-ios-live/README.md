@@ -44,8 +44,11 @@ Enable the fixture's OIDC portal credential verifier with
 `Oidc__Enabled=true`, `Authentication__PortalCredentialVerifier__UseOidc=true`
 and `Authentication__PortalCredentialVerifier__FallBackToAdminVerifier=false`.
 Configure the isolated issuer, audience and worker role. Restrict the worker
-route and role to the form, layer and attachment endpoints. Keep credential
-request bodies out of ingress logs.
+route and role to the form, layer and attachment endpoints. Verify that the
+worker can download the workbook and submit to the fixture layer, and that
+admin routes and other layers reject the worker. Field requests an IP-bound
+portal token. Preserve the same client IP through the trusted ingress for
+sign-in and sync. Keep credential request bodies out of ingress logs.
 
 Obtain a short-lived worker JWT through the fixture's identity provider for
 each scenario. Enter the worker username and paste the JWT in Field's Account
