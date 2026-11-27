@@ -419,6 +419,19 @@ internal sealed class FakeGeoServicesServer : HttpMessageHandler
             return result;
         }
 
+        if (!json.TrimStart().StartsWith('['))
+        {
+            foreach (var item in json.Split(','))
+            {
+                if (long.TryParse(item, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
+                {
+                    result.Add(objectId);
+                }
+            }
+
+            return result;
+        }
+
         using var doc = JsonDocument.Parse(json);
         foreach (var element in doc.RootElement.EnumerateArray())
         {

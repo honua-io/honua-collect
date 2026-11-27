@@ -92,4 +92,68 @@ public class GeoSnappingTests
         Assert.Equal(SnapKind.None, result.Kind);
         Assert.Same(captured, result.Point);
     }
+
+    [Fact]
+    public void Uses_metre_tolerance_at_high_latitude_and_preserves_the_target_coordinates()
+    {
+        var captured = new FieldGeoPoint(80, 0);
+        var vertex = new FieldGeoPoint(80, 0.0001, AccuracyMeters: 1);
+
+        var miss = GeoSnapping.Snap(captured, [vertex], toleranceMeters: 1.9);
+        var hit = GeoSnapping.Snap(captured, [vertex], toleranceMeters: 2);
+
+        Assert.Equal(SnapKind.None, miss.Kind);
+        Assert.Same(captured, miss.Point);
+        Assert.Equal(SnapKind.Vertex, hit.Kind);
+        Assert.Equal(new FieldGeoPoint(vertex.Latitude, vertex.Longitude), hit.Point);
+        Assert.InRange(hit.DistanceMeters, 1.93, 1.94);
+    }
+
+    [Fact]
+    public void Across_targets_the_first_equal_vertex_wins_and_vertices_beat_edges()
+    {
+        var captured = new FieldGeoPoint(0, 0);
+        var firstVertex = new FieldGeoPoint(0.00002, 0);
+        var secondVertex = new FieldGeoPoint(-0.00002, 0);
+        var edge = new SnapTarget([new(0.00002, -0.001), new(0.00002, 0.001)]);
+
+        var hit = GeoSnapping.Snap(captured, [edge, new SnapTarget([firstVertex]), new SnapTarget([secondVertex])], 5);
+
+        Assert.Equal(SnapKind.Vertex, hit.Kind);
+        Assert.Equal(firstVertex, hit.Point);
+        Assert.Equal(2.2108, hit.DistanceMeters, 5);
+    }
+
+    [Fact]
+    public void Equal_edges_within_a_target_keep_the_first_segment()
+    {
+        FieldGeoPoint[] path = [new(0.00002, -0.001), new(0.00002, 0.001), new(-0.00002, 0.001), new(-0.00002, -0.001)];
+
+        var hit = GeoSnapping.Snap(new FieldGeoPoint(0, 0), path, 5);
+
+        Assert.Equal(SnapKind.Edge, hit.Kind);
+        Assert.Equal(0.00002, hit.Point.Latitude, 8);
+        Assert.Equal(0, hit.Point.Longitude, 8);
+    }
+
+    [Fact]
+    public void Antimeridian_segment_snaps_near_the_date_line_and_misses_near_greenwich()
+    {
+        FieldGeoPoint[] path = [new(0, 179.999), new(0, -179.999)];
+        var distantCapture = new FieldGeoPoint(0.00002, 0);
+
+        var hit = GeoSnapping.Snap(new FieldGeoPoint(0.00002, -179.9998), path, 5);
+        var miss = GeoSnapping.Snap(distantCapture, path, 5);
+        var vertex = GeoSnapping.Snap(new FieldGeoPoint(0, -179.99999), [new FieldGeoPoint(0, 180)], 5);
+
+        Assert.Equal(SnapKind.Edge, hit.Kind);
+        Assert.Equal(0, hit.Point.Latitude, 8);
+        Assert.Equal(-179.9998, hit.Point.Longitude, 8);
+        Assert.Equal(2.2108, hit.DistanceMeters, 5);
+        Assert.Equal(SnapKind.None, miss.Kind);
+        Assert.Same(distantCapture, miss.Point);
+        Assert.Equal(SnapKind.Vertex, vertex.Kind);
+        Assert.Equal(180, vertex.Point.Longitude);
+        Assert.Equal(1.1132, vertex.DistanceMeters, 5);
+    }
 }

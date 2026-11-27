@@ -103,14 +103,22 @@ public class GeoServicesFeatureSyncTests
         var handler = new CapturingHandler(HttpStatusCode.OK, """{"updateResults":[{"objectId":42,"success":true}]}""");
         using var http = new HttpClient(handler);
 
-        var result = await new GeoServicesFeatureSync(http).UpdateAsync(42, Record(), new GeoServicesTarget("http://s", "svc", 9));
+        var record = Record();
+        record.Values["saved_number"] = JsonSerializer.SerializeToElement(7);
+        record.Values["saved_boolean"] = JsonSerializer.SerializeToElement(true);
+        record.Values["saved_null"] = JsonSerializer.SerializeToElement<object?>(null);
+        var result = await new GeoServicesFeatureSync(http).UpdateAsync(42, record, new GeoServicesTarget("http://s", "svc", 9));
 
         Assert.True(result.Success);
         Assert.Equal(42, result.ObjectId);
         Assert.Contains("updates=", handler.CapturedBody);
         using var doc = JsonDocument.Parse(System.Net.WebUtility.UrlDecode(
             handler.CapturedBody!.Split("updates=")[1].Split('&')[0]));
-        Assert.Equal(42, doc.RootElement[0].GetProperty("attributes").GetProperty("objectid").GetInt64());
+        var attributes = doc.RootElement[0].GetProperty("attributes");
+        Assert.Equal(42, attributes.GetProperty("objectid").GetInt64());
+        Assert.Equal(7, attributes.GetProperty("saved_number").GetInt32());
+        Assert.True(attributes.GetProperty("saved_boolean").GetBoolean());
+        Assert.False(attributes.TryGetProperty("saved_null", out _));
     }
 
     [Fact]
@@ -123,7 +131,22 @@ public class GeoServicesFeatureSyncTests
 
         Assert.True(result.Success);
         Assert.Equal(7, result.ObjectId);
-        Assert.Contains("deletes=%5B7%5D", handler.CapturedBody); // [7] url-encoded
+        Assert.Contains("deletes=7", handler.CapturedBody);
+    }
+
+    [Theory]
+    [InlineData("""{"updateResults":[]}""")]
+    [InlineData("""{"updateResults":[null]}""")]
+    [InlineData("""{"updateResults":[{"objectId":42,"success":true},{"objectId":43,"success":true}]}""")]
+    public async Task UpdateAsync_rejects_receipts_that_do_not_confirm_exactly_one_edit(string response)
+    {
+        using var http = new HttpClient(new CapturingHandler(HttpStatusCode.OK, response));
+        var sync = new GeoServicesFeatureSync(http, FeatureSyncRetryPolicy.None);
+
+        var result = await sync.UpdateAsync(42, Record(), new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Contains("updateResults", result.Error);
     }
 
     [Fact]

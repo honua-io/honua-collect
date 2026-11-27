@@ -134,6 +134,67 @@ public class FeatureSyncE2ETests
         }
     }
 
+    [SkippableFact]
+    public async Task Lost_attachment_acknowledgment_is_verified_after_reopening_without_posting_again()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is required for the live sync test.");
+
+        using var readHttp = Authed();
+        var server = new GeoServicesFeatureSync(readHttp);
+        var record = Site(Marker(), record => record.Status = RecordStatus.Submitted);
+        var entry = new FieldRecordEntry(record);
+        entry.MarkPending();
+        var added = await server.SubmitAsync(record, Target);
+        Assert.True(added.Success, added.Error);
+        var objectId = Assert.IsType<long>(added.ObjectId);
+        using var fault = new DropCommittedAttachmentResponse();
+        using var uploadHttp = Authed(fault);
+        var sync = new GeoServicesFeatureSync(uploadHttp);
+        var directory = Directory.CreateTempSubdirectory();
+        var path = Path.Combine(directory.FullName, "field.db");
+        const string key = "lost-photo-ack-test-key";
+
+        try
+        {
+            var store = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            entry.MarkSynced(objectId.ToString(CultureInfo.InvariantCulture));
+            var photoId = Guid.NewGuid();
+            var name = $"{photoId:N}.png";
+            var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "inspection.png"));
+            await File.WriteAllBytesAsync(Path.Combine(directory.FullName, name), bytes);
+            entry.AddOrdinaryPhoto(new OrdinaryFeaturePhoto(
+                photoId, name, "image/png", name, Convert.ToHexString(SHA256.HashData(bytes)), Target));
+            await store.SaveAsync(entry);
+
+            Assert.False(await OrdinaryPhotoReplay.ReplayAsync(
+                entry, sync, Target, directory.FullName, current => store.SaveAsync(current)));
+            Assert.Equal(OrdinaryPhotoState.NeedsVerification, Assert.Single(entry.OrdinaryPhotos).State);
+            Assert.NotNull(fault.CommittedAttachmentId);
+
+            var reopened = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            var held = Assert.Single(await reopened.LoadAllAsync());
+            Assert.True(await OrdinaryPhotoReplay.ReplayAsync(
+                held, sync, Target, directory.FullName, current => reopened.SaveAsync(current)));
+            Assert.Equal(1, fault.UploadRequests);
+
+            var persisted = Assert.Single(await reopened.LoadAllAsync());
+            var photo = Assert.Single(persisted.OrdinaryPhotos);
+            Assert.Equal(OrdinaryPhotoState.Synced, photo.State);
+            Assert.Equal(fault.CommittedAttachmentId, photo.ServerAttachmentId);
+            using var listing = JsonDocument.Parse(await readHttp.GetStringAsync(
+                $"/rest/services/{ServiceId}/FeatureServer/{LayerId}/{objectId}/attachments?f=json"));
+            var attachment = Assert.Single(listing.RootElement.GetProperty("attachmentInfos").EnumerateArray());
+            Assert.Equal(fault.CommittedAttachmentId, ReadLong(attachment, "id"));
+            Assert.Equal(name, attachment.GetProperty("name").GetString());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+            var deleted = await server.DeleteAsync(objectId, Target);
+            Assert.True(deleted.Success, deleted.Error);
+        }
+    }
+
     // Deliver all protocol errors normally. Drop the first actual success only after the server
     // returns the assigned ID, as happens when the response is lost on the way back to Field.
     private sealed class DropCommittedAddResponse() : DelegatingHandler(new HttpClientHandler())

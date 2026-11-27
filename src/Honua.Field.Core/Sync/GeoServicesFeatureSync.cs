@@ -8,6 +8,7 @@ using Honua.Sdk.Abstractions.Features;
 using Honua.Sdk.Field.Records;
 using Honua.Sdk.GeoServices.FeatureServer;
 using Honua.Sdk.GeoServices.FeatureServer.Exceptions;
+using Honua.Sdk.GeoServices.FeatureServer.Models;
 
 namespace Honua.Field.Core.Sync;
 
@@ -242,7 +243,7 @@ public sealed class GeoServicesFeatureSync
         }
 
         return PostEditsAsync(
-            target, "adds", addsJson, "addResults", idempotent: false, useGlobalIds: true, cancellationToken);
+            ct => AttemptAddAsync(target, addsJson, useGlobalIds: true, ct), idempotent: false, cancellationToken);
     }
 
     /// <summary>
@@ -468,9 +469,21 @@ public sealed class GeoServicesFeatureSync
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrWhiteSpace(objectIdField);
+        using var document = JsonDocument.Parse(BuildFeaturesJson(record, objectId, objectIdField));
+        var feature = document.RootElement[0];
+        var attributes = feature.GetProperty("attributes").EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        var update = new FeatureServerFeature
+        {
+            Attributes = attributes,
+            Geometry = feature.TryGetProperty("geometry", out var geometry) ? geometry.Clone() : null
+        };
+        var client = CreateFeatureServerClient(_http, target);
         return PostEditsAsync(
-            target, "updates", BuildFeaturesJson(record, objectId, objectIdField), "updateResults",
-            idempotent: true, useGlobalIds: false, cancellationToken);
+            ct => AttemptTypedEditAsync(async () =>
+                (await client.UpdateFeaturesAsync(target.ServiceId, target.LayerId, [update], cancellationToken: ct)
+                    .ConfigureAwait(false)).UpdateResults, "updateResults"),
+            idempotent: true, cancellationToken);
     }
 
     /// <summary>Deletes a feature by its object id.</summary>
@@ -492,9 +505,12 @@ public sealed class GeoServicesFeatureSync
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(target);
-        var deletes = $"[{objectId.ToString(CultureInfo.InvariantCulture)}]";
+        var client = CreateFeatureServerClient(_http, target);
         var result = await PostEditsAsync(
-            target, "deletes", deletes, "deleteResults", idempotent: true, useGlobalIds: false, cancellationToken)
+            ct => AttemptTypedEditAsync(async () =>
+                (await client.DeleteFeaturesAsync(target.ServiceId, target.LayerId, [objectId], cancellationToken: ct)
+                    .ConfigureAwait(false)).DeleteResults, "deleteResults"),
+            idempotent: true, cancellationToken)
             .ConfigureAwait(false);
 
         if (!result.Success && IsAlreadyAbsent(result))
@@ -530,10 +546,7 @@ public sealed class GeoServicesFeatureSync
     {
         try
         {
-            var client = new HonuaFeatureServerClient(_http, new HonuaFeatureServerClientOptions
-            {
-                RootAddress = new Uri(photo.Target.BaseUrl, UriKind.Absolute),
-            });
+            var client = CreateFeatureServerClient(_http, photo.Target);
             var source = new FeatureSource { ServiceId = photo.Target.ServiceId, LayerId = photo.Target.LayerId };
             var attachments = await client.ListAttachmentsAsync(
                 new FeatureAttachmentListRequest { Source = source, ObjectId = objectId }, cancellationToken).ConfigureAwait(false);
@@ -594,10 +607,7 @@ public sealed class GeoServicesFeatureSync
             filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 81920, useAsync: true);
         using var uploadCts = UploadDeadline.Start(fileStream.Length, cancellationToken);
-        var client = new HonuaFeatureServerClient(_uploadHttp, new HonuaFeatureServerClientOptions
-        {
-            RootAddress = new Uri(target.BaseUrl, UriKind.Absolute)
-        });
+        var client = CreateFeatureServerClient(_uploadHttp, target);
 
         try
         {
@@ -612,11 +622,7 @@ public sealed class GeoServicesFeatureSync
             return result.Succeeded
                 ? new FeatureSyncResult(true, result.AttachmentId, null)
                 : new FeatureSyncResult(false, result.AttachmentId,
-                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code)
-                {
-                    DefinitiveEditRejection = (result.AttachmentId is null or <= 0)
-                        && IsDefinitiveAttachmentRejection(result.Error?.Code)
-                };
+                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code);
         }
         catch (HonuaFeatureServerException ex) when (IsDefinitiveAttachmentRejection((int)ex.StatusCode)
             || ((int)ex.StatusCode is 200 or 400 && IsDefinitiveAttachmentRejection(ex.GeoServicesErrorCode)))
@@ -1030,13 +1036,46 @@ public sealed class GeoServicesFeatureSync
         return new EditOutcome(false, oid, detail, errCode);
     }
 
+    private static HonuaFeatureServerClient CreateFeatureServerClient(HttpClient http, GeoServicesTarget target) =>
+        new(http, new HonuaFeatureServerClientOptions { RootAddress = new Uri(target.BaseUrl, UriKind.Absolute) });
+
+    private static async Task<FeatureSyncResult> AttemptTypedEditAsync(
+        Func<Task<IReadOnlyList<FeatureServerEditResult>>> send, string resultKey)
+    {
+        try
+        {
+            var results = await send().ConfigureAwait(false);
+            if (results is not { Count: 1 })
+            {
+                return FeatureSyncResult.Fail($"Unexpected response: expected one {resultKey} entry.");
+            }
+
+            if (results[0] is not { } result)
+            {
+                return FeatureSyncResult.Fail($"Unexpected response: missing {resultKey} entry.");
+            }
+
+            return result.Success
+                ? new FeatureSyncResult(true, result.ObjectId, null)
+                : new FeatureSyncResult(false, result.ObjectId,
+                    result.Error?.Description ?? result.Error?.Message ?? "Edit was not applied.", result.Error?.Code);
+        }
+        catch (HonuaFeatureServerException ex)
+        {
+            var status = (int)ex.StatusCode;
+            return status >= 400
+                ? new FeatureSyncResult(false, null, $"HTTP {status}: {ex.ResponseBody ?? ex.Message}", status)
+                : new FeatureSyncResult(false, null, ex.Message, ex.GeoServicesErrorCode);
+        }
+        catch (JsonException ex)
+        {
+            return FeatureSyncResult.Fail($"Invalid response: {ex.Message}");
+        }
+    }
+
     private async Task<FeatureSyncResult> PostEditsAsync(
-        GeoServicesTarget target,
-        string editKey,
-        string editJson,
-        string resultKey,
+        Func<CancellationToken, Task<FeatureSyncResult>> send,
         bool idempotent,
-        bool useGlobalIds,
         CancellationToken cancellationToken)
     {
         FeatureSyncResult result = new(false, null, "No attempt was made.");
@@ -1046,7 +1085,7 @@ public sealed class GeoServicesFeatureSync
             var isLast = attempt >= _retry.MaxAttempts;
             try
             {
-                result = (await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds, cancellationToken).ConfigureAwait(false))
+                result = (await send(cancellationToken).ConfigureAwait(false))
                     with { Attempts = attempt };
 
                 if (result.Success || isLast || (!idempotent && !result.DefinitiveEditRejection)
@@ -1080,18 +1119,16 @@ public sealed class GeoServicesFeatureSync
         return result;
     }
 
-    private async Task<FeatureSyncResult> AttemptAsync(
+    private async Task<FeatureSyncResult> AttemptAddAsync(
         GeoServicesTarget target,
-        string editKey,
-        string editJson,
-        string resultKey,
+        string addsJson,
         bool useGlobalIds,
         CancellationToken cancellationToken)
     {
         var fields = new Dictionary<string, string>
         {
             ["f"] = "json",
-            [editKey] = editJson,
+            ["adds"] = addsJson,
             ["rollbackOnFailure"] = "true",
         };
 
@@ -1111,22 +1148,11 @@ public sealed class GeoServicesFeatureSync
         {
             // The server rejected the edit mode before applying any writes. Keep the
             // same attributes and let the layer allocate its own object ID.
-            return await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds: false, cancellationToken)
+            return await AttemptAddAsync(target, addsJson, useGlobalIds: false, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        if (editKey == "adds")
-        {
-            return ParseBatchResults(body, 1, response.StatusCode)[0];
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            // 5xx/429/408 are transient; mark them retryable via the HTTP status code.
-            return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
-        }
-
-        return ParseResult(body, resultKey);
+        return ParseBatchResults(body, 1, response.StatusCode)[0];
     }
 
     private static bool IsUnsupportedGlobalIdResponse(System.Net.HttpStatusCode statusCode, string body)
@@ -1358,31 +1384,4 @@ public sealed class GeoServicesFeatureSync
         }
     }
 
-    private static FeatureSyncResult ParseResult(string body, string resultKey)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-
-            if (TryReadServerError(root, out var msg, out var code))
-            {
-                return new FeatureSyncResult(false, null, msg, code);
-            }
-
-            if (root.TryGetProperty(resultKey, out var results) && results.GetArrayLength() > 0)
-            {
-                var outcome = ReadEditOutcome(results[0], "Edit was not applied.");
-                return outcome.Success
-                    ? new FeatureSyncResult(true, outcome.ObjectId, null)
-                    : new FeatureSyncResult(false, outcome.ObjectId, outcome.Detail, outcome.Code);
-            }
-
-            return new FeatureSyncResult(false, null, $"Unexpected response: no {resultKey}.");
-        }
-        catch (JsonException ex)
-        {
-            return new FeatureSyncResult(false, null, $"Invalid response: {ex.Message}");
-        }
-    }
 }

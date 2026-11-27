@@ -196,6 +196,7 @@ required = {
     "Ordinary_attachment_round_trips_metadata_and_photo_bytes",
     "Lost_add_acknowledgment_survives_reopen_without_creating_a_second_feature",
     "Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates",
+    "Lost_attachment_acknowledgment_is_verified_after_reopening_without_posting_again",
 }
 executed = {result.get("testName", "").rsplit(".", 1)[-1] for result in results}
 if missing := required - executed:

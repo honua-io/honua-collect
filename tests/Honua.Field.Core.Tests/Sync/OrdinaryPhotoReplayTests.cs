@@ -50,6 +50,7 @@ public sealed class OrdinaryPhotoReplayTests : IDisposable
     [InlineData(HttpStatusCode.Conflict, false)]
     [InlineData(HttpStatusCode.RequestTimeout, true)]
     [InlineData(HttpStatusCode.Conflict, true)]
+    [InlineData(HttpStatusCode.Forbidden, true)]
     public async Task Ambiguous_structured_error_verifies_without_posting_again(HttpStatusCode status, bool nestedError)
     {
         using var server = new AttachmentHandler(status, nestedError);
