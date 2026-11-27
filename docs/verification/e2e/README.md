@@ -8,11 +8,11 @@ PostgreSQL — the full capture → sync → store loop.
 
 The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) builds two signed Debug APKs, starts the pinned Honua Server revision with PostGIS and publishes the inspection workbook. Maestro drives the native Field screens on Android API 33 under a layer-scoped worker account.
 
-The first scenario installs the .NET 10 Field versionCode 3 from commit `fb16d0b`, downloads the workbook, disconnects the server and saves two inspections. One stays editable and one is queued. The gate installs the .NET 11 versionCode 4 APK over the older app and compares the Android UID, signing certificate, record IDs, queue state, cached form version and both attachment hashes. It then temporarily removes access to the device key, taps Retry, verifies that the local database files have identical hashes and restores the key. The saved draft must reopen and the queued inspection must still be ready to send.
+The first scenario installs the .NET 11 Field APK (version code 4) from commit `6e3db0b`, downloads the workbook, disconnects the server and saves two inspections. One stays editable and one is queued. The gate installs the candidate APK (version code 5) over the older app and compares the Android UID, signing certificate, record IDs, queue state, cached form version and both attachment hashes. It then temporarily removes access to the device key, taps Retry, verifies that the local database files have identical hashes and restores the key. The saved draft must reopen. The final upgrade phase sends the queued inspection and verifies it against the original workbook version.
 
 After clearing Field’s local data on the emulator, the gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. In CI the host publishes a newer revision while the draft is offline. The original version must still be used when the draft resumes and uploads. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
 
-The final scenario exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
+The tablet scenario exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
 
 To rerun the dropped-response scenario on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. To exercise the version change locally, set `HONUA_E2E_PUBLISH_NEXT_VERSION=1` and pass the disposable fixture admin key as the third argument. The script removes its temporary settings and network forwarding on exit.
 
@@ -32,6 +32,18 @@ A separate local Android check typed `field27` into the sample inspection’s Si
 A local Records check loaded 175 drafts, five outbox records and five sent records. On a portrait phone and a landscape tablet, the tester scrolled through all three groups and opened the edit history for the last sent record.
 
 The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45895394432) passed the installed .NET 10 to .NET 11 upgrade (versionCode 3 to 4), encryption-key recovery, receipt replay, rejection correction and adaptive geometry checks. For each submission scenario, Honua Server returned exactly one feature, one accepted receipt, two repeat rows and the expected attachment checksum. The [run artifact](https://github.com/honua-io/honua-field/actions/runs/45895394432/artifacts/15155210669) contains the matching upgrade snapshots, device screenshots, both server readbacks and the correction ledger.
+
+## Ordinary feature photos on Android
+
+The ordinary inspection scenario captures a photo in airplane mode, submits the feature to the outbox and restarts Field. Before reconnecting, the gate checks that the server has no matching feature. It then syncs, compares the downloaded attachment byte for byte against the private copy on the phone, and restarts again to verify that the feature and attachment IDs stay the same. The counts, IDs and SHA-256 are recorded in `ordinary-photo/server-readback.json`.
+
+For a local run, install the candidate Debug APK on a disposable emulator with a freshly cleared Field sandbox. Start the seeded `mobile_offline_demo` server and use a fixture key that can add, query and read attachments on layer `68910`. The default host port is `5189`. Set `HONUA_E2E_HTTP_PORT` if your fixture uses another port. The harness toggles airplane mode and uses `adb reverse` to reconnect the app to the fixture.
+
+```bash
+python3 scripts/e2e/run-ordinary-photo-android.py emulator-5554 /tmp/field-photo-results /path/to/fixture-key
+```
+
+The live .NET scenario also drops the upload acknowledgement after the server stores the photo, reopens the encrypted store and checks for a duplicate feature or attachment. See the [scenario list](#comprehensive-scenario-coverage).
 
 ## iPhone and iPad geometry
 
@@ -97,6 +109,7 @@ live server:
   is retried with backoff, so **every** submission succeeds (no spurious
   failures) and exactly one consistent row remains;
 - **independent captures with identical answers** — distinct record IDs produce two feature rows.
+- **lost attachment acknowledgement** — the server stores the photo before the client loses the response. Field reopens its encrypted store and verifies the uploaded photo without creating a second feature or attachment.
 
 Findings the suite surfaced (and the fix): concurrent same-row updates fail
 transiently under contention — the server reuses error code 1000 for both that

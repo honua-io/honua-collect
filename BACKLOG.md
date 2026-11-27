@@ -4,7 +4,7 @@ Capability gaps in the Honua mobile stack. Each item is tagged with:
 
 - **Status** — ❌ absent · ⚠️ partial (primitive/metadata exists, no shipped UX) · 🧩 framework only · 🧱 platform-neutral Core model implemented & unit-tested, device UX still pending · ✅ (suffix) verified working on a device/emulator
 - **Owner** — where it's built:
-  - `collect` = this repo (Apache)
+  - `field` = Honua Field (this repository, Apache)
   - `mobile` = honua-mobile primitives (Apache, consumed)
   - `sdk` = honua-sdk-dotnet (Apache, consumed)
 
@@ -26,7 +26,7 @@ testable without a device and unblocks every widget and screen above it:
   **C1–C6, F3, F5** plus repeats, and is the host every capture widget binds to.
 - **`Records/`** — `RecordSyncState` (transport state, orthogonal to the SDK
   review workflow), `RecordBox` Drafts/Outbox/Sent classification,
-  `CollectRecordEntry` upload lifecycle, and `SyncSummary`. Backs **S3, S4**.
+  `FieldRecordEntry` upload lifecycle, and `SyncSummary`. Backs **S3, S4**.
 - **`Export/RecordExporter`** — CSV + GeoJSON bulk export. Backs **R2**.
 - **`Sync/RecordConflictDetector` + `RecordConflict`** — field-level diff and
   merge for the manual conflict-review screen. Backs **S1**.
@@ -133,26 +133,26 @@ proven; these are device-sensor integrations.
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| C1 | Camera/photo capture widget (capture, retake, gallery pick) | 🧱✅ | collect |
-| C2 | Audio recording widget | 🧱✅ | collect |
-| C3 | Video capture widget | 🧱✅ | collect |
-| C4 | Signature capture pad | 🧱✅ | collect |
-| C5 | Sketch / freehand drawing widget | 🧱✅ | collect |
-| C6 | Barcode / QR scanner (decode from image) | 🧱✅ | collect |
-| C7 | Photo annotation / markup | 🧱✅ | collect |
-| C8 | Image auto-resize/compression before upload | ✅ | collect |
+| C1 | Camera/photo capture widget (capture, retake, gallery pick) | 🧱✅ | field |
+| C2 | Audio recording widget | 🧱✅ | field |
+| C3 | Video capture widget | 🧱✅ | field |
+| C4 | Signature capture pad | 🧱✅ | field |
+| C5 | Sketch / freehand drawing widget | 🧱✅ | field |
+| C6 | Barcode / QR scanner (decode from image) | 🧱✅ | field |
+| C7 | Photo annotation / markup | 🧱✅ | field |
+| C8 | Image auto-resize/compression before upload | ✅ | field |
 | C9 | Chunked/resumable large-media upload | 🧱 | mobile |
 
 ## 2. Geometry / GIS capture
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| G1 | Point capture from map tap | 🧱✅ | collect |
-| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱✅ | collect |
+| G1 | Point capture from map tap | 🧱✅ | field |
+| G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱✅ | field |
 | G3 | GPS streaming/averaging for vertices | 🧱 | mobile |
-| G4 | Embedded 2D map rendering surface (OSM tiles, no API key) | 🧱✅ | collect |
+| G4 | Embedded 2D map rendering surface (OSM tiles, no API key) | 🧱✅ | field |
 | G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | mobile |
-| G6 | On-device AR scene anchoring (physical device) | 🧩 | collect |
+| G6 | On-device AR scene anchoring (physical device) | 🧩 | field |
 | G7 | Snap-to-feature / topology assist | 🧱 | sdk |
 
 ## 3. Forms & authoring
@@ -162,46 +162,46 @@ proven; these are device-sensor integrations.
 | F1 | Form/survey builder (drag-drop or XLSForm import) | 🧱 | sdk/server |
 | F2 | Multi-language / localized forms | 🧱 | sdk |
 | F3 | Cascading/dependent selects beyond current visibility rules | 🧱 | sdk |
-| F4 | Related tables / record links UX | 🧱 | collect |
-| F5 | Default-from-previous / "favorites" answer reuse | 🧱 | collect |
-| F6 | Offline Data Events automation engine (rules → set/compute/tag/notify/follow-up/HTTP/AI actions; #44) | 🧱 | collect |
+| F4 | Related tables / record links UX | 🧱 | field |
+| F5 | Default-from-previous / "favorites" answer reuse | 🧱 | field |
+| F6 | Offline Data Events automation engine (rules → set/compute/tag/notify/follow-up/HTTP/AI actions; #44) | 🧱 | field |
 
 ## 4. Sync & offline (advanced)
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | collect |
-| S2 | Selective / partial sync (per-layer; spatial extent in layer CRS, attribute where, date/age, explicit selection) | 🧱✅ | collect |
-| S3 | Sync status center / per-record sync state UX | 🧱 | collect |
-| S4 | Outbox / Sent / Drafts boxes | 🧱 | collect |
+| S1 | Manual conflict-review UI (ManualReview strategy is built, no UI) | 🧱 | field |
+| S2 | Selective / partial sync (per-layer; spatial extent in layer CRS, attribute where, date/age, explicit selection) | 🧱✅ | field |
+| S3 | Sync status center / per-record sync state UX | 🧱 | field |
+| S4 | Outbox / Sent / Drafts boxes | 🧱 | field |
 
 ## 5. Reporting & exports
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| R1 | Per-record feature reports (templated Markdown/PDF/DOCX) | 🧱✅ | collect |
-| R2 | Bulk export (CSV/GeoJSON/KML/GeoPackage/Shapefile/Excel + field-mapped CSV) | 🧱✅ | collect |
-| R2b | Bulk report generation (N records → manifest of MD/PDF/DOCX, zip-bundled) | 🧱✅ | collect |
-| R3 | Report template designer (model + AI-narrative seam; UI deferred) | 🧱 | collect |
+| R1 | Per-record feature reports (templated Markdown/PDF/DOCX) | 🧱✅ | field |
+| R2 | Bulk export (CSV/GeoJSON/KML/GeoPackage/Shapefile/Excel + field-mapped CSV) | 🧱✅ | field |
+| R2b | Bulk report generation (N records → manifest of MD/PDF/DOCX, zip-bundled) | 🧱✅ | field |
+| R3 | Report template designer (model + AI-narrative seam; UI deferred) | 🧱 | field |
 
 ## 6. AI-assisted capture (differentiator; framework exists, provider stubbed)
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| A1 | Voice-to-fields | 🧱 | collect |
-| A2 | Photo-to-fields (Anthropic vision; needs API key) | 🧱 | collect |
-| A3 | Media redaction / face-blur execution | 🧱 | collect |
+| A1 | Voice-to-fields | 🧱 | field |
+| A2 | Photo-to-fields (Anthropic vision; needs API key) | 🧱 | field |
+| A3 | Media redaction / face-blur execution | 🧱 | field |
 
 ## 7. Enterprise auth & admin
 
 | # | Item | Status | Owner |
 |---|---|---|---|
-| E1 | SSO (OIDC/SAML) | 🧱 | collect |
-| E2 | Role enforcement on device | 🧱 | collect |
-| E3 | Audit logging | 🧱 | collect |
-| E4 | MDM / white-labeling / app config | 🧱 | collect |
-| E5 | Assignments / inbox & task dispatch | 🧱✅ | collect |
-| E6 | Push notifications (new assignment, sync done) | 🧱 | collect |
+| E1 | SSO (OIDC/SAML) | 🧱 | field |
+| E2 | Role enforcement on device | 🧱 | field |
+| E3 | Audit logging | 🧱 | field |
+| E4 | MDM / white-labeling / app config | 🧱 | field |
+| E5 | Assignments / inbox & task dispatch | 🧱✅ | field |
+| E6 | Push notifications (new assignment, sync done) | 🧱 | field |
 
 ## 8. Sensors / IoT (honua-mobile IoT module is interface-only today)
 

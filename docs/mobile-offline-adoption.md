@@ -86,6 +86,17 @@ attachment duplication. If checkpoint instrumentation is unavailable, record
 these cases as blocked rather than substituting an offline restart. Never alter the secure-storage key on a real
 phone holding the only copy of field data to simulate these failures.
 
+### Ordinary inspection photos
+
+The [installed Android photo gate](verification/e2e/README.md#ordinary-feature-photos-on-android)
+covers steps 3–5 for an ordinary feature-layer inspection. It submits a photo
+offline, reopens the outbox after process death, then checks the feature and
+attachment on the seeded server after reconnecting. The report records their IDs,
+counts and the SHA-256 of the downloaded bytes. The live Core test
+`Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates`
+exercises the separate case where the server accepts the upload and its reply is
+lost. Track published XLSForm media and physical-device upgrade results separately.
+
 ## Founder phone installation
 
 Use the previous and candidate builds of `io.honua.collect` (the installed app is named Honua Field). Back up any existing field data and use a dedicated test account. Install the previous build, populate the baseline in step 1, and install the candidate over it with the app closed.

@@ -23,7 +23,8 @@ Field reads and writes GeoServices REST feature services, including services hos
 | `applyEdits` — updates | ✅ | `UpdateAsync` |
 | `applyEdits` — deletes | ✅ | `DeleteAsync` |
 | `addAttachment` (upload) | ✅ | `AddAttachmentAsync` (multipart/form-data) |
-| `queryAttachments` (download) | 🔭 | not implemented; only upload today |
+| List and read one feature’s attachments | ✅ | Photo replay checks `/{objectId}/attachments` and reads a candidate attachment by ID to verify the captured bytes. |
+| Layer-wide `queryAttachments` | 🔭 | Bulk attachment queries are planned. |
 | Token auth (`generateToken`) | ✅ | [`ServerCredentialVerifier`](../src/Honua.Field.Presentation/Auth/ServerCredentialVerifier.cs) |
 | Transient-failure retry with backoff | ✅ | [`FeatureSyncRetryPolicy`](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs) (exponential + jitter) |
 | Reads and writes GeoServices REST feature services | ✅ | Protocol interoperability ([#37](https://github.com/honua-io/honua-field/issues/37)) |
@@ -76,9 +77,9 @@ Field reads and writes GeoServices REST feature services, including services hos
 
 | Capability | Honua Field | Evidence |
 | --- | :---: | --- |
-| Attach media to a feature and upload | ✅ | `AddAttachmentAsync` → FeatureServer `addAttachment` |
+| Queue ordinary feature photos offline and resume upload | ✅ | The outbox preserves the original layer, local photo identity and upload state across restarts. After a lost acknowledgement, Field checks the remote attachment before marking the record sent. [Live and installed-device checks](./verification/e2e/README.md#ordinary-feature-photos-on-android) |
 | Capture metadata (location, time, redaction flag) | ✅ | [`MediaCaptureField`](../src/Honua.Field.Core/Field/Capture/MediaCaptureField.cs) |
-| Download existing attachments (`queryAttachments`) | 🔭 | not implemented |
+| Browse attachments across multiple features | 🔭 | Planned layer-wide `queryAttachments` support. |
 
 ## Export & reporting
 
@@ -140,8 +141,7 @@ To avoid overstating:
   and tested; the hardware surfaces are not all bound yet.
 - **External GNSS / RTK (🔭):** not implemented — a future capability,
   planned in [#36](https://github.com/honua-io/honua-field/issues/36).
-- **`queryAttachments` (🔭):** only attachment **upload** is implemented; reading
-  existing attachments from a server is not.
+- **Layer-wide attachment search (🔭)** remains planned. Recovery reads the attachments belonging to the queued feature.
 - **Conflict-review UI (🟡):** field-level detection and merge are complete and
   tested in Core; the review **screen** is pending ([#38](https://github.com/honua-io/honua-field/issues/38)).
 - **Post-sync editability (🔭):** targeted ([#38](https://github.com/honua-io/honua-field/issues/38)) precisely
