@@ -112,6 +112,7 @@ jobs:
           for checkout in field-previous .; do
             (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
               -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+              -p:RestoreConfigFile="$PWD/NuGet.config" \
               --configuration Debug --disable-build-servers)
           done
       - name: Publish the candidate server for macOS
