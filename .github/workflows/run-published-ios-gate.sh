@@ -85,7 +85,12 @@ for ((attempt = 0; attempt < 90; ++attempt)); do
         exit 0
     fi
     if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        echo "::error::The fixture server exited before becoming ready" >&2
+        server_status=0
+        wait "$(cat "$pid_file")" || server_status=$?
+        echo "::error::The fixture server exited before becoming ready (status $server_status)" >&2
+        # Keep startup secrets private. Report exception types without messages or values.
+        LC_ALL=C grep -Eo '^[[:space:]]*(Unhandled exception\. |---> )?[[:alnum:]_.]+Exception:' \
+            "$state/server.log" | sort -u >&2 || true
         exit 1
     fi
     sleep 2

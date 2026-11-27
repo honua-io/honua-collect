@@ -3,11 +3,14 @@ set -euo pipefail
 umask 077
 inputs=$PWD
 work=$(mktemp -d "${TMPDIR:-/tmp}/honua-ios-live.XXXXXX")
+work=$(cd "$work" && pwd -P)
 mount="$work/postgres-mount"
+postgres_mounted=false
 mkdir -p "$mount"
 cleanup() {
-    if mount | grep -F " on $mount " >/dev/null; then
-        hdiutil detach "$mount" >/dev/null
+    if [[ $postgres_mounted = true ]] && ! hdiutil detach "$mount" >/dev/null; then
+        echo "Could not detach the temporary Postgres disk image" >&2
+        return
     fi
     rm -r -- "$work"
 }
@@ -38,6 +41,7 @@ download() {
 download https://github.com/PostgresApp/PostgresApp/releases/download/v2.9.7/Postgres-2.9.7-18.dmg "$work/postgres.dmg" \
     e00a4a45e322bb966253bab691c83fac06ec8eacf6833da27c98d4179f5052f6
 hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$work/postgres.dmg"
+postgres_mounted=true
 pg_path="$mount/Postgres.app/Contents/Versions/18/bin"
 test -x "$pg_path/initdb"
 "$pg_path/postgres" --version
@@ -66,7 +70,13 @@ export HONUA_E2E_IOS_DEVICE=${DEVICEFARM_DEVICE_UDID:?}
 mkdir -p "$GITHUB_WORKSPACE" "$RUNNER_TEMP/published-server"
 tar -xf "$inputs/fixture.tar" -C "$GITHUB_WORKSPACE"
 tar -xzf "$inputs/server.tar.gz" -C "$RUNNER_TEMP"
-test -x "$RUNNER_TEMP/published-server/Honua.Server"
+server_apphost="$RUNNER_TEMP/published-server/Honua.Server"
+test -x "$server_apphost"
+file "$server_apphost"
+if ! codesign --verify "$server_apphost"; then
+    codesign --force --sign - "$server_apphost"
+    codesign --verify "$server_apphost"
+fi
 build_path=src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64
 mkdir -p "$GITHUB_WORKSPACE/$build_path" "$GITHUB_WORKSPACE/field-previous/$build_path"
 ditto -x -k "$inputs/candidate.zip" "$GITHUB_WORKSPACE/$build_path"
