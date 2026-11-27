@@ -79,10 +79,9 @@ def reuse_app_upload(project_arn, receipt_file, checksum):
 
 
 def main():
-    previous_revision, field_revision, server_revision, upgrade_state = (
-        Path("provenance.txt").read_text().splitlines()
-    )
-    revisions = (previous_revision, field_revision, server_revision)
+    (previous_revision, field_revision, server_revision, upgrade_state,
+     harness_revision, picker_revision) = Path("provenance.txt").read_text().splitlines()
+    revisions = (previous_revision, field_revision, server_revision, harness_revision, picker_revision)
     if not all(re.fullmatch(r"[0-9a-f]{40}", revision) for revision in revisions):
         raise ValueError("Invalid staged Git revision")
     if upgrade_state not in {"draft", "outbox"}:

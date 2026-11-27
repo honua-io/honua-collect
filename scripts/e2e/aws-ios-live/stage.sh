@@ -7,7 +7,9 @@ server_revision=${HONUA_E2E_SERVER_REVISION:-ea127fc0916f2bce70596deb7e4f11784ce
 field_revision=${HONUA_E2E_FIELD_REVISION:-c6551c28995ed4f15cd9db92ec5df95938ae0da4}
 previous_revision=${HONUA_E2E_IOS_PREVIOUS_REVISION:-6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46}
 upgrade_state=${HONUA_E2E_UPGRADE_STATE:-outbox}
-for revision in "$server_revision" "$field_revision" "$previous_revision"; do
+picker_revision=${HONUA_E2E_IOS_PICKER_REVISION:-394051063939253a18e67d45fa76ef4ed509b364}
+harness_revision=$(git -C "$field" rev-parse HEAD)
+for revision in "$server_revision" "$field_revision" "$previous_revision" "$picker_revision"; do
     [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected a full Git revision" >&2; exit 2; }
 done
 case "$upgrade_state" in
@@ -32,7 +34,8 @@ cp -R "$setup/tests" "$destination/"
     cp "$previous_revision.zip" "$destination/previous.zip"
     cp "$field_revision.zip" "$destination/candidate.zip"
 )
-printf '%s\n' "$previous_revision" "$field_revision" "$server_revision" "$upgrade_state" > "$destination/provenance.txt"
+printf '%s\n' "$previous_revision" "$field_revision" "$server_revision" "$upgrade_state" \
+    "$harness_revision" "$picker_revision" > "$destination/provenance.txt"
 
 digest=$(awk 'NR == 1 {print $1}' "$5")
 printf '%s  %s\n' "$digest" "$4" | sha256sum --check -
@@ -40,6 +43,8 @@ cp "$4" "$destination/server.tar.gz"
 fixture="$destination/fixture"
 mkdir -p "$fixture"/{server-candidate/tests/seed,.github/workflows}
 git -C "$field" archive "$field_revision" scripts/e2e | tar -x -C "$fixture"
+git -C "$field" show "$picker_revision:scripts/e2e/maestro/capture-ios.yaml" \
+    > "$fixture/scripts/e2e/maestro/capture-ios.yaml"
 cp "$field/.github/workflows/run-published-ios-gate.sh" "$fixture/.github/workflows/"
 git -C "$3" show "$server_revision:tests/seed/base-schema.sql" > "$fixture/server-candidate/tests/seed/base-schema.sql"
 tar -cf "$destination/fixture.tar" -C "$fixture" .

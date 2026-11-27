@@ -80,6 +80,7 @@ export Geocoding__Enabled=false
 report_startup_diagnostics() {
     python3 - "$state" <<'PYTHON'
 from collections import deque
+from itertools import islice
 from pathlib import Path
 import re
 import sys
@@ -97,6 +98,7 @@ for secret in tuple(secrets):
     secrets.add(re.sub(r"%[0-9A-F]{2}", lambda match: match[0].lower(), secret))
 
 patterns = {
+    "migration.log": r"migrat|error|fail|exception|schema",
     "server.log": r"\b(?:WRN|ERR|FTL|warn|fail|critical)\b|migrat|now listening|exception",
     "server-host.trace": r"error|failed|not found|could not|permission denied",
     "postgres.log": r"\b(?:ERROR|FATAL|PANIC|DETAIL|HINT)\b",
@@ -107,7 +109,8 @@ for filename, pattern in patterns.items():
     if not log.exists():
         continue
     with log.open(errors="replace") as entries:
-        selected = deque((line for line in entries if re.search(pattern, line, re.IGNORECASE)), maxlen=24)
+        matching = (line for line in entries if re.search(pattern, line, re.IGNORECASE))
+        selected = [*islice(matching, 24), *deque(matching, maxlen=12)]
     print(f"Startup diagnostics from {filename}", file=sys.stderr)
     for line in selected:
         for secret in redactions:
@@ -117,6 +120,19 @@ PYTHON
 }
 cd "$RUNNER_TEMP/published-server"
 export DOTNET_HOST_TRACE=1 DOTNET_HOST_TRACEFILE="$state/server-host.trace"
+if [[ ${HONUA_E2E_MIGRATION_PREFLIGHT:-0} = 1 && ! -f "$pid_file" ]]; then
+    if ! HONUA_MIGRATE_ONLY=true ./Honua.Server </dev/null > "$state/migration.log" 2>&1; then
+        echo "::error::The fixture database migration failed" >&2
+        report_startup_diagnostics
+        exit 1
+    fi
+    if ! psql -X -w -h 127.0.0.1 -U postgres -d honua -Atqc \
+        "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'honua')" | grep -qx t; then
+        echo "::error::The migration exited without creating the honua schema" >&2
+        report_startup_diagnostics
+        exit 1
+    fi
+fi
 # Keep the fixture running across the restart helper's exit, without requiring nohup.
 (
     trap '' HUP
