@@ -39,7 +39,7 @@ def ready(read, expected, seconds):
     raise TimeoutError(f"Timed out waiting for {expected}, last status {last}")
 
 
-def smoke(driver, output):
+def smoke(driver, output, *, android):
     def visible(predicate, description):
         def find(browser):
             return next((e for e in browser.find_elements(AppiumBy.XPATH, f"//*[{predicate}]")
@@ -54,7 +54,14 @@ def smoke(driver, output):
     for expected in ("No drafts.", "Outbox is empty.", "Nothing sent yet."):
         label(expected)
     driver.save_screenshot(str(output / "records.png"))
-    label("Geometry").click()
+    geometry_tab = label("Geometry")
+    if android:
+        geometry_tab.click()
+    else:
+        # XCUITest can acknowledge an element click while the Records tab stays selected.
+        rect = geometry_tab.rect
+        driver.execute_script("mobile: tap", {"x": int(rect["x"] + rect["width"] / 2),
+                                             "y": int(rect["y"] + rect["height"] / 2)})
     label("Point: 0 vertex(es)")
     canvas = visible("@name='GeometryCanvas' or contains(@resource-id,'GeometryCanvas') or "
                      "@label='Geometry drawing area' or @content-desc='Geometry drawing area'", "drawing canvas")
@@ -107,7 +114,7 @@ def run(args):
         if android:
             options.auto_grant_permissions = True
         driver = webdriver.Remote(options=options, client_config=AppiumClientConfig(remote_server_addr=endpoint, timeout=120))
-        smoke(driver, args.output)
+        smoke(driver, args.output, android=android)
         report["outcome"] = "passed"
     except Exception as error:
         report["failure"] = re.sub(r"https?://\S+|/remote-endpoint/\S+", "[endpoint]", str(error).split("Stacktrace:")[0])[:1200]
