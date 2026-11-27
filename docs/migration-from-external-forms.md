@@ -1,28 +1,30 @@
 # Importing forms and field data
 
-This guide describes how to import common form and field-data formats into Honua Collect. Everything described
-here is implemented and unit-tested in `Honua.Collect.Core`; nothing requires a
-vendor-specific license or subscription.
-
-> Scope: this covers the data and form layers that Collect implements today. The
-> capture widgets that bind those forms to device sensors are tracked separately
-> (see issues #1/#35); this guide is about getting your **definitions and records**
-> in and out.
+Use Honua Server to publish a versioned XLSForm for field workers. For applications that
+already have schema rows or exported records, Honua Field also provides in-process importers.
 
 ## Importing form definitions
 
-### Importing XLSForm
+### Publishing an XLSForm for offline inspections
+
+1. Import the `.xlsx` workbook into Honua Server against the target service and layer. Enable offline collection on the draft package and publish that version. The [integration fixture](../scripts/e2e/publish-field-runtime-fixture.sh) shows the import and publish requests against a disposable server.
+2. Configure Field's `server.formId` for the published form. While connected, tap **Download Latest Form**, then **Start New Inspection**. A worker with access to the target layer can now capture answers, repeat rows, a position and photos offline.
+3. Tap **Save draft** to continue later from **Records**. The draft keeps the version the worker started with, including when a newer version is published. Submit the inspection and sync when connected. A worker can reopen a validation rejection, correct the answer offline and sync again.
+
+Use a WGS 84 point layer for the form's single top-level geopoint. Place photo questions at the top level. A repeat section supports up to 100 ordered rows of scalar or multiple-choice answers and stores them in a writable text attribute matching the section ID. Relevance and calculated expressions can refer to earlier answers, and repeat rows can also use parent answers. When a question becomes hidden, Field keeps its previous answer in the draft and omits it from submission.
+
+### Importing XLSForm sheet rows in an application
 
 XLSForm definitions use `survey` and `choices` sheets, the same sheet model the
-OpenDataKit ecosystem uses. Collect imports them directly:
+OpenDataKit ecosystem uses. Field imports them directly:
 
-- `Honua.Collect.Core.Field.Forms.Authoring.XlsFormImporter.Import(formId, name, survey, choices)`
+- `Honua.Field.Core.Field.Forms.Authoring.XlsFormImporter.Import(formId, name, survey, choices)`
   turns the `survey` and `choices` rows into a `FormDefinition`.
 - Field **types**, **labels**, **required** flags, **choice lists** (single/multi
   select), and **relevant** expressions in the common single-comparison form
-  (`${field} = value`, `>`, `<`, …) are mapped to Collect's form model and its
+  (`${field} = value`, `>`, `<`, …) are mapped to Field's form model and its
   live visibility rules (`FormSession`).
-- Repeating groups map to Collect's repeat groups (`RepeatGroup` /
+- Repeating groups map to Field's repeat groups (`RepeatGroup` /
   `RepeatInstance`).
 
 Practical path: export the form as XLSForm, read the two sheets into
@@ -35,7 +37,7 @@ call `Import`. Calculated fields and cascading selects are evaluated at runtime 
 When the original XLSForm isn't on hand, import the **published feature-layer
 schema** instead — the JSON a FeatureServer layer's metadata endpoint returns:
 
-- `Honua.Collect.Core.Migration.Survey123LayerImporter.Import(layerSchemaJson, formId?)`
+- `Honua.Field.Core.Migration.Survey123LayerImporter.Import(layerSchemaJson, formId?)`
   maps the layer's `fields` (GeoServices REST field types, `alias` → label, `nullable:false`
   → required) into a `FormDefinition`.
 - A field carrying a **coded-value `domain`** becomes a single-choice field whose
@@ -52,7 +54,7 @@ App-schema exports use a different format from XLSForm, but their field model (t
 signature, date, location, repeatable sections) maps cleanly onto the same
 `FormDefinition`. Import the app-schema export directly:
 
-- `Honua.Collect.Core.Migration.FulcrumImporter.ImportForm(appSchemaJson, formId?)`
+- `Honua.Field.Core.Migration.FulcrumImporter.ImportForm(appSchemaJson, formId?)`
   maps the app's `elements` (`TextField`, `ChoiceField`, `YesNoField`,
   `PhotoField`, …) into a `FormDefinition`, carrying `choices`, `required`, and a
   `location` field for the record position.
@@ -76,7 +78,7 @@ Bring historical records in as `FieldRecord`s:
   - Both return a `MigratedForm` whose `Records` are ready to persist, with any
     malformed/geometry-less rows reported in `Skipped`.
 - GeoServices REST feature layers are read over the GeoServices protocol
-  Collect already speaks (`FeaturePullService`, `GeoServicesFeatureSync`) — the
+  Field already speaks (`FeaturePullService`, `GeoServicesFeatureSync`) — the
   same wire format used to sync, so an existing FeatureServer layer can be pulled
   in without an intermediate file. The round trip (query → decode → applyEdits
   add/update/delete → attachment) is proven against a reference in-memory
@@ -85,8 +87,8 @@ Bring historical records in as `FieldRecord`s:
 
 ## Exporting back out
 
-Collect exports the captured record set to every common interchange format, so you
-are never locked in (`Honua.Collect.Core.Export`):
+Field exports the captured record set to every common interchange format, so you
+are never locked in (`Honua.Field.Core.Export`):
 
 | Format | API | Notes |
 | --- | --- | --- |
@@ -101,13 +103,13 @@ available to every user.
 
 ## Round-trip to a GeoServices REST or self-hosted FeatureServer
 
-Collect reads and writes the **GeoServices REST** protocol (FeatureServer
+Field reads and writes the **GeoServices REST** protocol (FeatureServer
 `query` / `applyEdits`, `generateToken`) directly, so it can sync against:
 
 - an existing **GeoServices REST** FeatureServer (no additional mobile apps required), or
 - a **self-hosted** GeoServices-compatible server, with **no vendor-specific license**.
 
-Point Collect at the target by configuring `ServerBaseUrl` / `ServiceId` /
+Point Field at the target by configuring `ServerBaseUrl` / `ServiceId` /
 `LayerId` in `AppSettings`; sync uses `GeoServicesFeatureSync`. See
 [data-residency-and-self-host.md](./data-residency-and-self-host.md) for where
 records live and how the connection is secured.

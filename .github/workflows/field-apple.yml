@@ -1,0 +1,119 @@
+name: Field on Apple platforms
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/field-apple.yml
+      - scripts/e2e/maestro/geometry-ios.yaml
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+      - global.json
+  push:
+    branches: [trunk]
+    paths:
+      - .github/workflows/field-apple.yml
+      - scripts/e2e/maestro/geometry-ios.yaml
+      - src/**
+      - Directory.Build.*
+      - Directory.Packages.props
+      - NuGet.config
+      - global.json
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  apple:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [iPhone, iPad]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install pinned Maestro
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --location --silent --show-error -o maestro.zip \
+            https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.12.1/maestro.zip
+          echo '54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7  maestro.zip' | shasum -a 256 --check
+          unzip -q maestro.zip
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Install MAUI Apple workloads
+        run: dotnet workload install maui-ios maui-maccatalyst
+      - name: Build iOS simulator app
+        run: |
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+            --disable-build-servers
+      - name: Capture and undo a polygon on ${{ matrix.family }}
+        env:
+          FAMILY: ${{ matrix.family }}
+        run: |
+          app=$(find src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64 -maxdepth 1 -name '*.app' -type d)
+          test -d "$app"
+          for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
+              NSPhotoLibraryUsageDescription NSLocationWhenInUseUsageDescription; do
+            test -n "$(plutil -extract "$key" raw -expect string -o - "$app/Info.plist")"
+          done
+          results="$RUNNER_TEMP/field-ios-results"
+          mkdir -p "$results"
+          xcrun simctl list devices available --json > "$results/simulators.json"
+          run_bounded() {
+            python3 -c 'import subprocess, sys; sys.exit(subprocess.run(sys.argv[2:], timeout=int(sys.argv[1])).returncode)' "$@"
+          }
+          if ! device=$(jq -er --arg family "$FAMILY" '
+            .devices["com.apple.CoreSimulator.SimRuntime.iOS-27-2"]
+            | map(select(.name | startswith($family)))
+            | first
+            | .udid
+          ' "$results/simulators.json"); then
+            echo "::error::No iOS 27.2 $FAMILY simulator found"
+            exit 1
+          fi
+          trap 'run_bounded 90 xcrun simctl shutdown "$device" || true' EXIT
+          echo "Booting $FAMILY simulator $device"
+          run_bounded 540 xcrun simctl bootstatus "$device" -b
+          echo "Installing Field on $FAMILY"
+          du -sh "$app"
+          if ! run_bounded 480 xcrun simctl install "$device" "$app"; then
+            run_bounded 60 xcrun simctl io "$device" screenshot "$results/install-failure.png" || true
+            exit 1
+          fi
+          echo "Running polygon capture on $FAMILY"
+          if ! run_bounded 420 maestro --device "$device" test --format junit \
+            --output "$results/junit.xml" --test-output-dir "$results" \
+            --debug-output "$results" scripts/e2e/maestro/geometry-ios.yaml; then
+            run_bounded 60 xcrun simctl io "$device" screenshot "$results/failure.png" || true
+            exit 1
+          fi
+      - name: Upload ${{ matrix.family }} smoke evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: field-ios-${{ matrix.family }}-results
+          path: ${{ runner.temp }}/field-ios-results
+          if-no-files-found: warn
+      - name: Build Mac Catalyst app
+        if: ${{ !cancelled() && matrix.family == 'iPhone' }}
+        run: |
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-maccatalyst -p:RuntimeIdentifier=maccatalyst-arm64

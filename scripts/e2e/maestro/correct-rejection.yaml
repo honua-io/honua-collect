@@ -1,0 +1,37 @@
+appId: io.honua.collect
+---
+- launchApp
+- extendedWaitUntil:
+    visible: Records
+    timeout: 90000
+- tapOn: Records
+- extendedWaitUntil:
+    visible: 'Rejected\. Open to correct\..*'
+    timeout: 15000
+- tapOn: 'Rejected\. Open to correct\..*'
+- assertVisible: ${INSPECTION_NAME}
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?choice_Open'
+      checked: true
+- assertVisible:
+    id: '(.*:id/)?choice_Closed'
+    checked: true
+- scrollUntilVisible:
+    element:
+      id: '(.*:id/)?total'
+      text: '2'
+- scrollUntilVisible:
+    element: 1 attached
+- scrollUntilVisible:
+    element: '21\.31000, -157\.81000.*'
+- scrollUntilVisible:
+    element: Offline visit one
+- scrollUntilVisible:
+    element: Offline visit two
+- scrollUntilVisible:
+    direction: UP
+    element:
+      id: '(.*:id/)?name'
+- tapOn:
+    id: '(.*:id/)?name'

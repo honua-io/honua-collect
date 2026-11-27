@@ -1,0 +1,138 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Reflection;
+using System.Text.Json;
+using Honua.Field.Core.Sync;
+
+namespace Honua.Field.App.Services;
+
+/// <summary>
+/// Strongly-typed app configuration loaded from the bundled <c>appsettings.json</c>
+/// asset — server endpoint and the (development-only) fallback credential. Keeps
+/// connection details and keys out of compiled code so they live in configuration
+/// and can be overridden per environment.
+/// </summary>
+public sealed record AppSettings
+{
+    /// <summary>Base URL of the Honua server.</summary>
+    public required string ServerBaseUrl { get; init; }
+
+    /// <summary>Feature service id of the editable layer.</summary>
+    public required string ServiceId { get; init; }
+
+    /// <summary>Published inspection form to download.</summary>
+    public string FormId { get; init; } = "field_site";
+
+    /// <summary>Layer id within the feature service.</summary>
+    public required int LayerId { get; init; }
+
+    /// <summary>Development fallback credential used until the user signs in; null in production.</summary>
+    public string? DemoApiKey { get; init; }
+
+    /// <summary>
+    /// Optional Base64 SPKI pins for the server certificate. When non-empty, the
+    /// server TLS handshake is additionally pinned to these public keys (see
+    /// <see cref="CertificatePinning"/>); empty means standard platform validation.
+    /// </summary>
+    public IReadOnlyList<string> PinnedCertificateSpki { get; init; } = Array.Empty<string>();
+
+    /// <summary>The server base address.</summary>
+    public Uri BaseUri => new(ServerBaseUrl);
+
+    /// <summary>The GeoServices feature-layer target derived from settings.</summary>
+    public GeoServicesTarget Target => new(ServerBaseUrl, ServiceId, LayerId);
+
+    /// <summary>
+    /// Loads settings from the embedded <c>appsettings.json</c> resource. Fully
+    /// synchronous so it is safe to call during MAUI startup without blocking on an
+    /// async file API (which deadlocks the UI thread).
+    /// </summary>
+    /// <returns>The parsed settings.</returns>
+    public static AppSettings Load()
+    {
+        var assembly = typeof(AppSettings).Assembly;
+        var resourceName = assembly.GetManifestResourceNames()
+            .First(n => n.EndsWith("appsettings.json", StringComparison.Ordinal));
+
+        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        using var document = JsonDocument.Parse(stream);
+        var root = document.RootElement;
+        var server = root.GetProperty("server");
+
+        var settings = new AppSettings
+        {
+            ServerBaseUrl = server.GetProperty("baseUrl").GetString()!,
+            ServiceId = server.GetProperty("serviceId").GetString()!,
+            LayerId = server.GetProperty("layerId").GetInt32(),
+            FormId = server.TryGetProperty("formId", out var form) ? form.GetString() ?? "field_site" : "field_site",
+            DemoApiKey = ReadApiKey(root), // null in source — no credential ships in the binary
+            PinnedCertificateSpki = ReadPins(server),
+        };
+
+        // Fail fast on a cleartext endpoint to a non-loopback host (no credential leak).
+        EndpointSecurity.EnsureSecureTransport(settings.BaseUri);
+        return ApplyLocalOverride(settings);
+    }
+
+    private static IReadOnlyList<string> ReadPins(JsonElement server)
+    {
+        if (!server.TryGetProperty("pinnedCertificates", out var pins) || pins.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return pins.EnumerateArray()
+            .Where(p => p.ValueKind == JsonValueKind.String)
+            .Select(p => p.GetString()!)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+    }
+
+    private static string? ReadApiKey(JsonElement root)
+        => root.TryGetProperty("demo", out var demo)
+            && demo.TryGetProperty("apiKey", out var key)
+            && key.ValueKind == JsonValueKind.String
+            ? key.GetString()
+            : null;
+
+    /// <summary>
+    /// Overlays an optional, gitignored <c>appsettings.local.json</c> from the app
+    /// data directory (a local-dev credential convenience). Read with synchronous
+    /// file IO so startup never blocks on an async API; absent in normal/CI builds.
+    /// </summary>
+    private static AppSettings ApplyLocalOverride(AppSettings settings)
+    {
+        try
+        {
+            var path = Path.Combine(FileSystem.AppDataDirectory, "appsettings.local.json");
+            if (!File.Exists(path))
+            {
+                return settings;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+#if DEBUG
+            if (document.RootElement.TryGetProperty("server", out var server))
+            {
+                var endpoint = new Uri(server.GetProperty("baseUrl").GetString()!, UriKind.Absolute);
+                if (!EndpointSecurity.IsDevelopmentLoopback(endpoint) || endpoint.Scheme is not ("http" or "https"))
+                {
+                    return settings;
+                }
+
+                settings = settings with
+                {
+                    ServerBaseUrl = endpoint.AbsoluteUri,
+                    FormId = server.TryGetProperty("formId", out var id) ? id.GetString() ?? settings.FormId : settings.FormId,
+                };
+            }
+#endif
+            return settings with { DemoApiKey = ReadApiKey(document.RootElement) ?? settings.DemoApiKey };
+        }
+        catch (Exception)
+        {
+            return settings; // a malformed local override must not break startup
+        }
+    }
+}

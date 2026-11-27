@@ -1,4 +1,4 @@
-# Honua Collect — feature backlog
+# Honua Field — feature backlog
 
 Capability gaps in the Honua mobile stack. Each item is tagged with:
 
@@ -13,7 +13,7 @@ Capability gaps in the Honua mobile stack. Each item is tagged with:
 > background sync, offline basemaps, offline 3D scene packages, routing) are not
 > listed here — see the assessment. This file tracks only the gaps.
 
-## Implemented so far — `Honua.Collect.Core` (platform-neutral, unit-tested)
+## Implemented so far — `Honua.Field.Core` (platform-neutral, unit-tested)
 
 The product "brain" the device UX binds to is landing first, since it is fully
 testable without a device and unblocks every widget and screen above it:
@@ -65,7 +65,7 @@ testable without a device and unblocks every widget and screen above it:
 - **`Notifications/*`** — push payloads + deterministic `PushNotificationRouter`.
   Backs **E6**.
 
-### Presentation layer — `Honua.Collect.Presentation` (the screen logic, unit-tested)
+### Presentation layer — `Honua.Field.Presentation` (the screen logic, unit-tested)
 
 The MVVM view-models the MAUI app binds to, built without any MAUI dependency so
 the screen behaviour is testable headlessly:
@@ -78,7 +78,7 @@ the screen behaviour is testable headlessly:
 - **`Assignments/InboxViewModel`** — assignment lifecycle.
 - **`Geometry/MapCaptureViewModel`** — point/line/polygon capture.
 
-The MAUI app (`Honua.Collect.App/Views/FormPage.xaml` + `FieldWidgetTemplateSelector`)
+The MAUI app (`Honua.Field.App/Views/FormPage.xaml` + `FieldWidgetTemplateSelector`)
 binds to these. The XAML is a thin surface; the logic is the view-models above.
 
 These items are marked 🧱 below: runtime + screen logic done and tested.
@@ -86,7 +86,7 @@ These items are marked 🧱 below: runtime + screen logic done and tested.
 ### Cross-repo updates (done — on branches, pending package cut)
 
 The repeat round-trip through native server sync is now landed upstream, not
-just via Collect's product-side convention:
+just via Field's product-side convention:
 
 - **honua-sdk-dotnet** (`field-native-repeats`): `FieldRecord.Repeats` carries
   `FieldRepeatInstance` rows natively; `FormValidator`/`CalculatedFieldEvaluator`
@@ -97,7 +97,7 @@ just via Collect's product-side convention:
   bounds, so a repeatable form authored/distributed/validated server-side
   round-trips to the capture client. 13 existing + 4 new tests green.
 
-Once those branches merge and a new `Honua.Sdk.Field` package is cut, Collect's
+Once those branches merge and a new `Honua.Sdk.Field` package is cut, Field's
 `FormSession` repeat storage swaps from its `List<Dictionary>` convention to the
 SDK's native `FieldRecord.Repeats`.
 

@@ -1,0 +1,44 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+namespace Honua.Field.Core.Reports;
+
+/// <summary>
+/// Defines a per-record feature report (BACKLOG R1): a templated, human-
+/// readable document for a single submission.
+/// The renderer produces portable Markdown from this; converting Markdown to
+/// PDF/Word is the downstream/host step.
+/// </summary>
+public sealed record ReportTemplate
+{
+    /// <summary>
+    /// Title line, with <c>{fieldId}</c> placeholders substituted from the record
+    /// (e.g. <c>"Pole inspection {poleId}"</c>). Falls back to the form name.
+    /// </summary>
+    public string? TitleTemplate { get; init; }
+
+    /// <summary>Section ids to include, in order. <see langword="null"/> includes all sections.</summary>
+    public IReadOnlyList<string>? SectionIds { get; init; }
+
+    /// <summary>Whether to render fields that have no value. Defaults to <see langword="false"/>.</summary>
+    public bool IncludeEmptyFields { get; init; }
+
+    /// <summary>Whether to list media attachment file names. Defaults to <see langword="true"/>.</summary>
+    public bool IncludeMedia { get; init; } = true;
+
+    /// <summary>Whether to include a record metadata header (id, status). Defaults to <see langword="true"/>.</summary>
+    public bool IncludeMetadata { get; init; } = true;
+
+    /// <summary>
+    /// Whether to fold an AI-drafted narrative section (epic #39) into the report when
+    /// a non-null <see cref="IReportNarrator"/> supplies one. Off by default; the
+    /// shipped narrator (<see cref="NullReportNarrator"/>) is a no-op regardless.
+    /// </summary>
+    public bool IncludeNarrative { get; init; }
+
+    /// <summary>Heading for the AI-drafted narrative section. Defaults to <c>"Summary"</c>.</summary>
+    public string NarrativeHeading { get; init; } = "Summary";
+
+    /// <summary>The default template: all sections, non-empty fields, media and metadata.</summary>
+    public static ReportTemplate Default { get; } = new();
+}

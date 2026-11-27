@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Field.App.MainPage"
+             Title="Honua Field">
+
+    <ScrollView Style="{StaticResource FieldFormColumn}">
+        <VerticalStackLayout Padding="24" Spacing="18">
+
+            <Label Text="Honua Field"
+                   Style="{StaticResource Headline}"
+                   SemanticProperties.HeadingLevel="Level1" />
+
+            <Label Text="Offline-first field data collection."
+                   Style="{StaticResource SubHeadline}" />
+
+            <Button x:Name="NewInspectionBtn"
+                    AutomationId="NewInspectionBtn"
+                    Text="Start New Inspection"
+                    Clicked="OnNewInspectionClicked"
+                    HorizontalOptions="Fill" />
+
+            <Button x:Name="DownloadFormBtn"
+                    AutomationId="DownloadFormBtn"
+                    Text="Download Latest Form"
+                    Clicked="OnDownloadFormClicked"
+                    HorizontalOptions="Fill" />
+
+            <Button Text="Sample Inspection Demo" Clicked="OnSampleInspectionClicked" />
+
+            <Button x:Name="CaptureKitBtn"
+                    Text="Capture Widgets Demo"
+                    Clicked="OnCaptureKitClicked"
+                    HorizontalOptions="Fill" />
+
+            <Button x:Name="SmartFormBtn"
+                    Text="Smart Form (Expressions) Demo"
+                    Clicked="OnSmartFormClicked"
+                    HorizontalOptions="Fill" />
+
+            <Label x:Name="StatusLabel" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

@@ -1,0 +1,10 @@
+appId: io.honua.collect
+---
+- launchApp
+- extendedWaitUntil:
+    visible: Sync
+    timeout: 90000
+- tapOn: Sync
+- extendedWaitUntil:
+    visible: 'Outbox 1 .*'
+    timeout: 15000

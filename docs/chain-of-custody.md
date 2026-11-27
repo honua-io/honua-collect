@@ -1,14 +1,14 @@
 # Chain of custody & verifiable provenance
 
 For legal, regulatory, insurance, and compliance submissions, the question is
-*"can you prove this photo wasn't faked, edited, or relocated?"* Honua Collect can
+*"can you prove this photo wasn't faked, edited, or relocated?"* Honua Field can
 answer it cryptographically. This documents what the shipped provenance code
 proves, how to verify it, and its current limits.
 
 ## What is signed
 
-At capture, Collect can bind a **capture provenance manifest**
-(`Honua.Collect.Core.Provenance.CaptureProvenance`) to the captured media:
+At capture, Field can bind a **capture provenance manifest**
+(`Honua.Field.Core.Provenance.CaptureProvenance`) to the captured media:
 
 - a **SHA-256 hash of the content** (`ContentHash`) — the photo/file bytes;
 - the **capture time** (UTC);
@@ -41,7 +41,7 @@ altered, not just that it was.
 ## Verifying the full capture→edit→sync chain
 
 For the multi-step history (a capture followed by signed edits and a sync),
-`Honua.Collect.Core.Provenance.ProvenanceChainVerifier` walks the hash-linked chain
+`Honua.Field.Core.Provenance.ProvenanceChainVerifier` walks the hash-linked chain
 and checks every step's signature, sequence, and prior-hash link, plus (optionally)
 that the current bytes still match the head content hash.
 
@@ -63,7 +63,7 @@ that the current bytes still match the head content hash.
 ## Tamper-evident history
 
 Separately, on-device actions are recorded in an append-only, **hash-chained**
-audit log (`Honua.Collect.Core.Enterprise.AuditLog`): each entry's hash chains the
+audit log (`Honua.Field.Core.Enterprise.AuditLog`): each entry's hash chains the
 previous entry with the event, so any later modification or deletion of an earlier
 entry breaks the chain and is detected by `AuditLog.Verify()`. Per-record edit
 history (`RecordEditHistory`) additionally captures who changed what, when —
@@ -71,7 +71,7 @@ including post-sync edits — and can reconstruct any prior version.
 
 ## A submission workflow
 
-1. Capture the photo + GPS; Collect computes the content hash and signs the
+1. Capture the photo + GPS; Field computes the content hash and signs the
    manifest with the device key.
 2. Submit the record and its signed provenance through sync.
 3. A reviewer independently re-runs `ProvenanceVerifier.Verify` with the media

@@ -1,0 +1,41 @@
+appId: io.honua.collect
+---
+- launchApp
+- extendedWaitUntil:
+    visible: Geometry
+    timeout: 60000
+- tapOn: Records
+- assertVisible: 'No drafts\.'
+- assertVisible: 'Outbox is empty\.'
+- assertVisible: 'Nothing sent yet\.'
+- takeScreenshot: empty-records
+- tapOn: Geometry
+- assertVisible: Capture geometry
+- tapOn:
+    id: GeometryType
+# UIKit exposes only the selected wheel row. Tap the third row
+# relative to the native picker container.
+- tapOn:
+    id: inputView
+    point: 50%,77%
+- assertVisible: Polygon
+- tapOn:
+    text: Done
+    childOf:
+      id: DoneAccessory
+- assertVisible: 'Polygon: 0 vertex\(es\)'
+- tapOn:
+    point: 25%,30%
+- tapOn:
+    point: 52%,32%
+- tapOn:
+    point: 33%,58%
+- assertVisible: 'Polygon: 3 vertex\(es\) ✓'
+- takeScreenshot: polygon
+- tapOn: Done
+- assertVisible: Geometry captured
+- assertVisible: '.*"type"\s*:\s*"Polygon".*'
+- tapOn: OK
+- tapOn: Undo
+- assertVisible: 'Polygon: 2 vertex\(es\)'
+- takeScreenshot: undo

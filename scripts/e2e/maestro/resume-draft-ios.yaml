@@ -1,0 +1,45 @@
+appId: io.honua.collect
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: NewInspectionBtn
+    timeout: 90000
+- tapOn: Records
+- extendedWaitUntil:
+    visible: 'Drafts [1-9][0-9]* .*'
+    timeout: 15000
+- tapOn:
+    text: Draft
+    index: 0
+- assertVisible: ${INSPECTION_NAME}
+- scrollUntilVisible:
+    element:
+      id: 'choice_Open'
+- assertVisible:
+    id: 'choice_Closed'
+- scrollUntilVisible:
+    element:
+      id: 'total'
+      text: '2'
+- scrollUntilVisible:
+    element: 1 attached
+- scrollUntilVisible:
+    element: '21\.31000, -157\.81000.*'
+- scrollUntilVisible:
+    element: Offline visit one
+- scrollUntilVisible:
+    element: Offline visit two
+- scrollUntilVisible:
+    element: Submit
+    visibilityPercentage: 100
+- assertVisible: Submit
+- takeScreenshot: resume-draft-ios-before-action
+- tapOn:
+    text: Submit
+    retryTapIfNoChange: false
+- takeScreenshot: resume-draft-ios-after-action
+- extendedWaitUntil:
+    visible: 'Drafts [0-9]+ · Outbox [1-9][0-9]* .*'
+    timeout: 15000

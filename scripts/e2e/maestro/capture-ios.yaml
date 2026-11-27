@@ -1,0 +1,81 @@
+appId: io.honua.collect
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: NewInspectionBtn
+    timeout: 90000
+- tapOn:
+    id: NewInspectionBtn
+- tapOn:
+    id: 'name'
+- inputText: ${INSPECTION_NAME}
+- pressKey: Enter
+- tapOn:
+    id: 'choice_Open'
+- tapOn:
+    id: 'choice_Closed'
+- scrollUntilVisible:
+    element:
+      id: 'total'
+      text: '2'
+- scrollUntilVisible:
+    element: Add photo
+- tapOn: Add photo
+- tapOn: Choose from gallery
+- extendedWaitUntil:
+    visible: '(Photos|Photo Library)'
+    timeout: 20000
+# The clean simulator Photos library contains only the seeded inspection image.
+- tapOn:
+    point: 12%,26%
+- extendedWaitUntil:
+    visible: Skip
+    timeout: 20000
+- tapOn: Skip
+- assertVisible: 1 attached
+- scrollUntilVisible:
+    element: Capture current location
+- tapOn: Capture current location
+- extendedWaitUntil:
+    visible: '21\.31000, -157\.81000.*'
+    timeout: 25000
+- scrollUntilVisible:
+    element: Add
+- tapOn: Add
+- tapOn: Add
+- scrollUntilVisible:
+    element:
+      id: 'note'
+- assertVisible:
+    id: 'note'
+    text: Offline visit one
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: 'note'
+      index: 1
+- tapOn:
+    id: 'note'
+    text: Offline visit one
+    index: 1
+- eraseText
+- inputText: Offline visit two
+- pressKey: Enter
+- scrollUntilVisible:
+    element: Save draft
+    visibilityPercentage: 100
+- assertVisible: Save draft
+- takeScreenshot: capture-ios-before-action
+- tapOn:
+    text: Save draft
+    retryTapIfNoChange: false
+- takeScreenshot: capture-ios-after-action
+- extendedWaitUntil:
+    visible: Draft saved. Open Records to continue.
+    timeout: 15000
+- tapOn: Records
+- extendedWaitUntil:
+    visible: Drafts 1 · Outbox 0 · Conflicts 0 · Sent 0
+    timeout: 15000

@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:views="clr-namespace:Honua.Field.App.Views"
+             x:Class="Honua.Field.App.Views.FormPage"
+             Title="{Binding Title}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+
+            <!-- One editor template per widget kind. Each binds Value two-way to
+                 the FieldViewModel, which pushes edits through the runtime so
+                 visibility, calculated fields, and validation update live. -->
+            <DataTemplate x:Key="TextEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="NumberEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" Keyboard="Numeric" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="ToggleEditor">
+                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" VerticalOptions="Center" />
+                    <Switch Grid.Column="1" IsToggled="{Binding Value, Mode=TwoWay}" />
+                </Grid>
+            </DataTemplate>
+
+            <DataTemplate x:Key="ChoiceEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}"
+                            SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="MultipleChoiceEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding MultipleChoiceOptions}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <CheckBox AutomationId="{Binding Label, StringFormat='choice_{0}'}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              SemanticProperties.Description="{Binding Label}" />
+                                    <Label Grid.Column="1" Text="{Binding Label}" VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="LocationEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Label Text="{Binding LocationText, TargetNullValue='No location captured'}" />
+                    <Button Text="Capture current location" HorizontalOptions="Start" Clicked="OnCaptureLocation" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="CalculatedEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Label AutomationId="{Binding FieldId}" Text="{Binding Value}" />
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="MediaEditor">
+                <VerticalStackLayout Spacing="4" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <Button Text="{Binding CaptureActionLabel}" Clicked="OnCaptureMedia"
+                                IsEnabled="{Binding CanCaptureMore}" />
+                        <Label Grid.Column="1" Text="{Binding MediaCount, StringFormat='{0} attached'}"
+                               VerticalOptions="Center" FontSize="12" TextColor="Gray" />
+                    </Grid>
+                    <VerticalStackLayout Spacing="4"
+                                         IsVisible="{Binding HasMedia}"
+                                         BindableLayout.ItemsSource="{Binding MediaItems}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="8,6" Stroke="LightGray" StrokeThickness="1">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                                        <Label Text="{Binding SummaryLine}" FontSize="12" VerticalOptions="Center" />
+                                        <Button Grid.Column="1" Text="Markup" FontSize="11" Padding="6,2"
+                                                IsVisible="{Binding CanAnnotate}"
+                                                Clicked="OnAnnotateMediaItem" />
+                                        <Button Grid.Column="2" Text="Note" FontSize="11" Padding="6,2"
+                                                Clicked="OnEditMediaCaption" />
+                                        <Button Grid.Column="3" Text="×" FontSize="11" Padding="6,2"
+                                                Clicked="OnRemoveMediaItem" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="BarcodeEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" Placeholder="{Binding HelpText}" />
+                        <Button Grid.Column="1" Text="{Binding CaptureActionLabel}" Clicked="OnScanBarcode" />
+                    </Grid>
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="RecordLinkEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <Button Text="{Binding CaptureActionLabel}" Clicked="OnManageRelatedRecords" />
+                        <Label Grid.Column="1" Text="{Binding RelatedCount, StringFormat='{0} linked'}"
+                               VerticalOptions="Center" FontSize="12" TextColor="Gray" />
+                    </Grid>
+                    <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <DataTemplate x:Key="FallbackEditor">
+                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
+                    <Label Text="{Binding Label}" />
+                    <Entry AutomationId="{Binding FieldId}" Text="{Binding Value, Mode=TwoWay}" />
+                </VerticalStackLayout>
+            </DataTemplate>
+
+            <views:FieldWidgetTemplateSelector x:Key="WidgetSelector"
+                TextTemplate="{StaticResource TextEditor}"
+                NumberTemplate="{StaticResource NumberEditor}"
+                ToggleTemplate="{StaticResource ToggleEditor}"
+                ChoiceTemplate="{StaticResource ChoiceEditor}"
+                MultipleChoiceTemplate="{StaticResource MultipleChoiceEditor}"
+                LocationTemplate="{StaticResource LocationEditor}"
+                CalculatedTemplate="{StaticResource CalculatedEditor}"
+                MediaTemplate="{StaticResource MediaEditor}"
+                BarcodeTemplate="{StaticResource BarcodeEditor}"
+                RecordLinkTemplate="{StaticResource RecordLinkEditor}"
+                FallbackTemplate="{StaticResource FallbackEditor}" />
+
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView Style="{StaticResource FieldFormColumn}">
+        <VerticalStackLayout Padding="16" Spacing="14">
+
+            <!-- Scalar fields -->
+            <VerticalStackLayout Spacing="14" IsEnabled="{Binding EditingEnabled}"
+                                 BindableLayout.ItemsSource="{Binding Fields}"
+                                 BindableLayout.ItemTemplateSelector="{StaticResource WidgetSelector}" />
+
+            <!-- Repeatable sections -->
+            <VerticalStackLayout Spacing="10" IsEnabled="{Binding EditingEnabled}" BindableLayout.ItemsSource="{Binding RepeatGroups}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate>
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding Label}" FontAttributes="Bold" VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="Add" Command="{Binding AddCommand}" />
+                            </Grid>
+                            <VerticalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Instances}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="10">
+                                            <VerticalStackLayout Spacing="10"
+                                                BindableLayout.ItemsSource="{Binding Fields}"
+                                                BindableLayout.ItemTemplateSelector="{StaticResource WidgetSelector}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Label Text="{Binding ErrorSummary}" TextColor="Red" />
+
+            <Button Text="✨ AI fill from photo" Clicked="OnAiFill" IsEnabled="{Binding EditingEnabled}" HorizontalOptions="Fill" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <Button Text="Save draft" IsVisible="{Binding CanSaveDraft}" Command="{Binding SaveDraftCommand}" />
+                <Button Grid.Column="1" Text="Submit" Command="{Binding SubmitCommand}" />
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

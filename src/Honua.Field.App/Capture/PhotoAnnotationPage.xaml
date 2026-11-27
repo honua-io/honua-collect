@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Field.App.Capture.PhotoAnnotationPage"
+             Title="Annotate Photo">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="12" RowSpacing="8">
+
+        <!-- Shape tool selector -->
+        <HorizontalStackLayout Grid.Row="0" Spacing="6">
+            <Button Text="Draw" Clicked="OnPickFreehand" FontSize="12" Padding="8,4" />
+            <Button Text="Arrow" Clicked="OnPickArrow" FontSize="12" Padding="8,4" />
+            <Button Text="Rect" Clicked="OnPickRectangle" FontSize="12" Padding="8,4" />
+            <Button Text="Oval" Clicked="OnPickEllipse" FontSize="12" Padding="8,4" />
+            <Button Text="Text" Clicked="OnPickText" FontSize="12" Padding="8,4" />
+        </HorizontalStackLayout>
+
+        <!-- Color palette + active tool/color indicator -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+            <Button x:Name="RedButton" Grid.Column="0" Text="Red" Clicked="OnPickRed" />
+            <Button x:Name="YellowButton" Grid.Column="1" Text="Yellow" Clicked="OnPickYellow" />
+            <Button x:Name="BlackButton" Grid.Column="2" Text="Black" Clicked="OnPickBlack" />
+            <Label x:Name="ColorLabel" Grid.Column="3" VerticalOptions="Center" HorizontalTextAlignment="End" FontSize="12" />
+        </Grid>
+
+        <Border Grid.Row="2" Stroke="LightGray" StrokeThickness="1" BackgroundColor="Black">
+            <GraphicsView x:Name="Canvas"
+                          StartInteraction="OnStart"
+                          DragInteraction="OnDrag"
+                          EndInteraction="OnEnd" />
+        </Border>
+
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="6">
+            <Label x:Name="StatusLabel" VerticalOptions="Center" FontSize="12" />
+            <Button Grid.Column="1" Text="Undo" Clicked="OnUndo" />
+            <Button Grid.Column="2" Text="Clear" Clicked="OnClear" />
+            <Button Grid.Column="3" Text="Cancel" Clicked="OnCancel" />
+            <Button Grid.Column="4" Text="Save" Clicked="OnSave" />
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

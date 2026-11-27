@@ -1,0 +1,9 @@
+appId: io.honua.collect
+---
+- tapOn: Sync now
+- extendedWaitUntil:
+    visible: Review rejected submissions in Records.
+    timeout: 45000
+- assertVisible:
+    text: Sync now
+    enabled: false

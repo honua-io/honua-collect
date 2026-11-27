@@ -6,7 +6,7 @@ Checks:
    the repository Apache-2.0 SPDX header.
 2. docs/THIRD-PARTY-NOTICES.md lists every shipping PackageReference from
    src/**/*.csproj with its exact resolved version from Directory.Packages.props.
-3. src/Honua.Collect.App/Honua.Collect.App.csproj packages docs/THIRD-PARTY-NOTICES.md
+3. src/Honua.Field.App/Honua.Field.App.csproj packages docs/THIRD-PARTY-NOTICES.md
    and NOTICE as MauiAsset entries so shipped binaries carry attributions.
 """
 from __future__ import annotations
@@ -97,7 +97,11 @@ def find_shipping_packages(repo_root: Path) -> set[str]:
         root = ET.fromstring(csproj.read_text("utf-8-sig"))
         for ref in root.findall(".//PackageReference"):
             include = ref.attrib.get("Include")
-            if include:
+            excluded = ref.attrib.get("ExcludeAssets", "")
+            exclude_element = ref.find("ExcludeAssets")
+            if exclude_element is not None and "Condition" not in exclude_element.attrib:
+                excluded = exclude_element.text or ""
+            if include and excluded.strip().lower() != "all":
                 packages.add(include)
     return packages
 
@@ -148,9 +152,9 @@ def check_third_party_notices(repo_root: Path) -> list[str]:
 
 
 def check_app_package_assets(repo_root: Path) -> list[str]:
-    csproj = repo_root / "src/Honua.Collect.App/Honua.Collect.App.csproj"
+    csproj = repo_root / "src/Honua.Field.App/Honua.Field.App.csproj"
     if not csproj.is_file():
-        return ["Missing src/Honua.Collect.App/Honua.Collect.App.csproj"]
+        return ["Missing src/Honua.Field.App/Honua.Field.App.csproj"]
     root = ET.fromstring(csproj.read_text("utf-8-sig"))
     logical_names = {
         elem.attrib.get("LogicalName", "")
@@ -159,7 +163,7 @@ def check_app_package_assets(repo_root: Path) -> list[str]:
     errors: list[str] = []
     for required in ("THIRD-PARTY-NOTICES.md", "NOTICE"):
         if required not in logical_names:
-            errors.append(f"Honua.Collect.App.csproj must include MauiAsset LogicalName='{required}'")
+            errors.append(f"Honua.Field.App.csproj must include MauiAsset LogicalName='{required}'")
     return errors
 
 

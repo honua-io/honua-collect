@@ -1,9 +1,9 @@
 # Data residency & self-host posture
 
 Where your field data lives and how it moves, for a regulated or air-gapped
-deployment of Honua Collect. This documents the **client** posture as implemented
+deployment of Honua Field. This documents the **client** posture as implemented
 in this repository; the companion Honua server (a separate component) is what
-Collect syncs to, and its deployment is out of scope here.
+Field syncs to, and its deployment is out of scope here.
 
 ## Where records live
 
@@ -16,7 +16,7 @@ Collect syncs to, and its deployment is out of scope here.
 - **On the server, when synced:** records sync to the FeatureServer you
   configure (`ServerBaseUrl` / `ServiceId` / `LayerId` in `AppSettings`) over the
   **GeoServices REST** protocol (`GeoServicesFeatureSync`). That server is the
-  system of record; Collect does not route data through any Honua-operated SaaS,
+  system of record; Field does not route data through any Honua-operated SaaS,
   and there is no separate vendor data silo.
 
 ## How the connection is secured
@@ -34,7 +34,7 @@ Collect syncs to, and its deployment is out of scope here.
 
 ## Identity provider
 
-Collect authenticates against the configured server's token endpoint, so a
+Field authenticates against the configured server's token endpoint, so a
 self-host deployment uses **its own** identity — there is no dependency on
 a third-party or Honua account. First-class enterprise SSO (OIDC/SAML) is tracked in #7.
 
@@ -45,9 +45,9 @@ a third-party or Honua account. First-class enterprise SSO (OIDC/SAML) is tracke
 
 ## Air-gapped use
 
-Collect is offline-first: capture, validation, visibility, calculated fields,
+Field is offline-first: capture, validation, visibility, calculated fields,
 repeats, and conflict detection all run with no network.
-In an air-gapped environment, Collect syncs to a FeatureServer reachable on the
+In an air-gapped environment, Field syncs to a FeatureServer reachable on the
 local network (the self-hosted Honua server or an on-prem self-hosted enterprise GIS server),
 with optional certificate pinning to that host. No outbound internet connection is
 required for the core capture-and-sync loop.
@@ -56,11 +56,11 @@ required for the core capture-and-sync loop.
 
 Documented here for honesty: the **server-side** air-gapped deployment runbook
 and a **round-trip interop test against a reference GeoServices REST layer** are tracked in
-#37 and live with the server component; they are not part of the Collect client.
+#37 and live with the server component; they are not part of the Field client.
 
 ## See also
 
 - [Self-hosting guide](./self-hosting.md) — the configuration surface and auth
-  for pointing Collect at a self-hosted server.
-- [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Collect supports,
+  for pointing Field at a self-hosted server.
+- [GeoServices compatibility matrix](./geoservices-compatibility.md) — what Field supports,
   marked honestly.

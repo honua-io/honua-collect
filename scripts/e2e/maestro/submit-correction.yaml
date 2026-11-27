@@ -1,0 +1,13 @@
+appId: io.honua.collect
+---
+- inputText: ${CORRECTED_NAME}
+- assertVisible:
+    id: '(.*:id/)?name'
+    text: '^${CORRECTED_NAME}$'
+- hideKeyboard
+- scrollUntilVisible:
+    element: Submit
+- tapOn: Submit
+- extendedWaitUntil:
+    visible: 'Drafts [0-9]+ · Outbox [1-9][0-9]* .*'
+    timeout: 15000

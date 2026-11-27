@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Honua.Field.App.Views.GeometryCapturePage"
+             Title="Capture geometry">
+
+    <Grid x:Name="Workspace" Margin="8" RowDefinitions="*,Auto" ColumnDefinitions="*,0"
+          SizeChanged="OnWorkspaceSizeChanged">
+        <Border Stroke="LightGray" StrokeThickness="1">
+            <GraphicsView x:Name="Canvas" AutomationId="GeometryCanvas"
+                          SemanticProperties.Description="Geometry drawing area"
+                          StartInteraction="OnStart"
+                          DragInteraction="OnDrag"
+                          EndInteraction="OnEnd" />
+        </Border>
+
+        <ScrollView x:Name="Tools" Grid.Row="1" Margin="0,8,0,0">
+            <VerticalStackLayout Spacing="6">
+                <Grid ColumnDefinitions="*,48,48,Auto" ColumnSpacing="4">
+                    <Picker x:Name="TypePicker" Title="Geometry type" AutomationId="GeometryType"
+                            SelectedIndexChanged="OnTypeChanged">
+                        <Picker.Items>
+                            <x:String>Point</x:String>
+                            <x:String>Line</x:String>
+                            <x:String>Polygon</x:String>
+                        </Picker.Items>
+                    </Picker>
+                    <Button Grid.Column="1" Text="−" Padding="0" Clicked="OnZoomOut"
+                            SemanticProperties.Description="Zoom out" />
+                    <Button Grid.Column="2" Text="+" Padding="0" Clicked="OnZoomIn"
+                            SemanticProperties.Description="Zoom in" />
+                    <Button Grid.Column="3" Text="Offline area" Padding="8,4" Clicked="OnDownloadArea" />
+                </Grid>
+                <Label x:Name="StatusLabel" />
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                    <Button Text="Undo" Clicked="OnUndo" />
+                    <Button Grid.Column="1" Text="Clear" Clicked="OnClear" />
+                    <Button Grid.Column="2" Text="Done" Clicked="OnDone" />
+                </Grid>
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

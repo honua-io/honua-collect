@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Honua.Field.App/Honua.Field.App.csproj" />
+    <Project Path="src/Honua.Field.Core/Honua.Field.Core.csproj" />
+    <Project Path="src/Honua.Field.Presentation/Honua.Field.Presentation.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj" />
+    <Project Path="tests/Honua.Field.Presentation.Tests/Honua.Field.Presentation.Tests.csproj" />
+  </Folder>
+</Solution>

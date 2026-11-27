@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="Honua.Field.App.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:Honua.Field.App"
+    xmlns:views="clr-namespace:Honua.Field.App.Views"
+    Title="Honua Field">
+
+    <TabBar>
+        <ShellContent Title="Capture" Route="capture"
+                      ContentTemplate="{DataTemplate local:MainPage}" />
+        <ShellContent Title="Records" Route="records"
+                      ContentTemplate="{DataTemplate views:RecordsPage}" />
+        <ShellContent Title="Sync" Route="sync"
+                      ContentTemplate="{DataTemplate views:SyncPage}" />
+        <ShellContent Title="Geometry" Route="geometry"
+                      ContentTemplate="{DataTemplate views:GeometryCapturePage}" />
+        <ShellContent Title="Signature" Route="signature"
+                      ContentTemplate="{DataTemplate views:SignaturePage}" />
+        <ShellContent Title="Account" Route="account"
+                      ContentTemplate="{DataTemplate views:LoginPage}" />
+        <ShellContent Title="Inbox" Route="inbox"
+                      ContentTemplate="{DataTemplate views:InboxPage}" />
+        <ShellContent Title="Export" Route="export"
+                      ContentTemplate="{DataTemplate views:ExportPage}" />
+    </TabBar>
+
+</Shell>

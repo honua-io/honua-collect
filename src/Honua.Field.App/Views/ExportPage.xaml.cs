@@ -1,0 +1,79 @@
+// Copyright (c) Honua Geo Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+using Honua.Field.App.Services;
+using Honua.Field.Core.Storage;
+using Honua.Field.Presentation.Export;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
+using Microsoft.Maui.Storage;
+
+namespace Honua.Field.App.Views;
+
+/// <summary>
+/// The reporting + bulk-export screen (BACKLOG R1/R2). Shows the captured
+/// record count and offers CSV / GeoJSON export and a per-record report for the
+/// latest record. Export text is produced by the tested
+/// <see cref="ExportViewModel"/> over the Core exporter/renderer; this page keeps
+/// only the file-writing and native share-sheet glue.
+/// </summary>
+public partial class ExportPage : ContentPage
+{
+    private readonly RecordBook _book;
+
+    public ExportPage(RecordBook book)
+    {
+        _book = book ?? throw new ArgumentNullException(nameof(book));
+        InitializeComponent();
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await _book.InitializeAsync();
+        BindingContext = new ExportViewModel(
+            SampleForms.FieldSite(),
+            _book.All.Select(e => e.Record));
+    }
+
+    private async void OnExportCsv(object? sender, EventArgs e) =>
+        await ShareTextAsync(vm => vm.ExportCsv(), "csv", "text/csv", "CSV export");
+
+    private async void OnExportGeoJson(object? sender, EventArgs e) =>
+        await ShareTextAsync(vm => vm.ExportGeoJson(), "geojson", "application/geo+json", "GeoJSON export");
+
+    private async void OnReportLatest(object? sender, EventArgs e) =>
+        await ShareTextAsync(vm => vm.RenderLatestReport(), "md", "text/markdown", "Record report");
+
+    private async Task ShareTextAsync(Func<ExportViewModel, string> produce, string extension, string contentType, string title)
+    {
+        if (BindingContext is not ExportViewModel vm)
+        {
+            return;
+        }
+
+        if (!vm.HasRecords)
+        {
+            StatusLabel.Text = "No records to export yet — capture one first.";
+            return;
+        }
+
+        try
+        {
+            var text = produce(vm);
+            var path = Path.Combine(FileSystem.CacheDirectory, $"{vm.FileBaseName}.{extension}");
+            await File.WriteAllTextAsync(path, text);
+
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = title,
+                File = new ShareFile(path, contentType),
+            });
+
+            StatusLabel.Text = $"{title} ready — {text.Length} characters shared.";
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = $"{title} failed: {ex.Message}";
+        }
+    }
+}

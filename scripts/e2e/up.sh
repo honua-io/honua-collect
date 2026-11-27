@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Brings up an isolated Honua server + PostGIS with the editable
-# mobile_offline_demo/68910 feature layer, for the Honua Collect e2e suite.
+# mobile_offline_demo/68910 feature layer, for the Honua Field e2e suite.
 # Reuses a prebuilt server image (HONUA_SERVER_IMAGE) to avoid a long build.
 set -euo pipefail
 
@@ -14,32 +14,35 @@ fi
 IMAGE="${HONUA_SERVER_IMAGE}"
 
 SERVER_REPO="${HONUA_SERVER_REPO:-${REPO_ROOT}/../honua-server}"
-SEED_YAML="${SERVER_REPO}/tests/seed/server.yaml"
+SNAPSHOT_SQL="${SERVER_REPO}/tests/seed/client-compat-v1.sql"
 SEED_SQL="${SERVER_REPO}/tests/seed/mobile-offline-demo-v1.sql"
-if [ ! -f "${SEED_YAML}" ] || [ ! -f "${SEED_SQL}" ]; then
-  echo "error: required honua-server seed files not found under '${SERVER_REPO}' (expected tests/seed/server.yaml and tests/seed/mobile-offline-demo-v1.sql). Set HONUA_SERVER_REPO to a local honua-server checkout." >&2
+if [ ! -f "${SNAPSHOT_SQL}" ] || [ ! -f "${SEED_SQL}" ]; then
+  echo "error: required honua-server seed files not found under '${SERVER_REPO}' (expected tests/seed/client-compat-v1.sql and tests/seed/mobile-offline-demo-v1.sql). Set HONUA_SERVER_REPO to a local honua-server checkout." >&2
   exit 1
 fi
 PGPORT="${PGPORT:-55432}"; HTTPPORT="${HTTPPORT:-18080}"
 # Admin/API key for the ephemeral e2e server. No literal default is committed:
-# supply HONUA_E2E_APIKEY, else a random one is generated and printed below.
+# supply HONUA_E2E_APIKEY, or read the generated key from the private file reported below.
 ADMIN_PW="${HONUA_E2E_APIKEY:-$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')}"
 # Ephemeral container DB password — random per run, never reused or shipped.
 PGPW="${HONUA_E2E_PGPASSWORD:-$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')}"
 
+if docker container inspect honua-e2e-pg >/dev/null 2>&1 || docker container inspect honua-e2e-srv >/dev/null 2>&1; then
+  echo "The honua-e2e containers already exist. Use the existing fixture or run scripts/e2e/down.sh before starting a new one." >&2
+  exit 1
+fi
 docker network create honua-e2e 2>/dev/null || true
-docker rm -f honua-e2e-pg honua-e2e-srv >/dev/null 2>&1 || true
 
 docker run -d --name honua-e2e-pg --network honua-e2e \
   -e POSTGRES_DB=honua_dev -e POSTGRES_USER=honua_user -e POSTGRES_PASSWORD=$PGPW \
-  -p "${PGPORT}:5432" postgis/postgis:17-3.5-alpine >/dev/null
+  -p "127.0.0.1:${PGPORT}:5432" "${HONUA_E2E_POSTGIS_IMAGE:-postgis/postgis:18-3.6}" >/dev/null
 until docker exec honua-e2e-pg pg_isready -U honua_user -d honua_dev >/dev/null 2>&1; do sleep 2; done
 
 MK=$(head -c 32 /dev/urandom | base64); SALT=$(head -c 16 /dev/urandom | base64)
 run_srv() {
   docker rm -f honua-e2e-srv >/dev/null 2>&1 || true
   docker run -d --name honua-e2e-srv --network honua-e2e \
-    -e ASPNETCORE_ENVIRONMENT=Development \
+    -e Licensing__DevGrantEdition=Pro -e ASPNETCORE_ENVIRONMENT=Development \
     -e ConnectionStrings__DefaultConnection="Host=honua-e2e-pg;Database=honua_dev;Username=honua_user;Password=$PGPW" \
     -e Kestrel__Endpoints__Http__Url="http://+:8080" -e Kestrel__Endpoints__Http__Protocols="Http1" \
     -e Security__ConnectionEncryption__MasterKey="$MK" -e Security__ConnectionEncryption__Salt="$SALT" \
@@ -49,23 +52,30 @@ run_srv() {
     -e Authentication__PortalCredentialVerifier__FallBackToAdminVerifier="true" \
     -e Geocoding__Enabled="false" \
     -e Geocoding__Nominatim__BaseUrl="https://nominatim.openstreetmap.org/" \
-    -p "${HTTPPORT}:8080" "$IMAGE" >/dev/null
+    -p "127.0.0.1:${HTTPPORT}:8080" "$IMAGE" >/dev/null
 }
 wait_ready() { for _ in $(seq 1 40); do sleep 3; [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${HTTPPORT}/healthz/ready)" = "200" ] && return 0; done; return 1; }
 
-run_srv; wait_ready || true   # first boot runs migrations (creates schema)
+run_srv
+wait_ready
 
-# Seed the metadata + editable layer, compile + activate the Metadata-v2 snapshot.
-seed() { docker cp "$1" honua-e2e-pg:/tmp/seed.sql && docker exec honua-e2e-pg psql -U honua_user -d honua_dev -q -f /tmp/seed.sql; }
-python3 - "$SERVER_REPO/tests/seed/server.yaml" > /tmp/server-seed.sql <<'PY'
-import sys, yaml
-for s in yaml.safe_load(open(sys.argv[1])).get('sql', []):
-    s=s.strip()
-    if s: print(s.rstrip(';') + ';')
-PY
-seed /tmp/server-seed.sql || true
-seed "$SERVER_REPO/tests/seed/mobile-offline-demo-v1.sql" || true
-docker exec honua-e2e-pg psql -U honua_user -d honua_dev -tAc "SELECT honua.seed_metadata_v2_compat_snapshot();" >/dev/null
-run_srv; wait_ready
+db=(docker exec -i honua-e2e-pg psql -X -v ON_ERROR_STOP=1 -U honua_user -d honua_dev)
+"${db[@]}" < "$SEED_SQL"
+sed -n '/^CREATE OR REPLACE FUNCTION honua\.seed_metadata_v2_compat_snapshot()/,/^\$\$;/p' "$SNAPSHOT_SQL" | "${db[@]}"
+"${db[@]}" <<'SQL'
+UPDATE honua.services SET metadata = jsonb_set(metadata, '{accessPolicy,allowAnonymousWrite}', 'false')
+WHERE service_name = 'mobile_offline_demo';
+UPDATE honua.layers SET metadata = metadata || jsonb_build_object('accessPolicy',
+    COALESCE(metadata->'accessPolicy', '{}'::jsonb) || '{"allowAnonymous":true,"allowAnonymousWrite":false}'::jsonb)
+WHERE layer_id = 68910;
+SELECT honua.seed_metadata_v2_compat_snapshot();
+SQL
+run_srv
+wait_ready
 
-echo "ready: http://localhost:${HTTPPORT}  (service mobile_offline_demo / layer 68910, X-API-Key=${ADMIN_PW})"
+if [[ -z ${HONUA_E2E_APIKEY:-} ]]; then
+  key_file=$(mktemp)
+  printf '%s\n' "$ADMIN_PW" > "$key_file"
+  echo "Generated HONUA_E2E_APIKEY in $key_file. Remove this file after the test."
+fi
+echo "Ready at http://localhost:${HTTPPORT} (service mobile_offline_demo / layer 68910)."
