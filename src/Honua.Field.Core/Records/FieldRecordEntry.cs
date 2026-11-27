@@ -97,6 +97,25 @@ public sealed class FieldRecordEntry
         LastError = OrdinaryAddVerificationMessage;
     }
 
+    public async Task PrepareOrdinaryAddAsync(Func<FieldRecordEntry, Task> persist)
+    {
+        var previousState = SyncState;
+        var previousError = LastError;
+        var previousAttempt = LastAttemptUtc;
+        MarkAddNeedsVerification();
+        try
+        {
+            await persist(this);
+        }
+        catch
+        {
+            SyncState = previousState;
+            LastError = previousError;
+            LastAttemptUtc = previousAttempt;
+            throw;
+        }
+    }
+
     public bool ApplyOrdinaryAddResult(Sync.FeatureSyncResult result)
     {
         if (result.Success && result.ObjectId is > 0)
@@ -105,7 +124,7 @@ public sealed class FieldRecordEntry
             return true;
         }
 
-        if (!result.Success && result.DefinitiveEditRejection)
+        if (!result.Success && (result.DefinitiveEditRejection || result.RequestNotSent))
         {
             MarkFailed(result.FailureDescription);
             SyncState = RecordSyncState.AddRejected;

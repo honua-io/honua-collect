@@ -135,8 +135,13 @@ public partial class MainPage : ContentPage
         try
         {
             entry = await _book.AddSubmittedAsync(record);
-            entry.MarkAddNeedsVerification();
-            await _book.SaveAsync(entry);
+            if (Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess == Microsoft.Maui.Networking.NetworkAccess.None)
+            {
+                StatusLabel.Text = "Saved to the Outbox. Sync when a network connection is available.";
+                return;
+            }
+
+            await entry.PrepareOrdinaryAddAsync(_book.SaveAsync);
             StatusLabel.Text = "Submitting to server…";
 
             var sync = _syncFactory();

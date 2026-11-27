@@ -51,12 +51,16 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
     /// <param name="code">The server/HTTP error code, when known.</param>
     public static FeatureSyncResult Fail(string error, int? code = null) => new(false, null, error, code);
 
+    /// <summary>The server explicitly rejected this edit without assigning an object ID.</summary>
+    public bool DefinitiveEditRejection { get; init; }
+
+    /// <summary>The add did not reach the server, so retrying it is safe.</summary>
+    public bool RequestNotSent { get; init; }
+
     /// <summary>
     /// A single one-line description of this result's failure (message plus code when
     /// present), suitable for surfacing in the sync center; empty when successful.
     /// </summary>
-    public bool DefinitiveEditRejection { get; init; }
-
     public string FailureDescription => Success
         ? string.Empty
         : ErrorCode is { } code
@@ -303,7 +307,7 @@ public sealed class GeoServicesFeatureSync
         }
         catch (HttpRequestException ex)
         {
-            return FailEach(records.Count, ex.Message);
+            return FailEach(records.Count, ex.Message, requestNotSent: ex.HttpRequestError == HttpRequestError.NameResolutionError);
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -344,10 +348,10 @@ public sealed class GeoServicesFeatureSync
         return ParseBatchResults(body, count, response.StatusCode);
     }
 
-    private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null)
+    private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null, bool requestNotSent = false)
     {
         var results = new FeatureSyncResult[count];
-        Array.Fill(results, FeatureSyncResult.Fail(error, code));
+        Array.Fill(results, FeatureSyncResult.Fail(error, code) with { RequestNotSent = requestNotSent });
         return results;
     }
 
@@ -970,7 +974,10 @@ public sealed class GeoServicesFeatureSync
             }
             catch (HttpRequestException ex)
             {
-                result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt);
+                result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt)
+                {
+                    RequestNotSent = !idempotent && ex.HttpRequestError == HttpRequestError.NameResolutionError
+                };
                 // A transport failure left no server response, so a non-idempotent
                 // add is ambiguous (it may have committed) — never auto-retry it.
                 if (!idempotent || isLast)

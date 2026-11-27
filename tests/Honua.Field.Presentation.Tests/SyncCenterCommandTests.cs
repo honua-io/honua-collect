@@ -221,6 +221,53 @@ public class SyncCenterCommandTests
         Assert.True(entries[1].RequiresServerVerification);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Ordinary_add_stays_pending_until_connected_and_dispatch_hold_is_saved(bool batch)
+    {
+        var entry = PendingEntry("r1");
+        var connected = false;
+        var saveAttempts = 0;
+        var sends = 0;
+        var vm = new SyncCenterViewModel(
+            [entry], (_, _) =>
+            {
+                sends++;
+                return Task.FromResult(FeatureSyncResult.Ok(17));
+            },
+            puller: null, form: null, persist: _ =>
+            {
+                if (++saveAttempts == 1)
+                {
+                    throw new IOException("Temporary disk error");
+                }
+
+                return Task.CompletedTask;
+            },
+            batchUploader: batch ? (_, _) =>
+            {
+                sends++;
+                return Task.FromResult<IReadOnlyList<FeatureSyncResult>>([FeatureSyncResult.Ok(17)]);
+            } : null,
+            canDispatchOrdinaryAdd: () => connected);
+
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(0, saveAttempts);
+        Assert.Equal(0, sends);
+        Assert.True(entry.IsPendingUpload);
+
+        connected = true;
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(1, saveAttempts);
+        Assert.Equal(0, sends);
+        Assert.True(entry.IsPendingUpload);
+
+        Assert.Equal(1, await vm.SyncAsync());
+        Assert.Equal(1, sends);
+        Assert.Equal(RecordSyncState.Synced, entry.SyncState);
+    }
+
     [Fact]
     public async Task A_second_sync_while_one_is_running_is_a_no_op()
     {

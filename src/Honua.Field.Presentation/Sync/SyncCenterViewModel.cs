@@ -82,6 +82,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     private readonly BatchRecordUploader? _batchUploader;
     private readonly int _batchSize;
     private readonly RecordStatePersister? _persist;
+    private readonly Func<bool>? _canDispatchOrdinaryAdd;
     private readonly FeaturePuller? _puller;
     private readonly FormDefinition? _form;
     private readonly FeaturePullService _pullService = new();
@@ -120,6 +121,8 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// </param>
     /// <param name="batchSize">Maximum records per batch round-trip (defaults to <see cref="DefaultBatchSize"/>).</param>
     /// <param name="logger">Optional structured logger.</param>
+    /// <param name="replayPublished">Optional published-form replay handler.</param>
+    /// <param name="canDispatchOrdinaryAdd">Whether the device can attempt an ordinary add now.</param>
     public SyncCenterViewModel(
         IEnumerable<FieldRecordEntry> entries,
         RecordUploader uploader,
@@ -129,7 +132,8 @@ public sealed class SyncCenterViewModel : ObservableObject
         BatchRecordUploader? batchUploader = null,
         int batchSize = DefaultBatchSize,
         ILogger<SyncCenterViewModel>? logger = null,
-        Func<FieldRecordEntry, CancellationToken, Task<bool>>? replayPublished = null)
+        Func<FieldRecordEntry, CancellationToken, Task<bool>>? replayPublished = null,
+        Func<bool>? canDispatchOrdinaryAdd = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
@@ -140,6 +144,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         _puller = puller;
         _form = form;
         _replayPublished = replayPublished;
+        _canDispatchOrdinaryAdd = canDispatchOrdinaryAdd;
         _logger = logger ?? NullLogger<SyncCenterViewModel>.Instance;
         _entries = entries.ToList();
         Pending = new ObservableCollection<FieldRecordEntry>(_entries.Where(e => e.IsPendingUpload));
@@ -532,20 +537,17 @@ public sealed class SyncCenterViewModel : ObservableObject
         return false;
     }
 
+
     private async Task<bool> PrepareOrdinaryAddAsync(FieldRecordEntry entry)
     {
-        if (!entry.IsPendingUpload)
+        if (!entry.IsPendingUpload || _canDispatchOrdinaryAdd?.Invoke() == false)
         {
             return false;
         }
 
-        entry.MarkAddNeedsVerification();
         try
         {
-            if (_persist is not null)
-            {
-                await _persist(entry);
-            }
+            await entry.PrepareOrdinaryAddAsync(e => _persist?.Invoke(e) ?? Task.CompletedTask);
 
             return true;
         }

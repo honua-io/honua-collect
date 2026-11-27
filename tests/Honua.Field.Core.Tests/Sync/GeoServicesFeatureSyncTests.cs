@@ -997,6 +997,21 @@ public class GeoServicesFeatureSyncTests
         Assert.Null(result.ObjectId);
     }
 
+    [Theory]
+    [InlineData(HttpRequestError.NameResolutionError, true)]
+    [InlineData(HttpRequestError.ConnectionError, false)]
+    public async Task Adds_distinguish_DNS_failure_from_an_uncertain_connection_failure(
+        HttpRequestError error, bool requestNotSent)
+    {
+        using var http = new HttpClient(new ThrowingHandler(new HttpRequestException(error, "network failure")));
+        var sync = new GeoServicesFeatureSync(http, FastRetry);
+
+        var direct = await sync.SubmitAsync(Record(), T);
+        var batch = Assert.Single(await sync.SubmitBatchAsync([Record()], T));
+        Assert.Equal(requestNotSent, direct.RequestNotSent);
+        Assert.Equal(requestNotSent, batch.RequestNotSent);
+    }
+
     [Fact]
     public async Task SubmitBatchAsync_does_not_retry_transport_failure()
     {

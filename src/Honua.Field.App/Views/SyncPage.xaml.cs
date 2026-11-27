@@ -52,7 +52,9 @@ public partial class SyncPage : ContentPage
         // not re-upload (and duplicate) an already-synced record.
         BindingContext = new SyncCenterViewModel(
             _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync,
-            logger: _logger, replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct));
+            logger: _logger, replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct),
+            canDispatchOrdinaryAdd: () => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
+                != Microsoft.Maui.Networking.NetworkAccess.None);
     }
 
     private async Task<FeatureSyncResult> UploadAsync(Core.Records.FieldRecordEntry entry, CancellationToken cancellationToken)
@@ -67,8 +69,7 @@ public partial class SyncPage : ContentPage
         //  - a re-edited, already-synced record (PendingUpdate carrying its RemoteId)
         //    -> applyEdits UPDATE against the existing object id (an add would
         //    duplicate the server feature).
-        //  - a brand-new record -> applyEdits ADD (carrying its stable client
-        //    GlobalID so a retried/lost-response add cannot duplicate).
+        //  - a brand-new record -> applyEdits ADD under the durable verification hold.
         // The result flows straight to the sync center, which surfaces the server's
         // error message/code verbatim.
         if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted)
