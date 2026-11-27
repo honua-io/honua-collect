@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
@@ -70,8 +71,9 @@ public partial class SyncPage : ContentPage
         var vm = new SyncCenterViewModel(
             _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync,
             logger: _logger, replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct),
-            canDispatchOrdinaryAdd: () => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
-                != Microsoft.Maui.Networking.NetworkAccess.None);
+            canDispatchOrdinaryAdd: HasNetworkAccess,
+            replayOrdinaryPhotos: ReplayOrdinaryPhotosAsync,
+            canDispatchOrdinaryRecord: entry => entry.OrdinaryPhotos.All(photo => photo.Target == _settings.Target));
         BindingContext = vm;
         var command = new Command(
             async () => await RunSyncAsync(),
@@ -80,6 +82,14 @@ public partial class SyncPage : ContentPage
         SyncButton.Command = command;
         return vm;
     }
+
+    private static bool HasNetworkAccess() => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
+        != Microsoft.Maui.Networking.NetworkAccess.None;
+
+    private Task<bool> ReplayOrdinaryPhotosAsync(Core.Records.FieldRecordEntry entry)
+        => HasNetworkAccess()
+            ? OrdinaryPhotoReplay.ReplayAsync(entry, _syncFactory(), _settings.Target, CaptureFiles.MediaDirectory, _book.SaveAsync)
+            : Task.FromResult(false);
 
     private async Task RunSyncAsync()
     {
