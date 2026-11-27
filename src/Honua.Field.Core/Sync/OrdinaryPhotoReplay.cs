@@ -74,6 +74,11 @@ public static class OrdinaryPhotoReplay
             }
             else
             {
+                if (result.DefinitiveEditRejection)
+                {
+                    await entry.UpdateOrdinaryPhotoAsync(photo, persist).ConfigureAwait(false);
+                }
+
                 allSynced = false;
             }
         }

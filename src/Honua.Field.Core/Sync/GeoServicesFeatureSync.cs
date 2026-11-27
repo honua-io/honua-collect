@@ -586,7 +586,19 @@ public sealed class GeoServicesFeatureSync
             return result.Succeeded
                 ? new FeatureSyncResult(true, result.AttachmentId, null)
                 : new FeatureSyncResult(false, result.AttachmentId,
-                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code);
+                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code)
+                {
+                    DefinitiveEditRejection = (result.AttachmentId is null or <= 0)
+                        && IsDefinitiveAttachmentRejection(result.Error?.Code)
+                };
+        }
+        catch (HonuaFeatureServerException ex) when (IsDefinitiveAttachmentRejection((int)ex.StatusCode)
+            || ((int)ex.StatusCode is 200 or 400 && IsDefinitiveAttachmentRejection(ex.GeoServicesErrorCode)))
+        {
+            return new FeatureSyncResult(false, null, ex.Message, ex.GeoServicesErrorCode ?? (int)ex.StatusCode)
+            {
+                DefinitiveEditRejection = true
+            };
         }
         catch (HonuaFeatureServerException ex) when (ex.GeoServicesErrorCode is { } code)
         {
@@ -614,12 +626,14 @@ public sealed class GeoServicesFeatureSync
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // The caller's token was not cancelled, so this is the upload deadline
-            // firing (or an HttpClient request timeout) — a transport failure, not a
-            // user cancel. Surface it as a failed result so the upload is retried.
+            // The upload timed out and its outcome is unknown. The caller can
+            // verify whether the server stored it.
             return FeatureSyncResult.Fail(ex.Message);
         }
     }
+
+    private static bool IsDefinitiveAttachmentRejection(int? code) =>
+        code is 401 or 403 or 413 or 415 or 422 or 1006;
 
     /// <summary>
     /// Pulls existing features from the target layer's <c>query</c> endpoint and
