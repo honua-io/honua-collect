@@ -41,7 +41,13 @@ class PhysicalUpgradeTests(unittest.TestCase):
     def test_cleans_up_after_candidate_install_error(self):
         self.run_install(install_error=RuntimeError("candidate rejected"))
 
-    def run_install(self, install_error):
+    def test_rejects_replacement_outbox_record_with_same_count(self):
+        self.run_install(install_error=None, sample_ids=("baseline-record", "replacement-record"))
+
+    def test_preserves_baseline_outbox_record(self):
+        self.run_install(install_error=None, sample_ids=("baseline-record", "baseline-record"))
+
+    def run_install(self, install_error, sample_ids=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             args = SimpleNamespace(
@@ -52,6 +58,7 @@ class PhysicalUpgradeTests(unittest.TestCase):
                 project_arn="project",
                 device_arn="device",
                 output=root / "evidence",
+                sample_inspection=sample_ids is not None,
             )
             harness = Mock()
             farm, driver = harness.farm, harness.driver
@@ -70,11 +77,16 @@ class PhysicalUpgradeTests(unittest.TestCase):
             }}
             farm.install_to_remote_access_session.side_effect = install_error
             harness.upload.side_effect = [("baseline-app", "baseline-hash"), ("candidate-app", "candidate-hash")]
+            if sample_ids:
+                harness.outbox.side_effect = [{"count": 1, "recordIds": [value]} for value in sample_ids]
             with (
                 patch.object(smoke.boto3, "client", return_value=farm),
                 patch.object(smoke.webdriver, "Remote", return_value=driver) as remote,
                 patch.object(smoke, "upload_app", harness.upload),
                 patch.object(smoke, "check_ios_build", harness.check),
+                patch.object(smoke, "queue_ios_sample", harness.queue),
+                patch.object(smoke, "ios_outbox", harness.outbox),
+                patch.object(smoke, "tap_ios_label", harness.tap),
                 patch("builtins.print"),
             ):
                 result = smoke.run(args)
@@ -88,13 +100,24 @@ class PhysicalUpgradeTests(unittest.TestCase):
                 ),
                 call.farm.get_remote_access_session(arn="session"),
                 call.check(driver, 4, args.output / "baseline.png"),
+            ]
+            if sample_ids:
+                expected.extend([call.queue(driver), call.outbox(driver, 1),
+                                 call.driver.save_screenshot(str(args.output / "baseline-outbox.png"))])
+            expected.extend([
                 call.driver.terminate_app("io.honua.collect"),
                 call.farm.install_to_remote_access_session(remoteAccessSessionArn="session", appArn="candidate-app"),
-            ]
+            ])
             if install_error:
                 expected.append(call.driver.save_screenshot(str(args.output / "failure.png")))
             else:
                 expected.append(call.check(driver, 5, args.output / "candidate.png"))
+            mismatch = sample_ids and sample_ids[0] != sample_ids[1]
+            if sample_ids:
+                expected.extend([call.tap(driver, "Records"), call.outbox(driver, 1),
+                                 call.driver.save_screenshot(str(args.output / "candidate-outbox.png"))])
+                if mismatch:
+                    expected.append(call.driver.save_screenshot(str(args.output / "failure.png")))
             expected.extend([call.driver.quit(), call.farm.stop_remote_access_session(arn="session")])
             self.assertEqual(harness.mock_calls, expected)
             report = json.loads((args.output / "result.json").read_text())
@@ -106,8 +129,11 @@ class PhysicalUpgradeTests(unittest.TestCase):
                 self.assertEqual(report["failure"], "candidate rejected")
                 self.assertNotIn("installedCandidateBuild", report)
             else:
-                self.assertEqual(result, 0)
+                self.assertEqual(result, int(bool(mismatch)))
                 self.assertEqual(report["installedCandidateBuild"], 5)
+                if sample_ids:
+                    self.assertEqual(report["baselineOutbox"]["recordIds"], [sample_ids[0]])
+                    self.assertEqual(report["candidateOutbox"]["recordIds"], [sample_ids[1]])
 
 
 if __name__ == "__main__":

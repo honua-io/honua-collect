@@ -9,6 +9,7 @@ import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from xml.etree import ElementTree
 from zipfile import ZipFile
 
 import boto3
@@ -124,6 +125,49 @@ def check_ios_build(driver, build, screenshot):
     driver.save_screenshot(str(screenshot))
 
 
+def ios_element(driver, xpath):
+    return WebDriverWait(driver, 25, 1).until(
+        lambda browser: next((e for e in browser.find_elements(AppiumBy.XPATH, xpath)
+                              if e.is_displayed()), False), xpath)
+
+
+def tap_ios_label(driver, label, kind="XCUIElementTypeButton"):
+    element = ios_element(driver, f"//{kind}[@label='{label}' or @name='{label}']")
+    rect = element.rect
+    driver.execute_script("mobile: tap", {"x": int(rect["x"] + rect["width"] / 2),
+                                         "y": int(rect["y"] + rect["height"] / 2)})
+
+
+def ios_outbox(driver, expected_count):
+    def inspect(browser):
+        labels = {element.get("label", "") for element in ElementTree.fromstring(browser.page_source).iter()
+                  if element.get("visible") == "true"}
+        ids = sorted(label for label in labels if re.fullmatch(r"[0-9a-f]{32}", label))
+        if len(ids) == expected_count and any(
+            re.fullmatch(fr"Drafts 0 · Outbox {expected_count} · Conflicts 0 · Sent 0", label) for label in labels
+        ):
+            return {"count": expected_count, "recordIds": ids}
+        return False
+
+    return WebDriverWait(driver, 25, 1).until(inspect, f"Expected {expected_count} visible Outbox records")
+
+
+def queue_ios_sample(driver):
+    tap_ios_label(driver, "Records")
+    ios_outbox(driver, 0)
+    tap_ios_label(driver, "Capture")
+    tap_ios_label(driver, "Sample Inspection Demo")
+    ios_element(driver, "//XCUIElementTypeTextField[@name='site_name']").send_keys("PhysicalUpgrade")
+    tap_ios_label(driver, "Done")
+    status = ios_element(driver, "(//XCUIElementTypeStaticText[@label='Status']/following::XCUIElementTypeButton)[1]")
+    status.click()
+    ios_element(driver, "//XCUIElementTypePickerWheel").send_keys("In progress")
+    tap_ios_label(driver, "Done")
+    tap_ios_label(driver, "Submit")
+    ios_element(driver, "//XCUIElementTypeNavigationBar//XCUIElementTypeButton").click()
+    tap_ios_label(driver, "Records")
+
+
 def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
     farm = boto3.client("devicefarm", region_name="us-west-2",
@@ -143,7 +187,7 @@ def run(args):
             candidate_build = read_device_build(args.upgrade_app)
             if candidate_build <= baseline_build:
                 raise ValueError("The upgrade IPA must have a higher build number")
-            report["scope"] = "same-session-install"
+            report["scope"] = "same-session-sample-outbox" if args.sample_inspection else "same-session-install"
             report["upgradeRevision"] = args.upgrade_revision
         app_arn, report["sha256"] = upload_app(farm, args.app, args.project_arn, android=android)
         if upgrade:
@@ -162,10 +206,20 @@ def run(args):
         if upgrade:
             check_ios_build(driver, baseline_build, args.output / "baseline.png")
             report["installedBaselineBuild"] = baseline_build
+            if args.sample_inspection:
+                queue_ios_sample(driver)
+                report["baselineOutbox"] = ios_outbox(driver, 1)
+                driver.save_screenshot(str(args.output / "baseline-outbox.png"))
             driver.terminate_app("io.honua.collect")
             farm.install_to_remote_access_session(remoteAccessSessionArn=session, appArn=candidate_arn)
             check_ios_build(driver, candidate_build, args.output / "candidate.png")
             report["installedCandidateBuild"] = candidate_build
+            if args.sample_inspection:
+                tap_ios_label(driver, "Records")
+                report["candidateOutbox"] = ios_outbox(driver, 1)
+                driver.save_screenshot(str(args.output / "candidate-outbox.png"))
+                if report["baselineOutbox"] != report["candidateOutbox"]:
+                    raise RuntimeError("Candidate Outbox record differs from the baseline")
         else:
             smoke(driver, args.output, android=android)
         report["outcome"] = "passed"
@@ -198,7 +252,10 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True, help="New evidence directory")
     parser.add_argument("--upgrade-app", type=Path, help="Candidate IPA for same-session installation on physical iPhone")
     parser.add_argument("--upgrade-revision", help="Source revision for the candidate IPA")
+    parser.add_argument("--sample-inspection", action="store_true", help="Verify a bundled demo Outbox record across the upgrade")
     args = parser.parse_args()
     if bool(args.upgrade_app) != bool(args.upgrade_revision):
         parser.error("--upgrade-app and --upgrade-revision must be supplied together")
+    if args.sample_inspection and not args.upgrade_app:
+        parser.error("--sample-inspection requires --upgrade-app")
     raise SystemExit(run(args))

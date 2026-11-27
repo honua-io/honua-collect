@@ -86,6 +86,22 @@ launch in the same session, then stops the session. The result JSON records
 the session, artifact digests and both observed build numbers. This check
 covers deployment. The workbook scenarios also require the data checks below.
 
+The [November 27, 2026 physical install run](https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/afe2be56-2a71-433e-8d74-1b0354523ff2/sessions/ba76616e-a392-44f4-9d3e-5dd5a1223bd4)
+launched builds 4 and 5 in the same iPhone 18 Pro session on iOS 27.0. Both
+IPA checksums matched the [build artifact](https://github.com/honua-io/honua-field/actions/runs/46058603327/artifacts/15229518520).
+
+With the same no-fixture IPAs, add `--sample-inspection` to submit one bundled
+Sample Inspection Demo record and verify that exactly one Outbox record with
+the same ID is visible in both builds. The evidence includes the before and
+after counts, record IDs and screenshots. The published workbook, original
+version, repeat values and synced attachment require the fixture below.
+
+The [physical Outbox run](https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/afe2be56-2a71-433e-8d74-1b0354523ff2/sessions/c917f343-69d6-4e41-8396-4857ac2bf3d2)
+queued one record on build 4 and found the same record
+(`5469d0145be3445cb207ff9f3dc56029`) as the sole Outbox entry on build 5
+on an iPhone 18 Pro running iOS 27.0. The device stayed in one session.
+The demo record remained local.
+
 For each of `draft` and `outbox`, start a fresh remote access session with
 the baseline IPA and connect Appium to its `remoteDriverEndpoint`. Install
 the candidate through
@@ -104,8 +120,11 @@ record back from Honua Server, count the accepted record and attachment
 exactly once, compare both repeat rows and verify the downloaded attachment
 against the captured digest. Stop each session after evidence collection.
 
-The simulator results above cover both scenarios. Physical qualification
-requires both physical sessions to pass the same readback checks.
+The simulator results above cover both scenarios. The physical workbook
+runs still need an approved disposable HTTPS origin reachable from Device
+Farm, a fixture-scoped identity, and a private operator path to publish and
+read back records. Physical qualification requires both physical sessions to
+pass the same readback checks.
 
 The [November 27, 2026 Device Farm preflight](https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/afe2be56-2a71-433e-8d74-1b0354523ff2/sessions/e662226e-e746-428e-883c-b2258c6d0a4b)
 established an XCUITest connection on an Apple iPhone 18 Pro running iOS 27.0.
