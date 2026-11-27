@@ -1,11 +1,11 @@
 appId: io.honua.collect
 ---
-- launchApp:
-    clearState: false
 - extendedWaitUntil:
-    visible: Start New Inspection
+    visible:
+      id: NewInspectionBtn
     timeout: 90000
-- tapOn: Start New Inspection
+- tapOn:
+    id: NewInspectionBtn
 - tapOn:
     id: 'name'
 - inputText: ${INSPECTION_NAME}

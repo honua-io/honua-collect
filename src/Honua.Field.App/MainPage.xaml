@@ -15,11 +15,13 @@
                    Style="{StaticResource SubHeadline}" />
 
             <Button x:Name="NewInspectionBtn"
+                    AutomationId="NewInspectionBtn"
                     Text="Start New Inspection"
                     Clicked="OnNewInspectionClicked"
                     HorizontalOptions="Fill" />
 
             <Button x:Name="DownloadFormBtn"
+                    AutomationId="DownloadFormBtn"
                     Text="Download Latest Form"
                     Clicked="OnDownloadFormClicked"
                     HorizontalOptions="Fill" />

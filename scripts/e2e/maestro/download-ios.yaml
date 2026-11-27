@@ -1,11 +1,11 @@
 appId: io.honua.collect
 ---
-- launchApp:
-    clearState: false
 - extendedWaitUntil:
-    visible: Download Latest Form
+    visible:
+      id: DownloadFormBtn
     timeout: 90000
-- tapOn: Download Latest Form
+- tapOn:
+    id: DownloadFormBtn
 - extendedWaitUntil:
     visible: 'Loaded .* \(version ${FORM_VERSION}\)\.'
     timeout: 30000

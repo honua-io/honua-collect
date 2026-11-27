@@ -67,6 +67,13 @@ run_flow() {
         -e "FORM_VERSION=$version" "$script_dir/maestro/$flow.yaml"
 }
 
+launch_and_run_flow() {
+    # simctl owns the cold launch; Maestro waits for a rendered Field control.
+    # Without this boundary a successful UIKit launch can race Maestro's attach.
+    "${simctl[@]}" launch "$device" "$app"
+    run_flow "$1"
+}
+
 list_media() {
     if [[ -d "$data/Library/media" ]]; then
         find "$data/Library/media" -type f | LC_ALL=C sort
@@ -205,7 +212,7 @@ version=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 30 -H
     if .package.offlinePolicy.enabled != true then error("The published fixture must allow offline capture.")
     else .version | select(type == "number" and . >= 1) end')
 list_media > "$working_dir/before"
-run_flow download-ios
+launch_and_run_flow download-ios
 "${simctl[@]}" terminate "$device" "$app"
 
 # Simulate server unreachability without affecting the macOS host or other devices.
@@ -222,15 +229,15 @@ if [[ -n $report ]]; then
     watch_process "$bundle/$executable" > "$working_dir/process-samples" &
     process_watch_pid=$!
 fi
-run_flow capture-ios
+launch_and_run_flow capture-ios
 stop_process_watch
 report_storage after-draft-save
 "${simctl[@]}" terminate "$device" "$app"
 report_storage after-draft-stop
 latest_version=$("$script_dir/publish-next-inspection-version.sh" "$port" "$version" "$admin_key")
-run_flow resume-draft-ios
+launch_and_run_flow resume-draft-ios
 "${simctl[@]}" terminate "$device" "$app"
-run_flow verify-outbox
+launch_and_run_flow verify-outbox-ios
 
 list_media > "$working_dir/after"
 LC_ALL=C comm -13 "$working_dir/before" "$working_dir/after" > "$working_dir/new-media"
@@ -247,7 +254,7 @@ rm -- "$working_dir/offline"
 run_flow retry-outbox
 test -f "$working_dir/withheld"
 "${simctl[@]}" terminate "$device" "$app"
-run_flow verify-outbox
+launch_and_run_flow verify-outbox-ios
 rm -- "$working_dir/lose-receipt"
 run_flow sync
 
