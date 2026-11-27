@@ -42,10 +42,17 @@ public sealed class MobileRecordStoreTests
             Assert.Equal(2, (await legacy.LoadAllAsync()).Count);
             await ExecuteAsync("DROP TRIGGER fail_second_import;");
 
+            // The preceding trigger changes can still reside in WAL. Checkpoint them
+            // before measuring whether a failed open changes any persisted data.
+            await ExecuteAsync("PRAGMA wal_checkpoint(TRUNCATE);");
             var bytes = await File.ReadAllBytesAsync(path);
             await Assert.ThrowsAsync<InvalidOperationException>(() => MobileRecordStore.OpenEncryptedAsync(path, "wrong-key"));
             await Assert.ThrowsAsync<ArgumentException>(() => MobileRecordStore.OpenEncryptedAsync(path, ""));
             Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+            var wal = new FileInfo(path + "-wal");
+            Assert.True(!wal.Exists || wal.Length == 0);
+            Assert.Equal(2, (await legacy.LoadAllAsync()).Count);
+            Assert.False(await sdk.IsDocumentCollectionImportedAsync("honua-field-records-v1"));
 
             var store = await MobileRecordStore.OpenEncryptedAsync(path, key);
             var pending = Assert.Single(await store.LoadAllAsync(), entry => entry.SyncState == RecordSyncState.Pending);
