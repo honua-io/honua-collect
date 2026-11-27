@@ -186,8 +186,11 @@ disconnecting or restarting Field. **Save draft** keeps the inspection in
 **Sample Inspection Demo** opens the bundled feature-layer form. To try offline
 photo collection, enter a site name, choose a status, tap **Add photo**, then
 **Submit**. You can close Field while the inspection is in the outbox. Once
-connected, open **Sync** and tap **Sync now**. Field marks the inspection as
-sent after it confirms the feature and all queued photos on the original layer.
+connected, open **Sync** and tap **Sync now**. If Honua Server accepts the
+feature first, the inspection stays in **Outbox** with the status **Feature
+sent. Photos still need sync.** Tap **Sync now** again on the original layer.
+If an upload reply was lost, Field checks the attachment name and SHA-256 on
+that feature. The inspection moves to **Sent** once every photo is confirmed.
 [Sample form](src/Honua.Field.App/SampleForms.cs) · [Photo sync verification](docs/verification/e2e/README.md#ordinary-feature-photos-on-android)
 
 ### Basemap

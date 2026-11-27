@@ -109,8 +109,11 @@ offline, reopens the outbox after process death, then checks the feature and
 attachment on the seeded server after reconnecting. The report records their IDs,
 counts and the SHA-256 of the downloaded bytes. The live Core test
 `Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates`
-exercises the separate case where the server accepts the upload and its reply is
-lost. Track published XLSForm media and physical-device upgrade results separately.
+exercises the case where the server accepts the upload and its reply is lost.
+On the next sync, Field looks up the generated file name on the original
+feature and downloads the attachment to verify its SHA-256. If Field cannot
+confirm the upload, the inspection stays in Outbox. Keep the on-device record
+and private photo while checking the attachment on the server.
 
 ## Founder phone installation
 

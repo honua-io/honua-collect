@@ -43,7 +43,7 @@ The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45
 
 ## Ordinary feature photos on Android
 
-The ordinary inspection scenario captures a photo in airplane mode, submits the feature to the outbox and restarts Field. Before reconnecting, the gate checks that the server has no matching feature. It then syncs, compares the downloaded attachment byte for byte against the private copy on the phone, and restarts again to verify that the feature and attachment IDs stay the same. The counts, IDs and SHA-256 are recorded in `ordinary-photo/server-readback.json`.
+The ordinary inspection scenario picks a fixture image from the Android gallery in airplane mode, submits the inspection to the outbox and restarts Field. Before reconnecting, the gate checks that the server has no matching feature. It then syncs, compares the downloaded attachment byte for byte against the JPEG saved by Field, and restarts again to verify that the feature and attachment IDs stay the same. The counts, IDs and SHA-256 are recorded in `ordinary-photo/server-readback.json`.
 
 For a local run, install the candidate Debug APK on a disposable emulator with a freshly cleared Field sandbox. Start the seeded `mobile_offline_demo` server and provision a worker key with read and write access to layer `68910` as shown below. Only this key goes to the device. The default host port is `5189`. Set `HONUA_E2E_HTTP_PORT` if your fixture uses another port. The harness toggles airplane mode and uses `adb reverse` to reconnect the app to the fixture.
 
