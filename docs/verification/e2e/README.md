@@ -122,3 +122,24 @@ python3 -m venv .venv-devicefarm
 ```
 
 The runner uploads that binary, waits for a device, verifies the three empty record groups, captures a point, checks the GeoJSON and undoes the edit. It records the binary digest, device, OS, session ARN, outcome and screenshots, then stops the session. Device Farm accounts meter device minutes. For workbook publication, disconnected capture, in-place upgrades and server-side receipt verification, run the published Android and iOS gates above.
+
+### AWS physical Android in-place update
+
+Use two APKs for `io.honua.collect` signed with the same certificate. The previous build must include **Sample Inspection Demo** and the candidate must have a higher Android version code. Use the following commands from the Field repository to build the test bundle. The device must be able to launch both APKs.
+
+```sh
+bundle=$(mktemp -d)
+mkdir -p "$bundle/tests"
+cp "$CANDIDATE_APK" "$bundle/candidate.apk"
+cp scripts/e2e/run-installed-android-upgrade.py "$bundle/"
+cp scripts/e2e/devicefarm/test_android_upgrade.py "$bundle/tests/"
+echo 'pytest==8.4.2' > "$bundle/requirements.txt"
+python3 -m pip download --only-binary=:all: -r "$bundle/requirements.txt" -d "$bundle/wheelhouse"
+(cd "$bundle" && zip -qr "$bundle/field-upgrade.zip" candidate.apk tests run-installed-android-upgrade.py requirements.txt wheelhouse)
+```
+
+Schedule a Device Farm Android custom-environment run in `us-west-2`. Select the previous APK as the app, `field-upgrade.zip` as the Appium Python package, and `scripts/e2e/devicefarm/android-upgrade.yml` as the test spec. Select a physical device and set `executionConfiguration.skipAppResign` to `true` so Android can verify the update against the original signer.
+
+The test saves one inspection on the previous build, updates it with `adb install -r`, and reopens Records on the same device. Download the customer artifacts for both screenshots and `upgrade.json`, which includes the installed APK digests, version codes, Android app UID, Outbox record ID and run ARN. The published-workbook tests above cover attachment bytes and server receipts.
+
+On November 27, 2026 UTC, a physical Pixel 8 running Android 15 passed the update from build 4 (`6e3db0b`) to build 5 (`3662201`). Both APKs used the same verification key. Android retained the app UID and the original 32-character Outbox record ID. AWS Device Farm run `cf27473e-0c2c-4740-a731-b26bc602126d` contains the screenshots and installed APK digests.

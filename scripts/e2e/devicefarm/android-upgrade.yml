@@ -1,0 +1,12 @@
+version: 0.1
+android_test_host: amazon_linux_2023
+phases:
+  install:
+    commands:
+      - devicefarm-cli use python 3.12
+      - python -m pip install --no-index --find-links "$DEVICEFARM_TEST_PACKAGE_PATH/wheelhouse" -r "$DEVICEFARM_TEST_PACKAGE_PATH/requirements.txt"
+  test:
+    commands:
+      - python -m pytest -q "$DEVICEFARM_TEST_PACKAGE_PATH/tests/test_android_upgrade.py"
+artifacts:
+  - $DEVICEFARM_LOG_DIR

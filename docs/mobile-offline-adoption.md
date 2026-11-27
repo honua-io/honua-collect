@@ -93,7 +93,7 @@ Use the previous and candidate builds of `io.honua.collect` (the installed app i
 - **Android.** Use `apksigner verify --print-certs` on both APKs and confirm the signer matches. Install the candidate with `adb -s "$ANDROID_SERIAL" install -r "$CANDIDATE_APK"`. Independently generated CI debug keys can differ. For a debug upgrade, build both APKs with the same keystore.
 - **iPhone.** Use device builds signed for the same team and app identifier and provisioned for the founder’s phone. On a paired development Mac, extract the candidate IPA with `ditto -x -k "$CANDIDATE_IPA" "$EXTRACT_DIR"` into a new directory. Install the extracted app with `xcrun devicectl device install app --device "$DEVICE" "$EXTRACT_DIR"/Payload/*.app`. Simulator IPAs run only on simulator targets.
 
-Complete steps 2–8 and record the previous and candidate versions, artifact digests, device model, OS, date and receipt IDs. Keep device serials and account credentials private. The shorter [Device Farm smoke](verification/e2e/README.md#aws-device-farm-native-smoke) verifies Records and geometry on the chosen model.
+Complete steps 2–8 and record the previous and candidate versions, artifact digests, device model, OS, date and receipt IDs. Keep device serials and account credentials private. The [Device Farm smoke](verification/e2e/README.md#aws-device-farm-native-smoke) verifies Records and geometry on the chosen model. The [physical Android upgrade](verification/e2e/README.md#aws-physical-android-in-place-update) checks the installed version, app UID and queued record on one phone before and after updating.
 
 ## Result record
 
