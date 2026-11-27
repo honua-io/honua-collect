@@ -104,10 +104,13 @@ integration. Restore this build using a NuGet configuration with the versioned
 candidate packages from Mobile PR #456 (`0.1.0-fieldtasks.45953036296.1`) and SDK PR #596
 (`5.1.1-fieldtasks.2`), alongside the normal public dependencies. Default builds
 exclude the pilot and its package dependencies. The pilot adds no Today screen.
+The hosted Assigned work pilot job verifies the package archive digests recorded
+in `.github/actions/assigned-work-validation-feed/artifacts.json`. These
+validation artifacts expire and require replacement by approved packages before rollout.
 
 The pilot restores the saved authenticated session after encrypted storage opens.
-The authenticated user ID must match the server's task assignee handle. Assignment
-snapshots and pending commands are separated by server, service and user. Offline
+Use the canonical service ID from server metadata and the authenticated user ID
+that matches the server's task assignee handle. Assignment snapshots and pending commands are separated by server, service and user. Offline
 reads use the stored snapshot. Startup, resume, connectivity and identity changes
 trigger replay and a fresh paginated download when online. An account switch
 cancels the previous sync. Replays retain the original command IDs and expected
