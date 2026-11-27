@@ -14,3 +14,41 @@ HONUA_DEVICEFARM_PROJECT_FILE=/private/path/to/project-arn python3 schedule.py
 Use Python 3.11 or later to schedule runs. The uploader prints the run ARN and stores it in `runarn`. To reuse a validated app upload when only the test harness changes, set `HONUA_DEVICEFARM_APP_RECEIPT` to the previous staging directory’s `app-upload.json`. The uploader checks project ownership, upload status, and the staged IPA digest first. Device Farm's artifact list contains the existing gate report under `published-ios`. Check `input-digests.txt` and the gate's result, final feature readback, and attachment hash. The gate forms a real outbox record in the old build, updates the installed app in place, publishes a newer workbook version, and sends the queued record under its original version. Passing requires the expected server-side record and its attachment bytes exactly once. The worker key and database credential are generated for the disposable fixture.
 
 To build another pair, dispatch `aws-ios-artifacts.yml` with `previous_revision` and `candidate_revision` once the workflow is registered on the repository's default branch. Both inputs must be full, distinct Git commits with compatible Apple toolchains. Set `HONUA_E2E_IOS_PREVIOUS_REVISION`, `HONUA_E2E_FIELD_REVISION`, and `HONUA_E2E_SERVER_REVISION` for staging to select the matching app archives and server seed. Set `HONUA_E2E_UPGRADE_STATE=draft` to exercise an upgrade before enqueueing. The default `outbox` covers upgrade after enqueueing. Staging puts the resulting selections in the checksummed `provenance.txt`, which the AWS run records along with the input digests. The manifest also records the staging harness commit and the exact iOS picker harness commit. Override the latter with `HONUA_E2E_IOS_PICKER_REVISION` when qualifying another compatible app pair. Set `HONUA_DEVICEFARM_DEVICE_ARN` for another approved iOS simulator in us-west-2.
+
+## Physical iPhone qualification
+
+Build the same two commits with the `ios-arm64` workflow input and download
+`aws-ios-device-apps`. Verify both IPA checksums. The workflow checks the
+Mach-O device platform, the shared `io.honua.collect` bundle ID and the
+increasing build numbers before publishing. The pinned baseline is build 4
+and the candidate is build 5. This packaging job leaves signing to the device
+lab and requires no change to Field's distribution identity.
+
+Use an available physical iPhone in the `Honua-Field` Device Farm project in
+`us-west-2`. Record the model, OS and session ARN. The physical iPhone needs
+network access to a disposable HTTPS Honua Server fixture at the pinned
+revision, including the workbook publication and readback endpoints. The
+simulator fixture's loopback URL and `simctl` media injection apply only to
+the simulator. Use the native picker with a known JPEG on the physical device
+and record the digest of the bytes Field actually stored before syncing.
+
+For each of `draft` and `outbox`, start a fresh remote access session with
+the baseline IPA and connect Appium to its `remoteDriverEndpoint`. Install
+the candidate through
+[`InstallToRemoteAccessSession`](https://docs.aws.amazon.com/devicefarm/latest/APIReference/API_InstallToRemoteAccessSession.html)
+in the same physical session, without uninstalling, resetting, signing in
+again or recreating the record. Check that the installed build changes from
+4 to 5 and that the candidate can read the old encrypted draft or outbox.
+Device Farm normally re-signs uploaded iOS apps. Both installations must
+preserve access to the original Field Keychain data for the upgrade to count.
+
+Keep independently captured evidence from both scenarios. For `draft`,
+open the preserved draft and enqueue it after the upgrade. For `outbox`,
+send the existing queued record. In each case verify version 2 is available
+while the record syncs under the original form and version 1. Read the
+record back from Honua Server, count the accepted record and attachment
+exactly once, compare both repeat rows and verify the downloaded attachment
+against the captured digest. Stop each session after evidence collection.
+
+The simulator results above cover both scenarios. Physical qualification
+requires both physical sessions to pass the same readback checks.
