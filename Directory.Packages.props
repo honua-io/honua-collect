@@ -26,8 +26,8 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(EnableAssignedWorkPilot)' == 'true'">
-    <HonuaSdkDotNetTrainVersion>5.1.1-fieldtasks.1</HonuaSdkDotNetTrainVersion>
-    <HonuaMobileVersion>0.1.0-fieldtasks.465d37d</HonuaMobileVersion>
+    <HonuaSdkDotNetTrainVersion>5.1.1-fieldtasks.2</HonuaSdkDotNetTrainVersion>
+    <HonuaMobileVersion>0.1.0-fieldtasks.45953036296.1</HonuaMobileVersion>
   </PropertyGroup>
 
   <!-- First-party Honua platform packages (private github-honua feed). -->

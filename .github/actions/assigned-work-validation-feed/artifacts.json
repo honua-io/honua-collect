@@ -1,0 +1,30 @@
+[
+  {
+    "source": "honua-task-sdk-validation",
+    "repo": "honua-io/honua-sdk-dotnet",
+    "run": 45952807612,
+    "id": 15177498235,
+    "revision": "90ca73985560fca4b2abe486fb8841f7303bbc70",
+    "sha256": "65f77e12d6b8f1be62a359a97761a9f2cf2fd2ad28bc37e108f8d990d66635d3",
+    "version": "5.1.1-fieldtasks.2",
+    "packages": [
+      "Honua.Sdk.Abstractions",
+      "Honua.Sdk.Field"
+    ]
+  },
+  {
+    "source": "honua-mobile-task-validation",
+    "repo": "honua-io/honua-mobile",
+    "run": 45953036296,
+    "id": 15176833500,
+    "revision": "e381c1d98b3db9c0902c399b348c25e05ca7c024",
+    "sha256": "d9dd3fabf1818b9302a5ef3b337dce7fd5bc8e6d726448c7d115ca8d92a850de",
+    "version": "0.1.0-fieldtasks.45953036296.1",
+    "packages": [
+      "Honua.Mobile.Maui",
+      "Honua.Mobile.Offline",
+      "Honua.Mobile.Offline.Tasks",
+      "Honua.Mobile.Sdk"
+    ]
+  }
+]

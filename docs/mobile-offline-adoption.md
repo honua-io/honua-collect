@@ -101,8 +101,8 @@ acceptance.
 
 Build with `-p:EnableAssignedWorkPilot=true` to compile the assigned-work lifecycle
 integration. Restore this build using a NuGet configuration with the versioned
-candidate packages from Mobile PR #456 (`0.1.0-fieldtasks.465d37d`) and SDK PR #596
-(`5.1.1-fieldtasks.1`), alongside the normal public dependencies. Default builds
+candidate packages from Mobile PR #456 (`0.1.0-fieldtasks.45953036296.1`) and SDK PR #596
+(`5.1.1-fieldtasks.2`), alongside the normal public dependencies. Default builds
 exclude the pilot and its package dependencies. The pilot adds no Today screen.
 
 The pilot restores the saved authenticated session after encrypted storage opens.

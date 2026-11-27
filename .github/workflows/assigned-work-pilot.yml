@@ -1,0 +1,37 @@
+name: Assigned work pilot
+
+on:
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+jobs:
+  assigned-work:
+    if: github.head_ref == 'feat/field-assigned-work-pilot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MSBuildEnableWorkloadResolver: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/assigned-work-validation-feed
+        with:
+          token: ${{ github.token }}
+      - name: Build and test against the opt-in package graph
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ github.token }}
+        run: |
+          set -euo pipefail
+          for suite in Core Presentation; do
+            project="tests/Honua.Field.$suite.Tests/Honua.Field.$suite.Tests.csproj"
+            dotnet restore "$project" -p:EnableAssignedWorkPilot=true
+            dotnet test "$project" -p:EnableAssignedWorkPilot=true --no-restore
+          done
