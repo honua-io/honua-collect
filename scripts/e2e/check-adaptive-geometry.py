@@ -59,7 +59,7 @@ def layout(device, directory, name, size, *, landscape, side_by_side, count):
             "geometryType": node_bounds(root, "GeometryType", "Polygon", "Point"),
             "zoomOut": node_bounds(root, "Zoom out", "−"),
             "zoomIn": node_bounds(root, "Zoom in", "+"),
-            "offlineArea": node_bounds(root, "Offline area"),
+            "offlineArea": node_bounds(root, "Check offline area", "Download area"),
             "undo": node_bounds(root, "Undo"),
             "clear": node_bounds(root, "Clear"),
             "done": node_bounds(root, "Done"),
