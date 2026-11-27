@@ -100,7 +100,8 @@ public sealed class RecordBook
         if (editorSnapshot is not null
             && (submission is null || record.Status == RecordStatus.Draft
                 || record.RecordId != editorSnapshot.RecordId || record.FormId != editorSnapshot.FormId
-                || editorSnapshot.ServerBaseUrl != submission.ServerBaseUrl))
+                || editorSnapshot.ServerBaseUrl != submission.ServerBaseUrl
+                || editorSnapshot.ReplayPrincipal != submission.ReplayPrincipal))
         {
             throw new ArgumentException("The editor snapshot must belong to this submitted inspection.", nameof(editorSnapshot));
         }

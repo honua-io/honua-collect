@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Honua.Field.Core.Enterprise;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Forms;
@@ -17,9 +18,26 @@ public sealed record SubmissionFile(string PartName, string LocalPath, string Co
 /// <summary>The versioned request and evidence captured before the first upload.</summary>
 public sealed record PublishedFormSubmission(string FormId, string RequestJson, IReadOnlyList<SubmissionFile> Files, string? ServerBaseUrl = null)
 {
-    /// <summary>Locates the frozen evidence in the current app installation while preserving the wire request.</summary>
+    /// <summary>The local identity authorized to upload this request.</summary>
+    public string? ReplayPrincipal { get; init; }
+
+    /// <summary>Locates captured evidence in this installation without changing the request or its key.</summary>
     public PublishedFormSubmission ResolveMediaPaths(string mediaDirectory) =>
-        this with { Files = Files.Select(file => file with { LocalPath = CapturedMediaPath.Resolve(file.LocalPath, mediaDirectory) }).ToArray() };
+        this with { Files = Files.Select(file => file with
+            { LocalPath = CapturedMediaPath.Resolve(file.LocalPath, mediaDirectory) }).ToArray() };
+
+    /// <summary>Uploads through a dedicated named client configured with Field authentication.</summary>
+    public Task<FeatureSyncResult> UploadForReplayAsync(HttpClient http, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(ServerBaseUrl) || string.IsNullOrWhiteSpace(ReplayPrincipal))
+        {
+            return Task.FromResult(FeatureSyncResult.Fail(
+                "Review this saved inspection in Records before retrying it."));
+        }
+
+        AuthHeaderHandler.BindReplayClient(http, ReplayPrincipal);
+        return UploadAsync(http, cancellationToken);
+    }
 
     /// <summary>Freezes the request, destination, and evidence references for replay.</summary>
     public static PublishedFormSubmission Capture(PublishedFormPackage package, FormSession session, Uri serverBaseUri,
@@ -120,6 +138,10 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
         catch (JsonException)
         {
             return FeatureSyncResult.Fail("The server returned an unreadable or mismatched submission receipt.");
+        }
+        catch (PublishedReplayIdentityException exception)
+        {
+            return FeatureSyncResult.Fail(exception.Message);
         }
         catch (HttpRequestException exception) when (exception.StatusCode is { } statusCode)
         {

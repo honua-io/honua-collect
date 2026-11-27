@@ -11,6 +11,12 @@ appId: io.honua.collect
 - assertVisible: ${OUTBOX_ID}
 - assertVisible: Ready to send
 - tapOn: ${DRAFT_ID}
+- runFlow:
+    when:
+      true: ${LEGACY_REVIEW}
+    commands:
+      - assertVisible: Open saved inspection
+      - tapOn: Open draft
 - assertVisible: ${INSPECTION_NAME}
 - scrollUntilVisible:
     element:

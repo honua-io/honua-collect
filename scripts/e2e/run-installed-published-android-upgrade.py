@@ -164,7 +164,8 @@ def snapshot(args, device, phase, identities=None):
     record_state = {key: identities[key] for key in ("draftId", "outboxId", "summary")}
     stop(device)
     run_flow(args, phase, "upgrade-saved-draft", DRAFT_ID=record_state["draftId"],
-             OUTBOX_ID=record_state["outboxId"], INSPECTION_NAME=DRAFT_NAME)
+             OUTBOX_ID=record_state["outboxId"], INSPECTION_NAME=DRAFT_NAME,
+             LEGACY_REVIEW=str(phase != "before").lower())
     stop(device)
     return record_state | private_files(device)
 
@@ -216,6 +217,11 @@ def seed(args, device):
         stop(device)
         run_flow(args, "before-queued" if name == QUEUE_NAME else "before-saved", flow,
                  INSPECTION_NAME=name, LEGACY_CAPTURE=str(args.manual_repeat_default).lower())
+        if flow == "resume-draft":
+            media = device.shell("run-as", PACKAGE, "find", "files/media", "-type", "f").splitlines()
+            check(len(media) == 1, "Expected only the historical outbox attachment")
+            (args.report / "historical-attachment").write_bytes(
+                device.adb("exec-out", "run-as", PACKAGE, "cat", media[0]))
     evidence = snapshot(args, device, "before")
     check(evidence["formVersion"] == form["version"], "Cached form version differs from downloaded version")
     write_report(args, "before", {"identity": identity, "storage": evidence})
@@ -274,6 +280,31 @@ def recover_key(args, device):
     write_report(args, "recovered-key", {"databaseSha256WhileKeyMissing": databases, "storage": recovered})
 
 
+def recover_outbox(args, device):
+    before = json.loads((args.report / "before.json").read_text())
+    port = os.environ.get("HONUA_E2E_HTTP_PORT", "5189")
+    version = str(before["storage"]["formVersion"])
+    latest_version = subprocess.check_output([
+        str(HERE / "publish-next-inspection-version.sh"), port, version, str(args.admin_key_file),
+    ], text=True, timeout=120).strip()
+    device.adb("reverse", f"tcp:{port}", f"tcp:{port}")
+    try:
+        run_flow(args, "recovered-outbox", "recover-legacy-outbox-android",
+                 OUTBOX_ID=before["storage"]["outboxId"])
+        subprocess.run([
+            "python3", str(HERE / "assert-field-record.py"),
+            "--server", f"http://127.0.0.1:{port}", "--api-key-file", str(args.admin_key_file),
+            "--form", FORM, "--version", version, "--latest-version", latest_version,
+            "--name", QUEUE_NAME, "--status", "open", "--status", "closed", "--total", "2",
+            "--repeat-note", "Offline visit one", "--repeat-note", "Offline visit two",
+            "--longitude=-157.81", "--latitude=21.31",
+            "--attachment", str(args.report / "historical-attachment"),
+            "--report", str(args.report / "server-readback.json"),
+        ], check=True, timeout=60)
+    finally:
+        device.adb("reverse", "--remove", f"tcp:{port}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("serial")
@@ -288,13 +319,14 @@ def main():
     )
     phases.add_parser("verify").add_argument("apk", type=Path)
     phases.add_parser("recover-key")
+    phases.add_parser("recover-outbox").add_argument("admin_key_file", type=Path)
     args = parser.parse_args()
     args.report = args.report.resolve()
     args.report.mkdir(parents=True, exist_ok=True)
     device = Android(os.environ.get("ADB", "adb"), args.serial)
     check(device.shell("getprop", "ro.kernel.qemu") == "1", "An Android emulator is required")
     try:
-        {"seed": seed, "verify": verify, "recover-key": recover_key}[args.phase](args, device)
+        {"seed": seed, "verify": verify, "recover-key": recover_key, "recover-outbox": recover_outbox}[args.phase](args, device)
     except Exception:
         try:
             capture_failure(args, device)

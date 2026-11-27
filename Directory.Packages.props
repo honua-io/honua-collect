@@ -21,7 +21,7 @@
   <PropertyGroup>
     <HonuaSdkDotNetTrainVersion>5.1.1-fieldforms.3</HonuaSdkDotNetTrainVersion>
     <!-- Validation only. Replace with the signed published Mobile version and remove the artifact feed before merge. -->
-    <HonuaMobileVersion>0.1.0-ci.45949637544.1</HonuaMobileVersion>
+    <HonuaMobileVersion>0.1.0-operationqueue.2</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>
   </PropertyGroup>
 

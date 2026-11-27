@@ -363,8 +363,8 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "Geospatial.Grpc": "[1.0.2, )",
-          "Honua.Mobile.Offline": "[0.1.0-ci.45949637544.1, )",
-          "Honua.Mobile.Sdk": "[0.1.0-ci.45949637544.1, )",
+          "Honua.Mobile.Offline": "[0.1.0-operationqueue.2, )",
+          "Honua.Mobile.Sdk": "[0.1.0-operationqueue.2, )",
           "Honua.Sdk.Field": "[5.1.1-fieldforms.3, )",
           "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
@@ -389,11 +389,11 @@
       },
       "Honua.Mobile.Offline": {
         "type": "CentralTransitive",
-        "requested": "[0.1.0-ci.45949637544.1, )",
-        "resolved": "0.1.0-ci.45949637544.1",
-        "contentHash": "vEaioaJGRLLhDNexPODyBHcLUesjKVkjZJxtlmF0M53ADyBX5k+u7elddcxfrYYcLcIWdAF4TOB5tw5H2gA7tg==",
+        "requested": "[0.1.0-operationqueue.2, )",
+        "resolved": "0.1.0-operationqueue.2",
+        "contentHash": "hgaOaikacMtDNglL0Z7tME9LzWxBEl9yrYkHX9E/2UhXjZ1c0eNvNVf8TdtnMTa+YMPUBUb5DpI1sqU/yjnMSg==",
         "dependencies": {
-          "Honua.Mobile.Sdk": "0.1.0-ci.45949637544.1",
+          "Honua.Mobile.Sdk": "0.1.0-operationqueue.2",
           "Honua.Sdk.Abstractions": "1.10.0",
           "Honua.Sdk.Offline": "1.10.0",
           "Microsoft.Data.Sqlite.Core": "10.0.10"
@@ -401,9 +401,9 @@
       },
       "Honua.Mobile.Sdk": {
         "type": "CentralTransitive",
-        "requested": "[0.1.0-ci.45949637544.1, )",
-        "resolved": "0.1.0-ci.45949637544.1",
-        "contentHash": "GucdZDlA1UJDBgUFGcO3PQxDl28C+xQDTJftJg0l1cWZ27kKXExeY2EDlI1dErAmKTzJJ2qN1bgDx5ub5YX+GA==",
+        "requested": "[0.1.0-operationqueue.2, )",
+        "resolved": "0.1.0-operationqueue.2",
+        "contentHash": "Y3d5POzt9w3KAAEq1cw9st/qFlyvUh8pfU7XUCWRkr9+L/OL8rei2BJVwb+EWmjF5lW9k9hq2w2iDZz+ZvlcuA==",
         "dependencies": {
           "Honua.Sdk.Abstractions": "1.10.0",
           "Honua.Sdk.GeoServices": "1.10.0",

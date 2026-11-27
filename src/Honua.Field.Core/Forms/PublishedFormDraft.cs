@@ -15,6 +15,9 @@ namespace Honua.Field.Core.Forms;
 /// <summary>Local editor state and the immutable package version required to resume it.</summary>
 public sealed record PublishedFormDraft(string FormId, string RecordId, string ServerBaseUrl, string PackageJson, string EditorJson)
 {
+    /// <summary>The local identity authorized to submit this draft.</summary>
+    public string? ReplayPrincipal { get; init; }
+
     /// <summary>Whether submission must use a fresh key after the prior attempt was rejected.</summary>
     public bool ReplacesRejectedSubmission { get; init; }
 

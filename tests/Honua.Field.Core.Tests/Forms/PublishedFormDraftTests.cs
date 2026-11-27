@@ -7,6 +7,7 @@ using Honua.Field.Core.Field.Capture;
 using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
+using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Forms;
@@ -196,12 +197,12 @@ public sealed class PublishedFormDraftTests
             var replayPhoto = Assert.Single(migratedPending.PublishedSubmission!.Files);
             Assert.Equal(Assert.Single(pendingPayload.Files), replayPhoto);
             Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(replayPhoto.LocalPath));
-            await mobileStore.DeleteAsync("pending-id");
+            await Assert.ThrowsAsync<InvalidOperationException>(() => mobileStore.DeleteAsync("pending-id"));
             Assert.Contains(await legacyStore.LoadAllAsync(), candidate => candidate.Record.RecordId == "pending-id");
 
             var reopenedBook = new RecordBook(await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key"));
             await reopenedBook.InitializeAsync();
-            var entry = Assert.Single(reopenedBook.All);
+            var entry = Assert.Single(reopenedBook.All, candidate => candidate.Record.RecordId == "stable-id");
             Assert.Equal(RecordSyncState.Local, entry.SyncState);
             var draft = Assert.IsType<PublishedFormDraft>(entry.PublishedDraft);
             Assert.Throws<InvalidOperationException>(() => draft.Open("inspection", "stable-id", new Uri("https://other.example")));
@@ -238,15 +239,15 @@ public sealed class PublishedFormDraftTests
             var snapshot = PublishedFormDraft.Capture(reopenedPackage, reopened, Server);
             var original = new PublishedFormSubmission("inspection", """{"idempotencyKey":"stable-id"}""", [], Server.AbsoluteUri);
             var submitted = await reopenedBook.AddSubmittedAsync(reopened.Record, original, snapshot);
-            Assert.Same(submitted, Assert.Single(reopenedBook.All));
+            Assert.Same(submitted, Assert.Single(reopenedBook.All, candidate => candidate.Record.RecordId == "stable-id"));
             Assert.Equal(RecordSyncState.Pending, submitted.SyncState);
             Assert.False(submitted.CanOpenPublishedEditor);
 
-            submitted.MarkSubmissionRejected("Correct the site name.");
-            await reopenedBook.SaveAsync(submitted);
-            var persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync());
+            Assert.False(await mobileStore.ReplayPublishedAsync(submitted, (_, _) =>
+                Task.FromResult(FeatureSyncResult.Fail("Correct the site name.", 422) with { CanCorrectSubmission = true })));
+            var persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync(), candidate => candidate.Record.RecordId == "stable-id");
             Assert.Equal(RecordSyncState.SubmissionRejected, persisted.SyncState);
-            Assert.Equal("Correct the site name.", persisted.LastError);
+            Assert.Equal("Correct the site name. (code 422)", persisted.LastError);
             Assert.False(persisted.IsPendingUpload);
             Assert.True(persisted.CanOpenPublishedEditor);
             Assert.Equal(original.RequestJson, persisted.PublishedSubmission?.RequestJson);
@@ -261,7 +262,7 @@ public sealed class PublishedFormDraftTests
 
             var correctionDraft = PublishedFormDraft.Capture(correctionPackage, correction, Server) with { ReplacesRejectedSubmission = true };
             await reopenedBook.SaveDraftAsync(correction.Record, correctionDraft);
-            persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync());
+            persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync(), candidate => candidate.Record.RecordId == "stable-id");
             Assert.Null(persisted.PublishedSubmission);
             Assert.True(persisted.CanOpenPublishedEditor);
             Assert.True(persisted.PublishedDraft!.ReplacesRejectedSubmission);

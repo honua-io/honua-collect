@@ -1,0 +1,10 @@
+appId: io.honua.collect
+---
+- tapOn: Records
+- tapOn: ${LEGACY_ROW}
+- assertVisible: Retry saved inspection
+- tapOn: Retry
+- extendedWaitUntil:
+    visible: Recover saved inspection
+    timeout: 45000
+- tapOn: OK
