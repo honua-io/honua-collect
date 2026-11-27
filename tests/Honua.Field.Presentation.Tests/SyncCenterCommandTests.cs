@@ -188,6 +188,41 @@ public class SyncCenterCommandTests
     }
 
     [Fact]
+    public async Task SyncAsync_persists_acknowledged_batch_member_and_retries_only_unresolved_member()
+    {
+        var entries = new[] { PendingEntry("r1"), PendingEntry("r2") };
+        var sent = new List<string[]>();
+        var persisted = new List<(string RecordId, RecordSyncState State, string? RemoteId)>();
+        BatchRecordUploader batch = (members, _) =>
+        {
+            sent.Add(members.Select(member => member.Record.RecordId).ToArray());
+            IReadOnlyList<FeatureSyncResult> results = sent.Count == 1
+                ? [FeatureSyncResult.Ok(17), FeatureSyncResult.Fail("Layer reported a general failure")]
+                : [FeatureSyncResult.Ok(18)];
+            return Task.FromResult(results);
+        };
+        var vm = new SyncCenterViewModel(
+            entries,
+            (_, _) => Task.FromResult(FeatureSyncResult.Fail("unused")),
+            puller: null, form: null,
+            persist: entry =>
+            {
+                persisted.Add((entry.Record.RecordId, entry.SyncState, entry.RemoteId));
+                return Task.CompletedTask;
+            },
+            batchUploader: batch);
+
+        Assert.Equal(1, await vm.SyncAsync());
+        Assert.Contains(("r1", RecordSyncState.Synced, "17"), persisted);
+        Assert.Contains(("r2", RecordSyncState.Failed, null), persisted);
+
+        Assert.Equal(1, await vm.SyncAsync());
+        Assert.Equal(["r1", "r2"], sent[0]);
+        Assert.Equal(["r2"], sent[1]);
+        Assert.Contains(("r2", RecordSyncState.Synced, "18"), persisted);
+    }
+
+    [Fact]
     public async Task A_second_sync_while_one_is_running_is_a_no_op()
     {
         var gate = new TaskCompletionSource<FeatureSyncResult>();

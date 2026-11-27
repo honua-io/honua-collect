@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Net;
 using System.Text.Json;
 using Honua.Sdk.Abstractions.Features;
 using Honua.Sdk.Field.Records;
@@ -338,9 +339,7 @@ public sealed class GeoServicesFeatureSync
                 .ConfigureAwait(false);
         }
 
-        return response.IsSuccessStatusCode
-            ? ParseBatchResults(body, count)
-            : FailEach(count, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
+        return ParseBatchResults(body, count, response.StatusCode);
     }
 
     private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null)
@@ -350,42 +349,64 @@ public sealed class GeoServicesFeatureSync
         return results;
     }
 
-    private static IReadOnlyList<FeatureSyncResult> ParseBatchResults(string body, int expectedCount)
+    private static IReadOnlyList<FeatureSyncResult> ParseBatchResults(string body, int expectedCount, HttpStatusCode status)
     {
+        var httpError = (int)status is >= 200 and < 300 ? null : (int?)status;
+        var unresolved = httpError is null
+            ? FeatureSyncResult.Fail("The server returned no valid result for this record.")
+            : FeatureSyncResult.Fail($"HTTP {httpError}: {body}", httpError);
+
         try
         {
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
-
-            if (TryReadServerError(root, out var msg, out var code))
+            if (httpError is null && TryReadServerError(root, out var message, out var code))
             {
-                return FailEach(expectedCount, msg, code);
+                unresolved = FeatureSyncResult.Fail(message, code);
             }
 
             var results = new FeatureSyncResult[expectedCount];
-            JsonElement addResults = default;
-            var haveResults = root.TryGetProperty("addResults", out addResults)
-                && addResults.ValueKind == JsonValueKind.Array;
-
-            for (var i = 0; i < expectedCount; i++)
+            Array.Fill(results, unresolved);
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("addResults", out var addResults)
+                || addResults.ValueKind != JsonValueKind.Array
+                || addResults.GetArrayLength() > expectedCount)
             {
-                if (!haveResults || i >= addResults.GetArrayLength())
+                return results;
+            }
+
+            // A partial batch can acknowledge individual edits even alongside a request error.
+            for (var i = 0; i < addResults.GetArrayLength(); i++)
+            {
+                var item = addResults[i];
+                if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("success", out var success))
                 {
-                    results[i] = FeatureSyncResult.Fail("The server returned no result for this record.");
                     continue;
                 }
 
-                var outcome = ReadEditOutcome(addResults[i], "Edit was not applied.");
-                results[i] = outcome.Success
-                    ? FeatureSyncResult.Ok(outcome.ObjectId)
-                    : FeatureSyncResult.Fail(outcome.Detail ?? "Edit was not applied.", outcome.Code);
+                if (success.ValueKind == JsonValueKind.True)
+                {
+                    if (item.TryGetProperty("objectId", out var objectId) && objectId.ValueKind == JsonValueKind.Number
+                        && objectId.TryGetInt64(out var id) && id > 0
+                        && (!item.TryGetProperty("error", out var error) || error.ValueKind == JsonValueKind.Null))
+                    {
+                        results[i] = FeatureSyncResult.Ok(id);
+                    }
+                }
+                else if (success.ValueKind == JsonValueKind.False)
+                {
+                    var outcome = ReadEditOutcome(item, unresolved.Error ?? "Edit was not applied.");
+                    results[i] = FeatureSyncResult.Fail(outcome.Detail!, outcome.Code ?? unresolved.ErrorCode);
+                }
             }
 
             return results;
         }
         catch (JsonException ex)
         {
-            return FailEach(expectedCount, $"Invalid response: {ex.Message}");
+            return httpError.HasValue
+                ? FailEach(expectedCount, unresolved.Error!, httpError)
+                : FailEach(expectedCount, $"Invalid response: {ex.Message}");
         }
     }
 
@@ -870,10 +891,12 @@ public sealed class GeoServicesFeatureSync
     /// <returns><see langword="true"/> when the response carries a server error.</returns>
     private static bool TryReadServerError(JsonElement root, out string message, out int? code)
     {
-        if (root.TryGetProperty("error", out var error))
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out var error))
         {
-            message = error.TryGetProperty("message", out var m) ? m.GetString() ?? "Server error" : "Server error";
-            code = error.TryGetProperty("code", out var c) && c.TryGetInt32(out var cv) ? cv : null;
+            message = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var m)
+                && m.ValueKind == JsonValueKind.String ? m.GetString()! : "Server error";
+            code = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var c)
+                && c.ValueKind == JsonValueKind.Number && c.TryGetInt32(out var cv) ? cv : null;
             return true;
         }
 
@@ -895,7 +918,7 @@ public sealed class GeoServicesFeatureSync
     private static EditOutcome ReadEditOutcome(JsonElement item, string defaultDetail)
     {
         var success = item.TryGetProperty("success", out var s) && s.GetBoolean();
-        long? oid = item.TryGetProperty("objectId", out var o) && o.TryGetInt64(out var v) ? v : null;
+        long? oid = item.TryGetProperty("objectId", out var o) && o.ValueKind == JsonValueKind.Number && o.TryGetInt64(out var v) ? v : null;
         if (success)
         {
             return new EditOutcome(true, oid, null, null);
@@ -903,10 +926,10 @@ public sealed class GeoServicesFeatureSync
 
         var detail = defaultDetail;
         int? errCode = null;
-        if (item.TryGetProperty("error", out var e))
+        if (item.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.Object)
         {
-            detail = (e.TryGetProperty("description", out var d) ? d.GetString() : detail) ?? detail;
-            errCode = e.TryGetProperty("code", out var ec) && ec.TryGetInt32(out var ecv) ? ecv : null;
+            detail = e.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString()! : detail;
+            errCode = e.TryGetProperty("code", out var ec) && ec.ValueKind == JsonValueKind.Number && ec.TryGetInt32(out var ecv) ? ecv : null;
         }
 
         return new EditOutcome(false, oid, detail, errCode);
