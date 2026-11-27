@@ -8,10 +8,9 @@ Capability gaps in the Honua mobile stack. Each item is tagged with:
   - `mobile` = honua-mobile primitives (Apache, consumed)
   - `sdk` = honua-sdk-dotnet (Apache, consumed)
 
-> Capabilities already at parity (dynamic forms, validation, repeats, calculated
-> fields, offline GeoPackage sync, conflict strategies, GPS/accuracy, geofencing,
-> background sync, offline basemaps, offline 3D scene packages, routing) are not
-> listed here — see the assessment. This file tracks only the gaps.
+Use the [offline adoption journey](docs/mobile-offline-adoption.md) for the
+release criteria and the [device verification guide](docs/verification/e2e/README.md)
+for the platform, form and server versions exercised by each installed test.
 
 ## Implemented so far — `Honua.Field.Core` (platform-neutral, unit-tested)
 
@@ -83,25 +82,15 @@ binds to these. The XAML is a thin surface; the logic is the view-models above.
 
 These items are marked 🧱 below: runtime + screen logic done and tested.
 
-### Cross-repo updates (done — on branches, pending package cut)
+### Published XLSForm repeats
 
-The repeat round-trip through native server sync is now landed upstream, not
-just via Field's product-side convention:
+Field stores repeat rows in the shared SDK's `FieldRecord.Repeats` and restores
+them by section ID when a worker reopens an inspection. The published-form
+gate captures two repeat rows offline and checks them on Honua Server after
+sync. [Repeat storage](src/Honua.Field.Core/Field/Forms/RepeatGroup.cs) ·
+[Installed XLSForm checks](docs/verification/e2e/README.md#published-xlsform-android-gate)
 
-- **honua-sdk-dotnet** (`field-native-repeats`): `FieldRecord.Repeats` carries
-  `FieldRepeatInstance` rows natively; `FormValidator`/`CalculatedFieldEvaluator`
-  evaluate each row against its own values (errors as `sectionId[index].field`).
-  21 existing + 5 new Field tests green.
-- **honua-server** (`forms-repeatable-sections`): `FormSectionDefinition` gains
-  `Repeatable`/`MinInstances`/`MaxInstances`; `FormPackageValidator` enforces the
-  bounds, so a repeatable form authored/distributed/validated server-side
-  round-trips to the capture client. 13 existing + 4 new tests green.
-
-Once those branches merge and a new `Honua.Sdk.Field` package is cut, Field's
-`FormSession` repeat storage swaps from its `List<Dictionary>` convention to the
-SDK's native `FieldRecord.Repeats`.
-
-### The MAUI app builds, installs, and runs — verified on an Android emulator
+### Historical Android baseline for the Collect-to-Field upgrade
 
 The Android toolchain was bootstrapped into `$HOME` (Temurin JDK 17 + Android
 SDK: cmdline-tools, platform android-36, build-tools 36.0.0, platform-tools,

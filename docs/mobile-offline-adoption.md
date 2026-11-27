@@ -104,8 +104,8 @@ phone holding the only copy of field data to simulate these failures.
 ### Ordinary inspection photos
 
 The [installed Android photo gate](verification/e2e/README.md#ordinary-feature-photos-on-android)
-covers steps 3–5 for an ordinary feature-layer inspection. It submits a photo
-offline, reopens the outbox after process death, then checks the feature and
+exercises offline submission and replay for one ordinary feature-layer inspection.
+It submits a photo offline, reopens the outbox after process death, then checks the feature and
 attachment on the seeded server after reconnecting. The report records their IDs,
 counts and the SHA-256 of the downloaded bytes. The live Core test
 `Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates`
