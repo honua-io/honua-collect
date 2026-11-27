@@ -32,6 +32,15 @@ simulator fixture's loopback URL and `simctl` media injection apply only to
 the simulator. Use the native picker with a known JPEG on the physical device
 and record the digest of the bytes Field actually stored before syncing.
 
+To check device installation before setting up the workbook fixture, run
+`run-devicefarm-smoke.py` with the baseline `--app` and `--revision`,
+the candidate `--upgrade-app` and `--upgrade-revision`, and the physical
+device and project ARNs. The script uploads both IPAs before reserving a
+device. It checks the installed build numbers and confirms both builds
+launch in the same session, then stops the session. The result JSON records
+the session, artifact digests and both observed build numbers. This check
+covers deployment. The workbook scenarios also require the data checks below.
+
 For each of `draft` and `outbox`, start a fresh remote access session with
 the baseline IPA and connect Appium to its `remoteDriverEndpoint`. Install
 the candidate through
