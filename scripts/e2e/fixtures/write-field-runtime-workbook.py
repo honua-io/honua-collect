@@ -1,9 +1,13 @@
-import sys
+import argparse
 from pathlib import Path
 from zipfile import ZipFile
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-output = Path(sys.argv[1])
+parser = argparse.ArgumentParser()
+parser.add_argument("output", type=Path)
+parser.add_argument("--assigned-work", action="store_true",
+                    help="Use a basic inspection survey for the assigned-work smoke fixture.")
+args = parser.parse_args()
 sheets = {
     "survey": [
         ["type", "name", "label", "required", "relevant", "constraint", "calculation", "default"],
@@ -19,10 +23,17 @@ sheets = {
     "settings": [["form_id", "form_title"], ["field_runtime_inspection", "Field Runtime Inspection"]],
     "choices": [["list_name", "name", "label"], ["states", "open", "Open"], ["states", "closed", "Closed"]],
 }
+if args.assigned_work:
+    sheets["survey"] = [
+        ["type", "name", "label", "required"],
+        ["text", "name", "Inspection name", "yes"],
+    ]
+    del sheets["choices"]
+
 spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 doc_rels = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 package_rels = "http://schemas.openxmlformats.org/package/2006/relationships"
-with ZipFile(output, "w") as file:
+with ZipFile(args.output, "w") as file:
     content_types = Element("Types", {"xmlns": "http://schemas.openxmlformats.org/package/2006/content-types"})
     SubElement(content_types, "Default", {
         "Extension": "rels", "ContentType": "application/vnd.openxmlformats-package.relationships+xml",

@@ -47,6 +47,10 @@
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(EnableAssignedWorkPilot)' == 'true'">
+    <DefineConstants>$(DefineConstants);HONUA_ASSIGNED_WORK_PILOT</DefineConstants>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/obj/packages.assigned-work.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
   <!-- The warnings-as-errors gate is in Directory.Build.targets, which is imported
        after the project sets UseMaui, so the MAUI app can be excluded correctly. -->
 </Project>
