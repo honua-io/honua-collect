@@ -13,6 +13,51 @@ namespace Honua.Field.Core.Tests.Storage;
 
 public sealed class MobileRecordStoreTests
 {
+    [Theory]
+    [InlineData("legacy")]
+    [InlineData("mobile")]
+    [InlineData("migrated")]
+    public async Task Ordinary_photos_preserve_independent_checkpoints_and_reject_stale_saves(string storage)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        const string key = "device-test-key";
+        IRecordStore store = storage == "mobile"
+            ? await directory.ReopenAsync()
+            : await SqliteRecordStore.OpenEncryptedAsync(directory.Database, key);
+        var target = new GeoServicesTarget("https://example.test", "inspections", 7);
+        var first = new OrdinaryFeaturePhoto(Guid.NewGuid(), "first.jpg", "image/jpeg", "stable-first.jpg", new string('A', 64), target);
+        var second = new OrdinaryFeaturePhoto(Guid.NewGuid(), "second.jpg", "image/jpeg", "stable-second.jpg", new string('B', 64), target);
+        var record = CreateRecord("ordinary");
+        record.Status = RecordStatus.Submitted;
+        await new RecordBook(store).AddSubmittedAsync(record, ordinaryPhotos: [first, second]);
+
+        var attempt = Assert.Single(await store.LoadAllAsync());
+        attempt.MarkAddNeedsVerification();
+        await store.SaveAsync(attempt);
+        attempt.MarkSynced("21");
+        await store.SaveAsync(attempt);
+        var stale = Assert.Single(await store.LoadAllAsync());
+        var held = first with { State = OrdinaryPhotoState.NeedsVerification };
+        attempt.UpdateOrdinaryPhoto(held);
+        await store.SaveAsync(attempt);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(stale));
+
+        store = await ReopenAsync();
+        var reopened = Assert.Single(await store.LoadAllAsync());
+        Assert.Equal("21", reopened.RemoteId);
+        Assert.Equal(new[] { held, second }, reopened.OrdinaryPhotos);
+        var synced = held with { State = OrdinaryPhotoState.Synced, ServerAttachmentId = 31 };
+        reopened.UpdateOrdinaryPhoto(synced);
+        await store.SaveAsync(reopened);
+
+        store = await ReopenAsync();
+        Assert.Equal(new[] { synced, second }, Assert.Single(await store.LoadAllAsync()).OrdinaryPhotos);
+
+        async Task<IRecordStore> ReopenAsync() => storage == "legacy"
+            ? await SqliteRecordStore.OpenEncryptedAsync(directory.Database, key)
+            : await directory.ReopenAsync();
+    }
+
     [Fact]
     public async Task Failed_import_rolls_back_records_and_marker_and_restarts_with_same_key()
     {

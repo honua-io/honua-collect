@@ -287,6 +287,72 @@ public sealed class FieldRecordEntry
     // Conflict details are recomputed by the next pull.
     internal void RestoreConflicted() => SyncState = RecordSyncState.Conflicted;
 
+    /// <summary>Photos and their independent upload checkpoints.</summary>
+    public IReadOnlyList<OrdinaryFeaturePhoto> OrdinaryPhotos { get; private set; } = [];
+
+    internal IReadOnlyList<OrdinaryFeaturePhoto> PersistedOrdinaryPhotos { get; private set; } = [];
+
+    /// <summary>Attaches newly captured evidence to this record.</summary>
+    public void AddOrdinaryPhoto(OrdinaryFeaturePhoto photo)
+    {
+        ArgumentNullException.ThrowIfNull(photo);
+        if (photo.Id == Guid.Empty || OrdinaryPhotos.Any(existing => existing.Id == photo.Id))
+        {
+            throw new ArgumentException("A photo must have a unique capture identifier.", nameof(photo));
+        }
+
+        if (photo.State != OrdinaryPhotoState.Pending || photo.ServerAttachmentId is not null)
+        {
+            throw new ArgumentException("Newly captured photos must be pending upload.", nameof(photo));
+        }
+
+        OrdinaryPhotos = Array.AsReadOnly(OrdinaryPhotos.Append(photo).ToArray());
+    }
+
+    /// <summary>Changes an attachment checkpoint while preserving its captured evidence and target.</summary>
+    public void UpdateOrdinaryPhoto(OrdinaryFeaturePhoto photo)
+    {
+        ArgumentNullException.ThrowIfNull(photo);
+        var existing = OrdinaryPhotos.SingleOrDefault(item => item.Id == photo.Id);
+        if (existing is null || (existing with { State = photo.State, ServerAttachmentId = photo.ServerAttachmentId }) != photo)
+        {
+            throw new ArgumentException("The checkpoint must match previously captured evidence.", nameof(photo));
+        }
+
+        bool validReceipt = photo.State switch
+        {
+            OrdinaryPhotoState.Pending or OrdinaryPhotoState.NeedsVerification => photo.ServerAttachmentId is null,
+            OrdinaryPhotoState.Synced => photo.ServerAttachmentId is > 0,
+            _ => false
+        };
+        if (!validReceipt || (existing.State == OrdinaryPhotoState.Synced && existing != photo))
+        {
+            throw new ArgumentException("The photo checkpoint or attachment receipt is invalid.", nameof(photo));
+        }
+
+        OrdinaryPhotos = Array.AsReadOnly(OrdinaryPhotos.Select(item => item.Id == photo.Id ? photo : item).ToArray());
+    }
+
+    internal void RestoreOrdinaryPhotos(OrdinaryFeaturePhoto[]? photos)
+    {
+        OrdinaryPhotos = Array.AsReadOnly(photos ?? []);
+        AcceptPersistedOrdinaryPhotos(OrdinaryPhotos);
+    }
+
+    internal void AcceptPersistedOrdinaryPhotos(IReadOnlyList<OrdinaryFeaturePhoto> photos)
+    {
+        PersistedOrdinaryPhotos = photos;
+    }
+
+    internal static void ValidateOrdinaryPhotos(IReadOnlyList<OrdinaryFeaturePhoto> expected,
+        IReadOnlyList<OrdinaryFeaturePhoto> stored)
+    {
+        if (!expected.SequenceEqual(stored))
+        {
+            throw new InvalidOperationException("Another operation changed this record's photos. Reload the record before retrying.");
+        }
+    }
+
     /// <summary>Stages a resolved entry for persistence without changing the live record.</summary>
     public FieldRecordEntry CreateResolvedSnapshot(FieldRecord merged)
     {
@@ -311,7 +377,9 @@ public sealed class FieldRecordEntry
             RemoteId = RemoteId,
             LastSyncedUtc = LastSyncedUtc,
             LastAttemptUtc = LastAttemptUtc,
-            FailedAttempts = FailedAttempts
+            FailedAttempts = FailedAttempts,
+            OrdinaryPhotos = OrdinaryPhotos,
+            PersistedOrdinaryPhotos = PersistedOrdinaryPhotos
         };
         snapshot.ApplyResolution(merged);
         return snapshot;
