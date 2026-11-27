@@ -27,11 +27,19 @@ appId: io.honua.collect
 - waitForAnimationToEnd
 # The system picker can omit its title from the accessibility tree. The
 # freshly seeded photo is the first thumbnail, ahead of the simulator samples.
-- tapOn:
-    point: 12%,26%
-- extendedWaitUntil:
-    visible: Skip
-    timeout: 20000
+# The native picker can still ignore taps while its thumbnails finish loading.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            notVisible: Skip
+          commands:
+            - tapOn:
+                point: 12%,26%
+      - extendedWaitUntil:
+          visible: Skip
+          timeout: 12000
 - tapOn: Skip
 - assertVisible: 1 attached
 - scrollUntilVisible:
