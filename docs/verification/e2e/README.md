@@ -128,7 +128,7 @@ Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.
 
 ### AWS Device Farm native smoke
 
-Run the Records and geometry journey on a Device Farm phone or tablet. Use a fresh device session and an installable Android APK or iOS IPA built for the selected device architecture. The iPhone simulator IPA is available from the Field on Apple platforms workflow. Use Python 3.11 or newer and an AWS profile with Device Farm project, device, upload and remote session permissions in us-west-2.
+Run the Records and geometry journey on a Device Farm phone or tablet. Use a fresh device session and an installable Android APK or iOS IPA built for the selected device architecture. For a physical iPhone or iPad, supply a device-signed IPA. For an iOS simulator, use the simulator artifact from the Field on Apple platforms workflow. Use Python 3.11 or newer and an AWS profile with Device Farm project, device, upload and remote session permissions in us-west-2.
 
 ```sh
 python3 -m venv .venv-devicefarm
