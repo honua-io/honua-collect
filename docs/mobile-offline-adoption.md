@@ -111,9 +111,13 @@ counts and the SHA-256 of the downloaded bytes. The live Core test
 `Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates`
 exercises the case where the server accepts the upload and its reply is lost.
 On the next sync, Field looks up the generated file name on the original
-feature and downloads the attachment to verify its SHA-256. If Field cannot
-confirm the upload, the inspection stays in Outbox. Keep the on-device record
-and private photo while checking the attachment on the server.
+feature and downloads the attachment to verify its SHA-256. An explicit
+rejection such as HTTP 403 leaves the photo ready to retry after access is
+restored. A timeout, an ambiguous reply or a process stop between recording
+the upload attempt and sending the request leaves the photo awaiting
+verification. If the server has no matching attachment, repeated syncs can
+leave the inspection in Outbox indefinitely. Keep the on-device record and
+private photo while checking the original feature on the server.
 
 ## Founder phone installation
 
