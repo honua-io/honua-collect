@@ -23,7 +23,9 @@ public static class AuthSessionSerializer
         [property: JsonPropertyName("rt")] string? RefreshToken,
         [property: JsonPropertyName("exp")] DateTimeOffset ExpiresAtUtc,
         [property: JsonPropertyName("scopes")] string[]? Scopes,
-        [property: JsonPropertyName("roles")] string[]? Roles);
+        [property: JsonPropertyName("roles")] string[]? Roles,
+        [property: JsonPropertyName("assignedWorkActor")] string? AssignedWorkActorId,
+        [property: JsonPropertyName("assignedWorkServer")] string? AssignedWorkServer);
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -43,7 +45,9 @@ public static class AuthSessionSerializer
             session.RefreshToken,
             session.ExpiresAtUtc,
             session.Scopes.ToArray(),
-            session.Roles.ToArray());
+            session.Roles.ToArray(),
+            session.AssignedWorkActorId,
+            session.AssignedWorkServer);
         return JsonSerializer.Serialize(dto, Options);
     }
 
@@ -84,6 +88,8 @@ public static class AuthSessionSerializer
             RefreshToken = dto.RefreshToken,
             ExpiresAtUtc = dto.ExpiresAtUtc,
             Scopes = new HashSet<string>(dto.Scopes ?? Array.Empty<string>(), StringComparer.Ordinal),
+            AssignedWorkActorId = dto.AssignedWorkActorId,
+            AssignedWorkServer = dto.AssignedWorkServer,
             Roles = new HashSet<string>(dto.Roles ?? Array.Empty<string>(), StringComparer.Ordinal),
         };
     }

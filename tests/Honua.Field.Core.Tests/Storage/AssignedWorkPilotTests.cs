@@ -27,7 +27,7 @@ public sealed class AssignedWorkPilotTests
             await manager.SignInAsync(Session("worker"));
             var task = new WorkTask
             {
-                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "worker",
+                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "canonical-worker",
                 Type = "inspection", Status = "assigned", Version = 3, Title = "Inspect"
             };
             var commandId = Guid.NewGuid();
@@ -42,9 +42,11 @@ public sealed class AssignedWorkPilotTests
             {
                 sends++;
                 var account = request.Headers.Authorization?.Parameter;
+                if (IsIdentity(request))
+                    return Identity(account);
                 if (request.Method == HttpMethod.Get)
                 {
-                    Assert.Contains("assignee=" + account, request.RequestUri!.Query);
+                    Assert.Contains("assignee=canonical-" + account, request.RequestUri!.Query);
                     if (account != "worker")
                         return Ok(new WorkTaskPage { Items = [] });
                     if (forceFailedRefresh)
@@ -175,13 +177,16 @@ public sealed class AssignedWorkPilotTests
             manager.SessionExpired += (_, _) => expiredEvents++;
             var task = new WorkTask
             {
-                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "worker",
+                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "canonical-worker",
                 Type = "inspection", Status = "in_progress", Version = 2, Title = "Inspect"
             };
             var commandId = Guid.NewGuid();
             var sent = new List<HttpMethod>();
             Task<HttpResponseMessage> Serve(HttpRequestMessage request)
             {
+                if (IsIdentity(request))
+                    return Task.FromResult(Identity(request.Headers.Authorization?.Parameter == "renewed"
+                        ? "worker" : request.Headers.Authorization?.Parameter));
                 if (request.Headers.Authorization?.Parameter == "worker")
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
@@ -210,7 +215,7 @@ public sealed class AssignedWorkPilotTests
             Assert.Empty(sent);
 
             await manager.SignInAsync(Session("worker"));
-            Assert.Equal(AssignedCommandStatus.Pending, Assert.Single((await pilot.ReadAsync("worker")).Commands).Status);
+            Assert.Empty((await pilot.ReadAsync("worker")).Commands);
             await manager.SignInAsync(expired);
             canRefresh = true;
             await pilot.SynchronizeAsync(online: true);
@@ -237,12 +242,14 @@ public sealed class AssignedWorkPilotTests
             var resumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var firstTask = new WorkTask
             {
-                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "first",
+                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "canonical-first",
                 Type = "inspection", Status = "assigned", Version = 1, Title = "Inspect"
             };
-            var secondTask = firstTask with { TaskId = Guid.NewGuid(), Assignee = "second" };
+            var secondTask = firstTask with { TaskId = Guid.NewGuid(), Assignee = "canonical-second" };
             async Task<HttpResponseMessage> Serve(HttpRequestMessage request)
             {
+                if (IsIdentity(request))
+                    return Identity(request.Headers.Authorization?.Parameter);
                 if (request.Headers.Authorization?.Parameter == "first")
                 {
                     began.SetResult();
@@ -275,6 +282,61 @@ public sealed class AssignedWorkPilotTests
         }
     }
 
+    [Fact]
+    public async Task Same_login_name_without_a_verified_actor_cannot_open_or_sync_an_existing_partition()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var records = await MobileRecordStore.OpenEncryptedAsync(Path.Combine(directory.FullName, "field.db"), "pilot-test-key");
+            var sessions = new AuthSessionStore();
+            var manager = new AuthSessionManager(sessions, new MemoryPersistence());
+            var task = new WorkTask
+            {
+                TaskId = Guid.NewGuid(), ServiceId = "assets", Assignee = "canonical-worker",
+                Type = "inspection", Status = "assigned", Version = 1, Title = "Inspect"
+            };
+            var taskReads = 0;
+            HttpResponseMessage Serve(HttpRequestMessage request)
+            {
+                if (IsIdentity(request))
+                    return request.Headers.Authorization?.Parameter == "worker"
+                        ? Identity("worker")
+                        : Ok(new { username = "worker" });
+                taskReads++;
+                Assert.Equal("worker", request.Headers.Authorization?.Parameter);
+                Assert.Contains("assignee=canonical-worker", request.RequestUri!.Query);
+                return Ok(new WorkTaskPage { Items = [task] });
+            }
+
+            var pilot = new AssignedWorkPilot(sessions, manager, _ => Task.FromResult(records),
+                () => new HttpClient(new TaskHandler(request => Task.FromResult(Serve(request)))),
+                new Uri("https://tasks.test"), "assets");
+            await manager.SignInAsync(Session("worker"));
+            await pilot.SynchronizeAsync(online: true);
+            Assert.Equal(task.TaskId, Assert.Single((await pilot.ReadAsync("worker")).Tasks).TaskId);
+
+            var wrongServer = new AssignedWorkPilot(sessions, manager, _ => Task.FromResult(records),
+                () => throw new InvalidOperationException(), new Uri("https://other.test"), "assets");
+            Assert.Empty((await wrongServer.ReadAsync("worker")).Tasks);
+            await manager.SignInAsync(Session("worker") with { AccessToken = "other-identity" });
+            await pilot.SynchronizeAsync(online: true);
+            Assert.Empty((await pilot.ReadAsync("worker")).Tasks);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => pilot.QueueTransitionAsync("worker", task.TaskId,
+                new WorkTaskTransitionRequest { CommandId = Guid.NewGuid(), ExpectedVersion = 1, Action = "start" }));
+            Assert.Equal(1, taskReads);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    private static bool IsIdentity(HttpRequestMessage request) =>
+        request.RequestUri!.AbsolutePath.EndsWith("/sharing/rest/community/self", StringComparison.Ordinal);
+
+    private static HttpResponseMessage Identity(string? account) => Ok(new { actorId = "canonical-" + account });
+
     private static AuthSession Session(string worker) => new()
     {
         UserId = worker, AccessToken = worker, ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1)
@@ -291,13 +353,14 @@ public sealed class AssignedWorkPilotTests
 
     private sealed class MemoryPersistence : ISessionPersistence
     {
-        private AuthSession? _session;
+        private string? _session;
 
-        public Task<AuthSession?> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(_session);
+        public Task<AuthSession?> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(AuthSessionSerializer.TryDeserialize(_session));
 
         public Task SaveAsync(AuthSession session, CancellationToken cancellationToken = default)
         {
-            _session = session;
+            _session = AuthSessionSerializer.Serialize(session);
             return Task.CompletedTask;
         }
 

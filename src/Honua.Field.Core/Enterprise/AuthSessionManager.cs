@@ -132,6 +132,23 @@ public sealed class AuthSessionManager
         _logger.LogInformation("Signed out user {UserId}.", previousUser ?? "(none)");
     }
 
+#if HONUA_ASSIGNED_WORK_PILOT
+    internal async Task<AuthSession?> BindAssignedWorkAsync(
+        AuthSession expected, string server, string? actorId, CancellationToken cancellationToken)
+    {
+        var next = expected with
+        {
+            AssignedWorkActorId = actorId,
+            AssignedWorkServer = actorId is null ? null : server,
+        };
+        if (next == expected)
+        {
+            return ReferenceEquals(expected, _store.Current) ? expected : null;
+        }
+        return await WriteSessionAsync(next, cancellationToken, expected).ConfigureAwait(false) ? next : null;
+    }
+#endif
+
     private async Task<bool> WriteSessionAsync(
         AuthSession? next, CancellationToken cancellationToken, AuthSession? expected = null)
     {
