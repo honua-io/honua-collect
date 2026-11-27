@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the native Records and geometry smoke on an AWS Device Farm device."""
+"""Run native Field smoke tests on an AWS Device Farm device."""
 import argparse
 import hashlib
 import json
@@ -8,6 +8,7 @@ import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from xml.etree import ElementTree
 
 import boto3
 import requests
@@ -39,7 +40,7 @@ def ready(read, expected, seconds):
     raise TimeoutError(f"Timed out waiting for {expected}, last status {last}")
 
 
-def smoke(driver, output, *, android):
+def smoke(driver, output, *, android, outbox_evidence=None):
     def visible(predicate, description):
         def find(browser):
             return next((e for e in browser.find_elements(AppiumBy.XPATH, f"//*[{predicate}]")
@@ -50,18 +51,21 @@ def smoke(driver, output, *, android):
         return visible(" or ".join(f"@{attr}='{text}'" for attr in ("text", "label", "name", "content-desc"))
                        + f" or starts-with(@content-desc, '{text},')", text)
 
-    label("Records").click()
+    def tap_tab(name):
+        tab = label(name)
+        if android:
+            tab.click()
+        else:
+            # XCUITest can acknowledge an element click without changing tabs.
+            rect = tab.rect
+            driver.execute_script("mobile: tap", {"x": int(rect["x"] + rect["width"] / 2),
+                                                 "y": int(rect["y"] + rect["height"] / 2)})
+
+    tap_tab("Records")
     for expected in ("No drafts.", "Outbox is empty.", "Nothing sent yet."):
         label(expected)
     driver.save_screenshot(str(output / "records.png"))
-    geometry_tab = label("Geometry")
-    if android:
-        geometry_tab.click()
-    else:
-        # XCUITest can acknowledge an element click while the Records tab stays selected.
-        rect = geometry_tab.rect
-        driver.execute_script("mobile: tap", {"x": int(rect["x"] + rect["width"] / 2),
-                                             "y": int(rect["y"] + rect["height"] / 2)})
+    tap_tab("Geometry")
     label("Point: 0 vertex(es)")
     canvas = visible("@name='GeometryCanvas' or contains(@resource-id,'GeometryCanvas') or "
                      "@label='Geometry drawing area' or @content-desc='Geometry drawing area'", "drawing canvas")
@@ -84,6 +88,74 @@ def smoke(driver, output, *, android):
     label("Undo").click()
     label("Point: 0 vertex(es)")
 
+    if outbox_evidence is None:
+        return
+
+    def queued_id():
+        label("Drafts 0 · Outbox 1 · Conflicts 0 · Sent 0")
+
+        def ids(browser):
+            tree = ElementTree.fromstring(browser.page_source)
+            identifiers = set()
+            for row in tree.iter():
+                if row.get("visible") != "true":
+                    continue
+                for attribute in ("label", "name", "value"):
+                    value = re.sub(r"(?<=[0-9a-f])\s+(?=[0-9a-f])", "", row.get(attribute, ""))
+                    identifiers.update(re.findall(r"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])", value))
+            return identifiers
+
+        found = WebDriverWait(driver, 35, 1).until(ids, "Visible Outbox record ID")
+        if len(found) != 1:
+            raise ValueError("Expected exactly one visible Outbox record ID")
+        return next(iter(found))
+
+    outbox_evidence["phase"] = "open-inspection"
+    tap_tab("Capture")
+    label("Sample Inspection Demo").click()
+    outbox_evidence["phase"] = "fill-inspection"
+    site = visible("@name='site_name'", "Site name")
+    site.click()
+    site.send_keys("Device Farm inspection")
+    label("Done").click()
+    status = label("Status").rect
+    required = label("Status is required.").rect
+    driver.tap([(driver.get_window_size()["width"] // 2, (status["y"] + status["height"] + required["y"]) // 2)])
+    wheel = visible("@type='XCUIElementTypePickerWheel'", "Status picker wheel")
+    driver.execute_script("mobile: selectPickerWheelValue", {"elementId": wheel.id, "order": "next"})
+    label("Done").click()
+    WebDriverWait(driver, 10).until(lambda app: not any(
+        element.is_displayed() for element in app.find_elements(
+            AppiumBy.IOS_PREDICATE, "label == 'Status is required.'")))
+
+    outbox_evidence["phase"] = "submit-inspection"
+    label("Submit").click()
+    visible(
+        "@type='XCUIElementTypeButton' and (@name='Honua Field' or @label='Honua Field')",
+        "Back to Honua Field",
+    ).click()
+    visible(
+        "contains(@label,'kept in Outbox') or starts-with(@label,'Sync error:')",
+        "Offline inspection submission status",
+    )
+    tap_tab("Records")
+    outbox_evidence["beforeRestart"] = queued_id()
+    driver.save_screenshot(str(output / "outbox-before-restart.png"))
+
+    outbox_evidence["phase"] = "restart"
+    app_id = "io.honua.collect"
+    driver.terminate_app(app_id)
+    wait = WebDriverWait(driver, 35, 1)
+    wait.until(lambda app: app.query_app_state(app_id) == 1, "Field process stopped")
+    driver.activate_app(app_id)
+    wait.until(lambda app: app.query_app_state(app_id) == 4, "Field foregrounded")
+    tap_tab("Records")
+    outbox_evidence["afterRestart"] = queued_id()
+    if outbox_evidence["beforeRestart"] != outbox_evidence["afterRestart"]:
+        raise ValueError("The queued inspection ID changed after restart")
+    driver.save_screenshot(str(output / "outbox-after-restart.png"))
+    outbox_evidence["phase"] = "verified"
+
 
 def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
@@ -96,6 +168,8 @@ def run(args):
         device = farm.get_device(arn=args.device_arn)["device"]
         android = device["platform"] == "ANDROID"
         report.update(device=device["name"], os=device["os"], platform=device["platform"])
+        if android and args.bundled_inspection_outbox:
+            raise ValueError("Bundled inspection Outbox smoke requires iOS")
         with args.app.open("rb") as app:
             report["sha256"] = hashlib.file_digest(app, "sha256").hexdigest()
             app.seek(0)
@@ -114,14 +188,16 @@ def run(args):
         if android:
             options.auto_grant_permissions = True
         driver = webdriver.Remote(options=options, client_config=AppiumClientConfig(remote_server_addr=endpoint, timeout=120))
-        smoke(driver, args.output, android=android)
+        outbox_evidence = report.setdefault("bundledInspectionOutbox", {}) if args.bundled_inspection_outbox else None
+        smoke(driver, args.output, android=android, outbox_evidence=outbox_evidence)
         report["outcome"] = "passed"
     except Exception as error:
         report["failure"] = re.sub(r"https?://\S+|/remote-endpoint/\S+", "[endpoint]", str(error).split("Stacktrace:")[0])[:1200]
         if driver:
             with suppress(Exception):
                 driver.save_screenshot(str(args.output / "failure.png"))
-                (args.output / "failure.xml").write_text(driver.page_source)
+                if not args.bundled_inspection_outbox:
+                    (args.output / "failure.xml").write_text(driver.page_source)
     finally:
         try:
             if driver:
@@ -143,4 +219,6 @@ if __name__ == "__main__":
     parser.add_argument("--app", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--output", type=Path, required=True, help="New evidence directory")
+    parser.add_argument("--bundled-inspection-outbox", action="store_true",
+                        help="Verify the bundled iOS inspection survives process restart")
     raise SystemExit(run(parser.parse_args()))
