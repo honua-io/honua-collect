@@ -47,6 +47,8 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
   or queued submission across an app upgrade. Honua Server verified the
   original form version, repeat rows and photo after sync.
   [iOS upgrade evidence](docs/verification/e2e/README.md#installed-ios-upgrade-on-aws)
+- The Today prototype simulates the current request contract, which sends the title and asset IDs to dispatch while notes and the sample photo reference stay in the browser.
+  [Repeatable phone and tablet capability check](docs/verification/today/README.md#chromium-regression)
 - Remaining device work includes physical-camera capture, external GNSS receiver qualification, map editing,
   background sync, push notifications and enterprise sign-in. Windows device
   verification is also pending.

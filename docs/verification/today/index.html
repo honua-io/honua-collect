@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Today's work · Honua Field prototype</title>
+  <link rel="stylesheet" href="today.css">
+  <script defer src="today.js"></script>
+</head>
+<body>
+  <header><span>Honua Field</span><span id="network">Working offline</span></header>
+  <main>
+    <section aria-labelledby="today">
+      <h1 id="today">Today</h1>
+      <p>West district · Thursday's route</p>
+      <div role="group" aria-label="Task view" class="controls">
+        <button id="list-view" aria-pressed="true">List</button>
+        <button id="map-view" aria-pressed="false">Map</button>
+      </div>
+      <div id="list" aria-label="Assigned stops in route order"></div>
+      <div id="map" hidden aria-label="Schematic route map">
+        <span class="road oak">Oak Street</span><span class="road park">Park Road</span>
+      </div>
+    </section>
+    <section id="detail" aria-labelledby="asset-title" hidden>
+      <h2 id="asset-title" tabindex="-1"></h2><p id="asset"></p><p id="history"></p>
+      <div class="controls"><button id="inspect">Inspection</button><button id="request">Work request</button></div>
+      <form id="capture">
+        <h3 id="form-title"></h3><p id="record-status" role="status"></p>
+        <div id="request-title-field" hidden>
+          <label for="request-title">Request title</label><input id="request-title" type="text" autocomplete="off">
+        </div>
+        <p id="evidence-status" hidden></p>
+        <label for="notes">Field notes</label><textarea id="notes" rows="3"></textarea>
+        <button id="photo" type="button">Attach sample photo</button>
+        <p id="attachment"></p>
+        <button id="queue" class="primary" type="submit">Queue for sync</button>
+      </form>
+    </section>
+    <p id="announcement" role="status" aria-live="polite"></p>
+    <details><summary>Prototype controls</summary>
+      <p>Uses sample assets and a simulated server. Use synthetic notes only.</p>
+      <label for="request-contract">Work request scenario</label>
+      <select id="request-contract">
+        <option value="full">Proposed request with evidence</option>
+        <option value="title-only">Current candidate · title and asset</option>
+      </select>
+      <label for="response">Next sync result</label>
+      <select id="response">
+        <option value="accepted">Accepted</option>
+        <option value="lost">Accepted, receipt lost</option>
+        <option value="reassigned">Inspection task reassigned</option>
+      </select>
+      <div class="controls"><button id="retry">Reconnect and sync</button><button id="offline">Work offline</button><button id="reset">Reset practice session</button></div>
+    </details>
+  </main>
+</body>
+</html>
