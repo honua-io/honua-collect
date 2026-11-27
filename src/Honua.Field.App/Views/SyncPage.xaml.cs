@@ -68,12 +68,16 @@ public partial class SyncPage : ContentPage
         // the active form lets the merge classify new-vs-conflicting records. The
         // persister durably saves each entry's post-upload state so a restart does
         // not re-upload (and duplicate) an already-synced record.
+        var target = _settings.Target;
         var vm = new SyncCenterViewModel(
-            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync,
-            logger: _logger, replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct),
+            _book.All, (entry, cancellationToken) => UploadAsync(entry, target, cancellationToken),
+            PullAsync, SampleForms.FieldSite(), _book.SaveAsync,
+            (entries, cancellationToken) => BatchUploadAsync(entries, target, cancellationToken),
+            logger: _logger,
+            replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct),
             canDispatchOrdinaryAdd: HasNetworkAccess,
             replayOrdinaryPhotos: ReplayOrdinaryPhotosAsync,
-            canDispatchOrdinaryRecord: entry => entry.OrdinaryPhotos.All(photo => photo.Target == _settings.Target));
+            canDispatchOrdinaryRecord: entry => entry.OrdinaryPhotos.All(photo => photo.Target == target));
         BindingContext = vm;
         var command = new Command(
             async () => await RunSyncAsync(),
@@ -118,7 +122,8 @@ public partial class SyncPage : ContentPage
         }
     }
 
-    private async Task<FeatureSyncResult> UploadAsync(Core.Records.FieldRecordEntry entry, CancellationToken cancellationToken)
+    private async Task<FeatureSyncResult> UploadAsync(
+        Core.Records.FieldRecordEntry entry, GeoServicesTarget target, CancellationToken cancellationToken)
     {
         var sync = _syncFactory();
 
@@ -135,30 +140,41 @@ public partial class SyncPage : ContentPage
         // error message/code verbatim.
         if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted)
         {
-            if (entry.RemoteId is { } remoteId
-                && long.TryParse(remoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var deleteId))
+            if (entry.RemoteId is null)
             {
-                return await sync.DeleteAsync(deleteId, _settings.Target, cancellationToken);
+                return FeatureSyncResult.Ok(null);
             }
 
-            return FeatureSyncResult.Ok(null);
+            if (!long.TryParse(entry.RemoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var deleteId)
+                || deleteId <= 0)
+            {
+                return FeatureSyncResult.Fail("This feature has an invalid server object ID. Check the server layer before retrying.");
+            }
+
+            return await sync.DeleteAsync(deleteId, target, cancellationToken);
         }
 
-        if (long.TryParse(entry.RemoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId))
+        if (entry.RemoteId is { } storedObjectId)
         {
-            return await sync.UpdateAsync(objectId, entry.Record, _settings.Target, cancellationToken: cancellationToken);
+            if (!long.TryParse(storedObjectId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var objectId)
+                || objectId <= 0)
+            {
+                return FeatureSyncResult.Fail("This feature has an invalid server object ID. Check the server layer before retrying.");
+            }
+
+            return await sync.UpdateAsync(objectId, entry.Record, target, cancellationToken: cancellationToken);
         }
 
-        return await sync.SubmitAsync(entry.Record, _settings.Target, cancellationToken);
+        return await sync.SubmitAsync(entry.Record, target, cancellationToken);
     }
 
     private async Task<IReadOnlyList<FeatureSyncResult>> BatchUploadAsync(
         IReadOnlyList<Core.Records.FieldRecordEntry> entries,
-        CancellationToken cancellationToken)
+        GeoServicesTarget target, CancellationToken cancellationToken)
     {
         var sync = _syncFactory();
         var records = entries.Select(e => e.Record).ToList();
-        return await sync.SubmitBatchAsync(records, _settings.Target, cancellationToken);
+        return await sync.SubmitBatchAsync(records, target, cancellationToken);
     }
 
     private async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)

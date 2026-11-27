@@ -21,6 +21,7 @@
   <PropertyGroup>
     <!-- Validation only. Replace both pins with signed published versions and remove the artifact feed before merge. -->
     <HonuaSdkDotNetTrainVersion>5.1.1-fieldcombined.4</HonuaSdkDotNetTrainVersion>
+    <HonuaSdkOrdinaryClientVersion>2.2.0</HonuaSdkOrdinaryClientVersion>
     <HonuaMobileVersion>0.1.0-ci.46062303570.1</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>
   </PropertyGroup>
@@ -28,6 +29,8 @@
   <!-- First-party Honua platform packages (private github-honua feed). -->
   <ItemGroup>
     <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
+    <PackageVersion Include="Honua.Sdk.GeoServices" Version="$(HonuaSdkOrdinaryClientVersion)" />
+    <PackageVersion Include="Honua.Sdk.Geometry" Version="$(HonuaSdkOrdinaryClientVersion)" />
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline.Tasks" Version="$(HonuaMobileVersion)" Condition="'$(EnableAssignedWorkPilot)' == 'true'" />

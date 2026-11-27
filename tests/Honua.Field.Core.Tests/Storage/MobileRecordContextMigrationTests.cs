@@ -90,6 +90,53 @@ public sealed class MobileRecordContextMigrationTests
         }
     }
 
+    [Fact]
+    public async Task Ordinary_photo_checkpoints_survive_store_migration_and_reopen()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(directory.FullName, "records.db");
+            const string key = "device-test-key";
+            var entry = new FieldRecordEntry(new FieldRecord
+            {
+                RecordId = "inspection-42", FormId = "inspection", Status = RecordStatus.Submitted,
+            });
+            entry.MarkSynced("42");
+            var photo = new OrdinaryFeaturePhoto(Guid.NewGuid(), "capture.jpg", "image/jpeg",
+                "capture.jpg", new string('A', 64), new GeoServicesTarget("https://example.test", "inspections", 0));
+            entry.AddOrdinaryPhoto(photo);
+
+            var legacy = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            await legacy.SaveAsync(entry);
+            var mobile = await MobileRecordStore.OpenEncryptedAsync(path, key);
+            var migrated = Assert.Single(await mobile.LoadAllAsync());
+            var stale = Assert.Single(await mobile.LoadAllAsync());
+            Assert.Equal(photo, Assert.Single(migrated.OrdinaryPhotos));
+
+            var verifying = photo with { State = OrdinaryPhotoState.NeedsVerification };
+            await migrated.UpdateOrdinaryPhotoAsync(verifying, current => mobile.SaveAsync(current));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => mobile.SaveAsync(stale));
+
+            var reopened = await MobileRecordStore.OpenEncryptedAsync(path, key);
+            var restored = Assert.Single(await reopened.LoadAllAsync());
+            Assert.Equal("42", restored.RemoteId);
+            Assert.Equal(verifying, Assert.Single(restored.OrdinaryPhotos));
+            Assert.Equal(RecordBox.Outbox, restored.Box);
+
+            var receipt = verifying with { State = OrdinaryPhotoState.Synced, ServerAttachmentId = 17 };
+            await restored.UpdateOrdinaryPhotoAsync(receipt, current => reopened.SaveAsync(current));
+            var restarted = await MobileRecordStore.OpenEncryptedAsync(path, key);
+            var completed = Assert.Single(await restarted.LoadAllAsync());
+            Assert.Equal(receipt, Assert.Single(completed.OrdinaryPhotos));
+            Assert.Equal(RecordBox.Sent, completed.Box);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(RecordSyncState.Pending)]
     [InlineData(RecordSyncState.Uploading)]

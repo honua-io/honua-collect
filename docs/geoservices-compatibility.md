@@ -43,7 +43,7 @@ Field reads and writes GeoServices REST feature services, including services hos
 | Single/multi-select choice lists | ✅ | form model |
 | Cascading selects | ✅ | [`ChoiceCascade`](../src/Honua.Field.Core/Field/Forms/Cascade/ChoiceCascade.cs) |
 | Default-from-previous / favorites | ✅ | `FormSession` |
-| XLSForm import | ✅ | [`XlsFormImporter`](../src/Honua.Field.Core/Field/Forms/Authoring/XlsFormImporter.cs) — see [migration guide](./migration-from-external-forms.md) |
+| Capture from a published XLSForm | ✅ | Import and publish the workbook on Honua Server, then download the version in Field. See the [migration guide](./migration-from-external-forms.md). |
 
 ## Capture
 
@@ -123,9 +123,8 @@ Field runs entirely on infrastructure the customer operates
 For import and export workflows, see the full
 [migration guide](./migration-from-external-forms.md):
 
-- **From XLSForm:** import the survey's **XLSForm** directly
-  ([`XlsFormImporter`](../src/Honua.Field.Core/Field/Forms/Authoring/XlsFormImporter.cs));
-  pull existing feature-layer records over GeoServices.
+- Import the XLSForm workbook on Honua Server and download the published form in Field.
+  Pull existing feature-layer records over GeoServices.
 - **From CSV/GeoJSON:** re-express the app's fields onto the same form model; import
   records from CSV/GeoJSON exports.
 - **Out of Field:** export to CSV, GeoJSON, KML, GeoPackage, or Shapefile — no
