@@ -25,6 +25,8 @@ Physical camera capture, authentication and real Server receipt verification hav
 
 ## Chromium regression
 
+The Today Prototype pull request check runs this regression when the prototype or its workflow changes. Playwright pins the Chromium build used by the check.
+
 Run from the repository root with Node.js and npm. Install Playwright and Chromium in a temporary directory to keep the prototype independent of browser tooling.
 
 ```sh
