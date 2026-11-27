@@ -51,37 +51,31 @@ if [[ $attempt == 45 ]]; then
 fi
 
 printf 'X-API-Key: %s\n' "$(cat "$admin_key_file")" > "$working_dir/admin-header"
-if ! curl --fail --silent -H @"$working_dir/admin-header" "$base/api/v1/forms/$form" > "$working_dir/published"; then
-    workbook="$working_dir/field-runtime-inspection.xlsx"
-    python3 "$script_dir/fixtures/write-field-runtime-workbook.py" "$workbook"
-    if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -F "file=@$workbook" \
-        "$base/api/v1/admin/forms/import?serviceId=field_inspections&layerId=68950" > "$working_dir/draft"; then
-        jq -c . "$working_dir/draft" >&2
-        exit 1
-    fi
-elif ! jq -e --arg note "$repeat_note_default" "$fixture_ready" "$working_dir/published" >/dev/null; then
-    version=$(jq -er '.version' "$working_dir/published")
-    curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
-        "$base/api/v1/admin/forms/$form/versions/$version/reopen" > "$working_dir/draft"
+workbook="$working_dir/field-runtime-inspection.xlsx"
+python3 "$script_dir/fixtures/write-field-runtime-workbook.py" "$workbook"
+if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -F "file=@$workbook" \
+    "$base/api/v1/admin/forms/import?serviceId=field_inspections&layerId=68950" > "$working_dir/draft"; then
+    jq -c . "$working_dir/draft" >&2
+    exit 1
 fi
-if [[ -s $working_dir/draft ]]; then
-    version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/draft")
-    printf 'If-Match: %s\n' "$(jq -er '.etag' "$working_dir/draft")" > "$working_dir/etag-header"
-    # The workbook importer currently leaves literal defaults to the published package API.
-    jq -e --arg note "$repeat_note_default" '.package | .offlinePolicy.enabled = true
-        | (.fields[] | select(.fieldId == "note") | .defaultValue) = $note' \
-        "$working_dir/draft" > "$working_dir/package"
-    if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -H @"$working_dir/etag-header" \
-        -H 'Content-Type: application/json' -X PUT --data-binary @"$working_dir/package" \
-        "$base/api/v1/admin/forms/$form/versions/$version" > "$working_dir/updated"; then
-        jq -c . "$working_dir/updated" >&2
-        exit 1
-    fi
-    if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
-        "$base/api/v1/admin/forms/$form/versions/$version/publish" > "$working_dir/published"; then
-        jq -c . "$working_dir/published" >&2
-        exit 1
-    fi
+version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/draft")
+printf 'If-Match: %s\n' "$(jq -er '.etag' "$working_dir/draft")" > "$working_dir/etag-header"
+if ! jq -e --arg note "$repeat_note_default" \
+    '[.package.fields[] | select(.fieldId == "note") | .defaultValue] == [$note]' "$working_dir/draft" >/dev/null; then
+    echo "The fixture draft is missing the repeat default from the XLSForm. Check the server revision and workbook." >&2
+    exit 1
+fi
+jq -e '.package | .offlinePolicy.enabled = true' "$working_dir/draft" > "$working_dir/package"
+if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -H @"$working_dir/etag-header" \
+    -H 'Content-Type: application/json' -X PUT --data-binary @"$working_dir/package" \
+    "$base/api/v1/admin/forms/$form/versions/$version" > "$working_dir/updated"; then
+    jq -c . "$working_dir/updated" >&2
+    exit 1
+fi
+if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
+    "$base/api/v1/admin/forms/$form/versions/$version/publish" > "$working_dir/published"; then
+    jq -c . "$working_dir/published" >&2
+    exit 1
 fi
 jq -e --arg note "$repeat_note_default" "$fixture_ready" "$working_dir/published" >/dev/null
 version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/published")

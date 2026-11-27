@@ -174,7 +174,10 @@ chmod 700 "$HONUA_E2E_RESTART_SERVER_COMMAND"
 
 echo "Waiting for the prebooted simulator $device"
 run_bounded 540 xcrun simctl bootstatus "$device"
-app=$(find "$workspace/src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64" -maxdepth 1 -name '*.app' -type d)
+build_path=src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64
+previous_app=$(find "$workspace/field-previous/$build_path" -maxdepth 1 -name '*.app' -type d)
+test -d "$previous_app"
+app=$(find "$workspace/$build_path" -maxdepth 1 -name '*.app' -type d)
 test -d "$app"
 # The Apple workload links simulator entitlements into the executable.
 # The ad-hoc code signature does not carry these simulator entitlements.
@@ -203,18 +206,12 @@ if sys.argv[2] not in entitlements.get("keychain-access-groups", []):
     sys.exit(f"Missing simulator Keychain access group for {sys.argv[2]}")
 print(f"Verified embedded simulator Keychain access group for {sys.argv[2]}")
 PYTHON
-if [[ -n ${HONUA_E2E_IOS_PREVIOUS_REVISION:-} ]]; then
-    previous_app=$(find "$workspace/field-previous/src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64" \
-        -maxdepth 1 -name '*.app' -type d)
-    test -d "$previous_app"
-    echo "Installing previous Field build on $device ($(du -sh "$previous_app" | cut -f1) uncompressed)"
-    test "$bundle_id" = "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$previous_app/Info.plist")"
-    run_bounded 480 xcrun simctl install "$device" "$previous_app"
-    export HONUA_E2E_IOS_UPGRADE_APP="$app"
-else
-    echo "Installing $(basename "$app") on $device ($(du -sh "$app" | cut -f1) uncompressed)"
-    run_bounded 480 xcrun simctl install "$device" "$app"
-fi
+echo "Installing previous Field build on $device ($(du -sh "$previous_app" | cut -f1) uncompressed)"
+test "$bundle_id" = "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$previous_app/Info.plist")"
+run_bounded 480 xcrun simctl install "$device" "$previous_app"
+export HONUA_E2E_IOS_UPGRADE_APP="$app"
+: "${HONUA_E2E_IOS_PREVIOUS_REVISION:=$(git -C "$workspace/field-previous" rev-parse HEAD)}"
+export HONUA_E2E_IOS_PREVIOUS_REVISION
 echo "App install complete. Starting published form journey."
 
 if ! run_bounded 2100 bash "$workspace/scripts/e2e/run-published-ios.sh" \
