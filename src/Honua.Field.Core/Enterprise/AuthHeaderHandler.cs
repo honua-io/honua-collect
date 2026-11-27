@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Honua.Field.Core.Enterprise;
 
@@ -37,6 +39,23 @@ public sealed class AuthHeaderHandler : DelegatingHandler
     /// <summary>The legacy API-key header used for the signed-out fallback.</summary>
     public const string ApiKeyHeader = "X-API-Key";
 
+    private const string AnonymousPrincipal = "anonymous";
+    private const string ReplayPrincipalHeader = "X-Honua-Local-Replay-Principal";
+
+    /// <summary>Captures the current account or development credential without storing the credential itself.</summary>
+    public static string CaptureReplayPrincipal(IAuthSessionStore sessions) =>
+        sessions.Current is { } session ? Fingerprint("account", session.UserId)
+            : sessions.FallbackApiKey is { Length: > 0 } key ? Fingerprint("key", key) : AnonymousPrincipal;
+
+    internal static void BindReplayClient(HttpClient client, string principal)
+    {
+        client.DefaultRequestHeaders.Remove(ReplayPrincipalHeader);
+        client.DefaultRequestHeaders.Add(ReplayPrincipalHeader, principal);
+    }
+
+    private static string Fingerprint(string kind, string value) =>
+        kind + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
     private readonly IAuthSessionStore _sessions;
     private readonly SessionValidator? _validate;
     private readonly TimeProvider _time;
@@ -61,7 +80,21 @@ public sealed class AuthHeaderHandler : DelegatingHandler
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // An explicit Authorization header always wins.
+        string? requiredPrincipal = null;
+        if (request.Headers.TryGetValues(ReplayPrincipalHeader, out var principals))
+        {
+            requiredPrincipal = principals.Single();
+            request.Headers.Remove(ReplayPrincipalHeader);
+            if (request.Headers.Authorization is not null || request.Headers.Contains(ApiKeyHeader))
+            {
+                throw new PublishedReplayIdentityException();
+            }
+        }
+
+        string? authenticatedPrincipal = _sessions.Current is null && string.IsNullOrEmpty(_sessions.FallbackApiKey)
+            ? AnonymousPrincipal : null;
+
+        // An explicit Authorization header always wins on ordinary requests.
         if (request.Headers.Authorization is not null)
         {
             return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -84,6 +117,7 @@ public sealed class AuthHeaderHandler : DelegatingHandler
         {
             // Short-lived bearer token from the credential→token exchange.
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", live.AccessToken);
+            authenticatedPrincipal = Fingerprint("account", live.UserId);
         }
         else if (!hadSession
             && _sessions.FallbackApiKey is { Length: > 0 } key
@@ -92,8 +126,17 @@ public sealed class AuthHeaderHandler : DelegatingHandler
             // Fallback key is only for the never-signed-in case (e.g. local dev). A
             // session that lapsed fails closed: no silent downgrade to anonymous.
             request.Headers.Add(ApiKeyHeader, key);
+            authenticatedPrincipal = Fingerprint("key", key);
+        }
+
+        if (requiredPrincipal is not null && !StringComparer.Ordinal.Equals(requiredPrincipal, authenticatedPrincipal))
+        {
+            throw new PublishedReplayIdentityException();
         }
 
         return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }
 }
+
+internal sealed class PublishedReplayIdentityException() : HttpRequestException(
+    "Sign in with the account that captured this inspection before syncing.");

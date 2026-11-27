@@ -28,15 +28,14 @@ public partial class MainPage : ContentPage
     private readonly AppSettings _settings;
     private readonly RecordBook _book;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly HttpClient _http;
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
     private readonly IRelatedRecordStore _relatedStore;
 
     private readonly PublishedInspectionPages _inspections;
-    private PublishedFormPackage? _onlineForm;
+    private (Uri Server, string FormId, PublishedFormPackage Package)? _onlineForm;
 
-    private string CachePath => Path.Combine(FileSystem.AppDataDirectory,
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{_settings.BaseUri}\n{_settings.FormId}"))) + ".form.json");
+    private static string CachePath(Uri server, string formId) => Path.Combine(FileSystem.AppDataDirectory,
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{server}\n{formId}"))) + ".form.json");
 
     public MainPage(
         AppSettings settings,
@@ -49,7 +48,6 @@ public partial class MainPage : ContentPage
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _http = _httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
         _relatedStore = relatedStore ?? throw new ArgumentNullException(nameof(relatedStore));
         _inspections = inspections;
@@ -60,7 +58,10 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            var package = _onlineForm ?? PublishedFormPackage.LoadCached(_settings.FormId, CachePath);
+            var server = _settings.BaseUri;
+            var formId = _settings.FormId;
+            var package = _onlineForm is { } online && online.Server == server && online.FormId == formId
+                ? online.Package : PublishedFormPackage.LoadCached(formId, CachePath(server, formId));
             if (package is null)
             {
                 StatusLabel.Text = "Download the published form before starting an inspection.";
@@ -68,7 +69,7 @@ public partial class MainPage : ContentPage
             }
 
             var session = package.CreateSession(Guid.NewGuid().ToString("n"));
-            await Navigation.PushAsync(_inspections.Create(package, session, message => StatusLabel.Text = message));
+            await Navigation.PushAsync(_inspections.Create(package, session, server, message => StatusLabel.Text = message));
         }
         catch (Exception ex)
         {
@@ -107,8 +108,11 @@ public partial class MainPage : ContentPage
         StatusLabel.Text = "Downloading latest form…";
         try
         {
-            var form = await new FormPackageClient(_http).DownloadPublishedAsync(_settings.FormId, CachePath);
-            _onlineForm = form.OfflineEnabled ? null : form;
+            using var http = _httpClientFactory.CreateClient(MauiProgram.ServerHttpClient);
+            var server = http.BaseAddress ?? throw new InvalidOperationException("The form server is unavailable.");
+            var formId = _settings.FormId;
+            var form = await new FormPackageClient(http).DownloadPublishedAsync(formId, CachePath(server, formId));
+            _onlineForm = form.OfflineEnabled ? null : (server, formId, form);
             StatusLabel.Text = $"Loaded {form.Definition.Name} (version {form.Version}).";
         }
         catch (Exception ex)

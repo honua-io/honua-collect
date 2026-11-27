@@ -36,13 +36,21 @@ public class SyncCenterCommandTests
         };
         entry.MarkPending();
         var requests = new List<PublishedFormSubmission>();
-        var vm = new SyncCenterViewModel([entry], (pending, _) =>
-        {
-            requests.Add(pending.PublishedSubmission!);
-            return Task.FromResult(requests.Count == 1
-                ? FeatureSyncResult.Fail("HTTP 503", 503)
-                : FeatureSyncResult.Fail("Correct the site name.", 400) with { CanCorrectSubmission = true });
-        });
+        var vm = new SyncCenterViewModel([entry], (_, _) => throw new InvalidOperationException("Legacy uploader used."),
+            replayPublished: (pending, _) =>
+            {
+                requests.Add(pending.PublishedSubmission!);
+                if (requests.Count == 1)
+                {
+                    pending.MarkFailed("HTTP 503");
+                }
+                else
+                {
+                    pending.MarkSubmissionRejected("Correct the site name.");
+                }
+
+                return Task.FromResult(false);
+            });
 
         await vm.SyncAsync();
         Assert.Equal(RecordSyncState.Failed, entry.SyncState);

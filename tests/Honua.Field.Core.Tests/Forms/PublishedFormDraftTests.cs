@@ -7,6 +7,7 @@ using Honua.Field.Core.Field.Capture;
 using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
+using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Forms;
@@ -38,6 +39,57 @@ public sealed class PublishedFormDraftTests
           }
         }
         """;
+
+    [Fact]
+    public async Task Ios_upgrade_reopens_draft_and_replays_frozen_attachment_from_relocated_container()
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var application = Path.Combine(root.FullName, "Application");
+            var oldContainer = Path.Combine(application, Guid.NewGuid().ToString("D"));
+            var newContainer = Path.Combine(application, Guid.NewGuid().ToString("D"));
+            var media = Directory.CreateDirectory(Path.Combine(oldContainer, "Library", "media"));
+            var oldPath = Path.Combine(media.FullName, $"{Guid.NewGuid():N}.jpg");
+            await File.WriteAllBytesAsync(oldPath, [1, 2, 3]);
+            var package = PublishedFormPackage.Parse("inspection", PackageJson);
+            var session = package.CreateSession("stable-id");
+            session.SetValue("where", new FieldGeoPoint(38, -122));
+            var photo = new CapturedMediaAttachment { AttachmentId = "evidence", FieldId = "photo", LocalPath = oldPath };
+            session.AddMedia(photo);
+            var frozen = PublishedFormSubmission.Capture(package, session, Server);
+            session.AddRepeatInstance("visits").AddMedia(photo with { AttachmentId = "repeat", FieldId = "rowPhoto" });
+            var draft = PublishedFormDraft.Capture(package, session, Server);
+
+            Directory.Move(oldContainer, newContainer);
+            var newMedia = Path.Combine(newContainer, "Library", "media");
+            var newPath = Path.Combine(newMedia, Path.GetFileName(oldPath));
+            var (_, reopened) = draft.Open("inspection", "stable-id", Server, newMedia);
+            Assert.Equal(newPath, Assert.Single(reopened.GetField("photo").Media).LocalPath);
+            var repeat = Assert.Single(reopened.GetRepeat("visits").Instances);
+            Assert.Equal(newPath, Assert.Single(repeat.GetField("rowPhoto").Media).LocalPath);
+            var replay = frozen.ResolveMediaPaths(newMedia);
+            Assert.Equal(frozen.RequestJson, replay.RequestJson);
+            Assert.Equal(oldPath, Assert.Single(frozen.Files).LocalPath);
+            Assert.Equal(Assert.Single(frozen.Files) with { LocalPath = newPath }, Assert.Single(replay.Files));
+            Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(Assert.Single(replay.Files).LocalPath));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/tmp/media/00000000000000000000000000000002.jpg")]
+    [InlineData("/tmp/Application/20000000-0000-0000-0000-000000000000/Library/media/logo.jpg")]
+    [InlineData("/tmp/Application/20000000-0000-0000-0000-000000000000/Library/media/../media/00000000000000000000000000000002.jpg")]
+    public void Upgrade_leaves_paths_outside_the_capture_convention_untouched(string path)
+    {
+        const string newMedia = "/tmp/Application/10000000-0000-0000-0000-000000000000/Library/media";
+        var frozen = new PublishedFormSubmission("inspection", "{}", [new SubmissionFile("file0", path, "image/jpeg", "photo.jpg")]);
+        Assert.Equal(path, Assert.Single(frozen.ResolveMediaPaths(newMedia).Files).LocalPath);
+    }
 
     [Theory]
     [InlineData(false)]
@@ -145,12 +197,12 @@ public sealed class PublishedFormDraftTests
             var replayPhoto = Assert.Single(migratedPending.PublishedSubmission!.Files);
             Assert.Equal(Assert.Single(pendingPayload.Files), replayPhoto);
             Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(replayPhoto.LocalPath));
-            await mobileStore.DeleteAsync("pending-id");
+            await Assert.ThrowsAsync<InvalidOperationException>(() => mobileStore.DeleteAsync("pending-id"));
             Assert.Contains(await legacyStore.LoadAllAsync(), candidate => candidate.Record.RecordId == "pending-id");
 
             var reopenedBook = new RecordBook(await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key"));
             await reopenedBook.InitializeAsync();
-            var entry = Assert.Single(reopenedBook.All);
+            var entry = Assert.Single(reopenedBook.All, candidate => candidate.Record.RecordId == "stable-id");
             Assert.Equal(RecordSyncState.Local, entry.SyncState);
             var draft = Assert.IsType<PublishedFormDraft>(entry.PublishedDraft);
             Assert.Throws<InvalidOperationException>(() => draft.Open("inspection", "stable-id", new Uri("https://other.example")));
@@ -187,15 +239,15 @@ public sealed class PublishedFormDraftTests
             var snapshot = PublishedFormDraft.Capture(reopenedPackage, reopened, Server);
             var original = new PublishedFormSubmission("inspection", """{"idempotencyKey":"stable-id"}""", [], Server.AbsoluteUri);
             var submitted = await reopenedBook.AddSubmittedAsync(reopened.Record, original, snapshot);
-            Assert.Same(submitted, Assert.Single(reopenedBook.All));
+            Assert.Same(submitted, Assert.Single(reopenedBook.All, candidate => candidate.Record.RecordId == "stable-id"));
             Assert.Equal(RecordSyncState.Pending, submitted.SyncState);
             Assert.False(submitted.CanOpenPublishedEditor);
 
-            submitted.MarkSubmissionRejected("Correct the site name.");
-            await reopenedBook.SaveAsync(submitted);
-            var persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync());
+            Assert.False(await mobileStore.ReplayPublishedAsync(submitted, (_, _) =>
+                Task.FromResult(FeatureSyncResult.Fail("Correct the site name.", 422) with { CanCorrectSubmission = true })));
+            var persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync(), candidate => candidate.Record.RecordId == "stable-id");
             Assert.Equal(RecordSyncState.SubmissionRejected, persisted.SyncState);
-            Assert.Equal("Correct the site name.", persisted.LastError);
+            Assert.Equal("Correct the site name. (code 422)", persisted.LastError);
             Assert.False(persisted.IsPendingUpload);
             Assert.True(persisted.CanOpenPublishedEditor);
             Assert.Equal(original.RequestJson, persisted.PublishedSubmission?.RequestJson);
@@ -210,7 +262,7 @@ public sealed class PublishedFormDraftTests
 
             var correctionDraft = PublishedFormDraft.Capture(correctionPackage, correction, Server) with { ReplacesRejectedSubmission = true };
             await reopenedBook.SaveDraftAsync(correction.Record, correctionDraft);
-            persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync());
+            persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync(), candidate => candidate.Record.RecordId == "stable-id");
             Assert.Null(persisted.PublishedSubmission);
             Assert.True(persisted.CanOpenPublishedEditor);
             Assert.True(persisted.PublishedDraft!.ReplacesRejectedSubmission);

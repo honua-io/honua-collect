@@ -13,6 +13,12 @@ appId: io.honua.collect
 - tapOn:
     text: Draft
     index: 0
+- runFlow:
+    when:
+      true: ${LEGACY_REVIEW}
+    commands:
+      - assertVisible: Open saved inspection
+      - tapOn: Open draft
 - assertVisible: ${INSPECTION_NAME}
 - scrollUntilVisible:
     element:

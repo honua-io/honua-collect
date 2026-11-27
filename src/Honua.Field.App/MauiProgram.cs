@@ -265,6 +265,7 @@ public static class MauiProgram
 
 		// Shell tab pages resolved via constructor injection (no static service locator).
 		builder.Services.AddTransient<PublishedInspectionPages>();
+		builder.Services.AddTransient<PublishedOutboxReplay>();
 		builder.Services.AddTransient<MainPage>();
 		builder.Services.AddTransient<RecordsPage>();
 		builder.Services.AddTransient<SyncPage>();

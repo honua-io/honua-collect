@@ -1,0 +1,12 @@
+appId: io.honua.collect
+---
+- launchApp:
+    clearState: false
+- tapOn: Records
+- tapOn: ${OUTBOX_ID}
+- assertVisible: Retry saved inspection
+- tapOn: Retry
+- extendedWaitUntil:
+    visible: The server confirmed this inspection.
+    timeout: 45000
+- tapOn: OK

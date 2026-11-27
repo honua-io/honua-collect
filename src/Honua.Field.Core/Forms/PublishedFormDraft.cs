@@ -15,6 +15,9 @@ namespace Honua.Field.Core.Forms;
 /// <summary>Local editor state and the immutable package version required to resume it.</summary>
 public sealed record PublishedFormDraft(string FormId, string RecordId, string ServerBaseUrl, string PackageJson, string EditorJson)
 {
+    /// <summary>The local identity authorized to submit this draft.</summary>
+    public string? ReplayPrincipal { get; init; }
+
     /// <summary>Whether submission must use a fresh key after the prior attempt was rejected.</summary>
     public bool ReplacesRejectedSubmission { get; init; }
 
@@ -41,6 +44,10 @@ public sealed record PublishedFormDraft(string FormId, string RecordId, string S
 
     /// <summary>Reopens an independent session for the originally captured form version.</summary>
     public (PublishedFormPackage Package, FormSession Session) Open(string formId, string recordId, Uri server)
+        => Open(formId, recordId, server, null);
+
+    /// <summary>Reopens the draft and locates captured evidence under the current installation.</summary>
+    public (PublishedFormPackage Package, FormSession Session) Open(string formId, string recordId, Uri server, string? mediaDirectory)
     {
         if (!string.Equals(FormId, formId, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(RecordId, recordId, StringComparison.Ordinal)
@@ -67,13 +74,13 @@ public sealed record PublishedFormDraft(string FormId, string RecordId, string S
             Status = RecordStatus.Draft,
         };
         var session = package.OpenRecord(record);
-        RestoreFields(session, state.Fields);
+        RestoreFields(session, state.Fields, mediaDirectory);
         foreach (var group in state.Repeats)
         {
             var repeat = session.GetRepeat(group.Key);
             foreach (var row in group.Value)
             {
-                RestoreFields(repeat.AddRestoredInstance(), row);
+                RestoreFields(repeat.AddRestoredInstance(), row, mediaDirectory);
             }
         }
 
@@ -85,14 +92,15 @@ public sealed record PublishedFormDraft(string FormId, string RecordId, string S
         fields.Where(field => field.Field.Type != FormFieldType.Calculated)
             .Select(field => new DraftFieldState(field.FieldId, DraftValue.From(field.Value), field.Media.ToArray())).ToArray();
 
-    private static void RestoreFields(ICaptureHost host, DraftFieldState[] fields)
+    private static void RestoreFields(ICaptureHost host, DraftFieldState[] fields, string? mediaDirectory)
     {
         foreach (var field in fields)
         {
             host.SetValue(field.FieldId, field.Value.Restore());
             foreach (var attachment in field.Media)
             {
-                host.AddMedia(RestoreEvidenceMetadata(attachment));
+                var path = CapturedMediaPath.Resolve(attachment.LocalPath, mediaDirectory);
+                host.AddMedia(RestoreEvidenceMetadata(attachment with { LocalPath = path }));
             }
         }
     }

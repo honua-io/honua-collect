@@ -4,6 +4,7 @@
 using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
+using Honua.Field.Core.Sync;
 using Honua.Mobile.Offline.GeoPackage;
 using Honua.Sdk.Field.Records;
 using Microsoft.Data.Sqlite;
@@ -96,6 +97,95 @@ public sealed class MobileRecordStoreTests
         {
             directory.Delete(recursive: true);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Published_replay_survives_restart_and_only_one_store_owns_the_upload(bool legacy)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        var photo = Path.Combine(directory.Path, "evidence.jpg");
+        await File.WriteAllBytesAsync(photo, [1, 2, 3]);
+        var request = new PublishedFormSubmission("inspection", """{"idempotencyKey":"initial","formVersion":3}""",
+            [new SubmissionFile("photo", photo, "image/jpeg", "evidence.jpg")], "https://field.example/");
+        var draft = new PublishedFormDraft("inspection", "record", "https://field.example/", "{}", "{}");
+        var record = CreateRecord("record");
+        record.Status = RecordStatus.Submitted;
+        IRecordStore initial = legacy
+            ? await SqliteRecordStore.OpenEncryptedAsync(directory.Database, "device-test-key")
+            : await directory.ReopenAsync();
+        await new RecordBook(initial).AddSubmittedAsync(record, request, draft);
+
+        var store = await directory.ReopenAsync();
+        var other = await directory.ReopenAsync();
+        var first = Assert.Single(await store.LoadAllAsync());
+        var second = Assert.Single(await other.LoadAllAsync());
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unexpectedUploads = 0;
+        var response = new TaskCompletionSource<FeatureSyncResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempt = store.ReplayPublishedAsync(first, async (frozen, token) =>
+        {
+            entered.SetResult();
+            Assert.Equal(request.RequestJson, frozen.RequestJson);
+            Assert.Equal(request.Files, frozen.Files);
+            return await response.Task.WaitAsync(token);
+        });
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(await other.ReplayPublishedAsync(second, UnexpectedUpload));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => other.DeleteAsync(record.RecordId));
+        response.SetResult(FeatureSyncResult.Fail("Lost response", 503));
+        Assert.False(await attempt);
+
+        var restarted = await directory.ReopenAsync();
+        var pending = Assert.Single(await restarted.LoadAllAsync());
+        Assert.Equal(RecordSyncState.Failed, pending.SyncState);
+        Assert.Equal(1, pending.FailedAttempts);
+        Assert.NotNull(pending.LastAttemptUtc);
+        Assert.False(await restarted.ReplayPublishedAsync(pending, (frozen, _) =>
+        {
+            Assert.Equal(request.RequestJson, frozen.RequestJson);
+            return Task.FromResult(FeatureSyncResult.Fail("Correct the site", 422) with { CanCorrectSubmission = true });
+        }));
+        Assert.Equal(RecordSyncState.SubmissionRejected, pending.SyncState);
+        Assert.True(pending.CanOpenPublishedEditor);
+        Assert.False(await restarted.ReplayPublishedAsync(pending, UnexpectedUpload));
+
+        var corrected = request with { RequestJson = """{"idempotencyKey":"corrected","formVersion":3}""" };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new RecordBook(restarted).AddSubmittedAsync(record, request, draft));
+        await new RecordBook(restarted).AddSubmittedAsync(record, corrected, draft);
+        var finalStore = await directory.ReopenAsync();
+        var final = Assert.Single(await finalStore.LoadAllAsync());
+        Assert.True(await finalStore.ReplayPublishedAsync(final, (frozen, _) =>
+        {
+            Assert.Equal(corrected.RequestJson, frozen.RequestJson);
+            Assert.Equal(request.Files, frozen.Files);
+            return Task.FromResult(FeatureSyncResult.Ok(42));
+        }));
+        var sent = Assert.Single(await (await directory.ReopenAsync()).LoadAllAsync());
+        Assert.Equal(RecordSyncState.Synced, sent.SyncState);
+        Assert.Equal("42", sent.RemoteId);
+        Assert.False(await finalStore.ReplayPublishedAsync(final, UnexpectedUpload));
+        await finalStore.DeleteAsync(record.RecordId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RecordBook(finalStore).AddSubmittedAsync(record, corrected, draft));
+        Assert.Empty(await finalStore.LoadAllAsync());
+        Assert.Equal(0, unexpectedUploads);
+
+        Task<FeatureSyncResult> UnexpectedUpload(PublishedFormSubmission _, CancellationToken __)
+        {
+            unexpectedUploads++;
+            return Task.FromResult(FeatureSyncResult.Fail("Unexpected upload"));
+        }
+    }
+
+    private sealed class TemporaryRecordDirectory : IDisposable
+    {
+        private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory();
+        public string Path => _directory.FullName;
+        public string Database => System.IO.Path.Combine(Path, "records.db");
+        public Task<MobileRecordStore> ReopenAsync() => MobileRecordStore.OpenEncryptedAsync(Database, "device-test-key");
+        public void Dispose() => _directory.Delete(recursive: true);
     }
 
     private static FieldRecord CreateRecord(string id) => new() { RecordId = id, FormId = "inspection" };

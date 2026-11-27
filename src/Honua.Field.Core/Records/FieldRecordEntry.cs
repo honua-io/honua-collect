@@ -215,12 +215,19 @@ public sealed class FieldRecordEntry
         Conflict = conflict;
     }
 
-    /// <summary>
-    /// Restores the conflicted transport state when rehydrating from storage. The
-    /// field-level <see cref="Conflict"/> body is recomputed by the next pull (it is
-    /// not persisted), so the record stays in the Conflicts box and out of the
-    /// Outbox after a restart rather than silently re-uploading.
-    /// </summary>
+    /// <summary>Rehydrates the stored sync state without attempting another upload.</summary>
+    internal void RestoreSyncState(RecordSyncState state, string? remoteId, string? error,
+        int failedAttempts, DateTimeOffset? lastAttemptUtc, DateTimeOffset? lastSyncedUtc)
+    {
+        SyncState = state;
+        RemoteId = remoteId;
+        LastError = error;
+        FailedAttempts = failedAttempts;
+        LastAttemptUtc = lastAttemptUtc;
+        LastSyncedUtc = lastSyncedUtc;
+    }
+
+    // Conflict details are recomputed by the next pull.
     internal void RestoreConflicted() => SyncState = RecordSyncState.Conflicted;
 
     /// <summary>
