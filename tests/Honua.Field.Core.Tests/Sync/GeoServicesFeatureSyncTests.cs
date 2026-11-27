@@ -52,6 +52,23 @@ public class GeoServicesFeatureSyncTests
     }
 
     [Fact]
+    public void BuildAddsJson_preserves_persisted_json_primitives()
+    {
+        using var persisted = JsonDocument.Parse("""{"sync_version":1,"checked":false,"empty":null}""");
+        var record = Record();
+        foreach (var attribute in persisted.RootElement.EnumerateObject())
+        {
+            record.Values[attribute.Name] = attribute.Value;
+        }
+
+        using var adds = JsonDocument.Parse(GeoServicesFeatureSync.BuildAddsJson(record));
+        var attrs = adds.RootElement[0].GetProperty("attributes");
+        Assert.Equal(1, attrs.GetProperty("sync_version").GetInt32());
+        Assert.False(attrs.GetProperty("checked").GetBoolean());
+        Assert.False(attrs.TryGetProperty("empty", out _));
+    }
+
+    [Fact]
     public async Task SubmitAsync_posts_applyEdits_and_parses_object_id()
     {
         var handler = new CapturingHandler(HttpStatusCode.OK, """{"addResults":[{"objectId":6892003,"success":true}]}""");

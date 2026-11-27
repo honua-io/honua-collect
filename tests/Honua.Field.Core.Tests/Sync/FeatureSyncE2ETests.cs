@@ -345,14 +345,26 @@ public class FeatureSyncE2ETests
         using var readHttp = Authed();
         var sync = new GeoServicesFeatureSync(uploadHttp);
         var online = false;
+        Exception? replayFailure = null;
 
         SyncCenterViewModel OpenCenter(MobileRecordStore store, FieldRecordEntry entry) =>
             new([entry], (pending, ct) => sync.SubmitAsync(pending.Record, Target, ct), null, null,
                 persist: pending => store.SaveAsync(pending),
                 batchUploader: (batch, ct) => sync.SubmitBatchAsync(batch.Select(pending => pending.Record).ToArray(), Target, ct),
                 canDispatchOrdinaryAdd: () => online,
-                replayOrdinaryPhotos: pending => OrdinaryPhotoReplay.ReplayAsync(
-                    pending, sync, Target, directory.FullName, value => store.SaveAsync(value)));
+                replayOrdinaryPhotos: async pending =>
+                {
+                    try
+                    {
+                        return await OrdinaryPhotoReplay.ReplayAsync(
+                            pending, sync, Target, directory.FullName, value => store.SaveAsync(value));
+                    }
+                    catch (Exception ex)
+                    {
+                        replayFailure = ex;
+                        throw;
+                    }
+                });
 
         try
         {
@@ -383,6 +395,9 @@ public class FeatureSyncE2ETests
 
             online = true;
             await OpenCenter(reopened, pending).SyncAsync();
+            Assert.Null(replayFailure);
+            Assert.True(pending.RemoteId is not null, pending.LastError ?? "Feature upload did not return an object ID.");
+            Assert.True(pending.HasPendingOrdinaryPhotos);
             Assert.Equal(1, fault.UploadRequests);
             Assert.NotNull(fault.CommittedAttachmentId);
             var feature = Assert.Single((await QueryByNameAsync(readHttp, marker)).EnumerateArray());

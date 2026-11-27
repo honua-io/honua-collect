@@ -1260,6 +1260,12 @@ public sealed class GeoServicesFeatureSync
             case float or double or decimal:
                 writer.WriteNumber(key, Convert.ToDouble(value, CultureInfo.InvariantCulture));
                 break;
+            case JsonElement { ValueKind: JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False } element:
+                writer.WritePropertyName(key);
+                element.WriteTo(writer);
+                break;
+            case JsonElement { ValueKind: JsonValueKind.Null }:
+                break;
             default:
                 writer.WriteString(key, value.ToString() ?? string.Empty);
                 break;
