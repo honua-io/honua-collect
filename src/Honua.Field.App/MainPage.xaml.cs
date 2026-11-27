@@ -125,8 +125,19 @@ public partial class MainPage : ContentPage
 
     private async Task OnQueuedAsync(FieldRecordEntry entry, GeoServicesTarget target)
     {
+        if (!await ForegroundSyncGate.Instance.WaitAsync(0))
+        {
+            StatusLabel.Text = "Saved to the Outbox. Open Sync to upload it.";
+            return;
+        }
+
         try
         {
+            if (!entry.IsPendingUpload)
+            {
+                return;
+            }
+
             if (_settings.Target != target)
             {
                 StatusLabel.Text = "Saved to the Outbox. Reconnect to the original inspection service to sync.";
@@ -173,6 +184,10 @@ public partial class MainPage : ContentPage
             StatusLabel.Text = entry.RequiresServerVerification
                 ? $"Check the record in the Outbox before retrying. {ex.Message}"
                 : $"Could not finish saving or uploading: {ex.Message}";
+        }
+        finally
+        {
+            ForegroundSyncGate.Instance.Release();
         }
     }
 }
