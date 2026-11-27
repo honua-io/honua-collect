@@ -38,6 +38,8 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 - On iPhone and iPad simulators, Field can draw a polygon, show its GeoJSON
   and undo the last vertex. The Apple workflow also builds Mac Catalyst.
   [Phone and tablet verification](docs/verification/e2e/README.md#iphone-and-ipad-geometry)
+- The Today prototype simulates the current request contract, which sends the title and asset IDs to dispatch while notes and the sample photo reference stay in the browser.
+  [Repeatable phone and tablet capability check](docs/verification/today/README.md#chromium-regression)
 - Remaining device work includes camera and GNSS integration, map editing,
   background sync, push notifications and enterprise sign-in. Windows device
   verification is also pending.
@@ -216,7 +218,7 @@ Repo docs:
 | --- | --- |
 | [Self-hosting guide](docs/self-hosting.md) | Point Field at a self-hosted Honua server (config surface, auth, quickstart). |
 | [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
-| [Shared offline runtime adoption](docs/mobile-offline-adoption.md) | Migration boundary and weekly Android emulator and hosted iOS simulator acceptance journey (physical phones optional). |
+| [Shared offline runtime adoption](docs/mobile-offline-adoption.md) | Migration requirements, weekly Android and iOS gates, and the founder phone upgrade journey. |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |

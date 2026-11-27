@@ -113,6 +113,45 @@ class Android:
         left, top, right, bottom = self.bounds(self.element(text, kind=kind))
         self.shell("input", "tap", str((left + right) // 2), str((top + bottom) // 2))
 
+    def queue_sample_inspection(self, button, name):
+        self.tap(button, kind="Button")
+        self.tap(kind="EditText")
+        self.shell("input", "text", name)
+
+        def entered(root):
+            return next((node for node in root.iter("node")
+                         if node.get("text") == name), None)
+
+        self.screen(entered, "the inspection name")
+        self.shell("input", "keyevent", "4")
+        status = self.element("Status", kind="TextView")
+
+        def picker(root):
+            status_bottom = self.bounds(status)[3]
+            candidates = [node for node in root.iter("node")
+                          if node.get("class", "").endswith(".EditText")
+                          and self.bounds(node)[1] >= status_bottom]
+            return min(candidates, key=lambda node: self.bounds(node)[1]) if candidates else None
+
+        left, top, right, bottom = self.bounds(self.screen(picker, "status picker"))
+        self.shell("input", "tap", str((left + right) // 2), str((top + bottom) // 2))
+        self.tap("New")
+        # Small phones can leave Submit below the fold after dismissing the picker.
+        def submit_visible(root):
+            return any(node.get("text") == "Submit" and node.get("class") == "android.widget.Button"
+                       for node in root.iter("node"))
+
+        for _ in range(4):
+            if self.screen(submit_visible, "form hierarchy"):
+                break
+            bounds = self.bounds(self.element(kind="ScrollView"))
+            left, top, right, bottom = bounds
+            x = (left + right) // 2
+            self.shell("input", "swipe", str(x), str((top + 3 * bottom) // 4),
+                       str(x), str((3 * top + bottom) // 4), "300")
+        self.tap("Submit", kind="Button")
+        self.tap("Navigate up")
+
     def outbox(self):
         def read(root):
             texts = [node.get("text", "") for node in root.iter("node")]
@@ -165,30 +204,7 @@ def run(device, legacy, current):
     sketch = device.sketch(filename)
     device.tap("Navigate up")
 
-    device.tap("Start New Inspection", kind="Button")
-    device.tap(kind="EditText")
-    device.shell("input", "text", "UpgradeOutbox")
-
-    def entered(root):
-        return next((node for node in root.iter("node")
-                     if node.get("text") == "UpgradeOutbox"), None)
-
-    device.screen(entered, "the inspection name")
-    device.shell("input", "keyevent", "4")
-    status = device.element("Status", kind="TextView")
-
-    def picker(root):
-        status_bottom = device.bounds(status)[3]
-        candidates = [node for node in root.iter("node")
-                      if node.get("class", "").endswith(".EditText")
-                      and device.bounds(node)[1] >= status_bottom]
-        return min(candidates, key=lambda node: device.bounds(node)[1]) if candidates else None
-
-    left, top, right, bottom = device.bounds(device.screen(picker, "status picker"))
-    device.shell("input", "tap", str((left + right) // 2), str((top + bottom) // 2))
-    device.tap("New")
-    device.tap("Submit", kind="Button")
-    device.tap("Navigate up")
+    device.queue_sample_inspection("Start New Inspection", "UpgradeOutbox")
     before = device.outbox()
 
     device.shell("am", "force-stop", PACKAGE)
