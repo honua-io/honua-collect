@@ -1,5 +1,7 @@
 appId: io.honua.collect
 ---
+- launchApp:
+    stopApp: false
 - extendedWaitUntil:
     visible:
       id: NewInspectionBtn

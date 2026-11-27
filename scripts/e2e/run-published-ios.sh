@@ -68,8 +68,8 @@ run_flow() {
 }
 
 launch_and_run_flow() {
-    # simctl owns the cold launch; Maestro waits for a rendered Field control.
-    # Without this boundary a successful UIKit launch can race Maestro's attach.
+    # simctl owns the cold launch. Maestro foregrounds the running app and
+    # waits for its home screen before interacting with it.
     "${simctl[@]}" launch "$device" "$app"
     run_flow "$1"
 }
