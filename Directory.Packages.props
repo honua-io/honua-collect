@@ -25,11 +25,17 @@
     <MauiVersion>11.0.10</MauiVersion>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(EnableAssignedWorkPilot)' == 'true'">
+    <HonuaSdkDotNetTrainVersion>5.1.1-fieldtasks.3</HonuaSdkDotNetTrainVersion>
+    <HonuaMobileVersion>0.1.0-fieldtasks.45963856191.1</HonuaMobileVersion>
+  </PropertyGroup>
+
   <!-- First-party Honua platform packages (private github-honua feed). -->
   <ItemGroup>
     <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
+    <PackageVersion Include="Honua.Mobile.Offline.Tasks" Version="$(HonuaMobileVersion)" Condition="'$(EnableAssignedWorkPilot)' == 'true'" />
     <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Geospatial.Grpc" Version="1.0.2" />
   </ItemGroup>

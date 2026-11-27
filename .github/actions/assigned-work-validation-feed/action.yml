@@ -1,0 +1,13 @@
+name: Assigned work validation feed
+description: Restore the immutable Mobile and .NET SDK validation artifacts for the opt-in pilot
+inputs:
+  token:
+    description: Workflow token with read access to the candidate artifacts
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: python3 "${{ github.action_path }}/restore.py"

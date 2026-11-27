@@ -50,6 +50,10 @@ public sealed record AuthSession
     /// </summary>
     public IReadOnlySet<string> Roles { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
+    internal string? AssignedWorkActorId { get; init; }
+
+    internal string? AssignedWorkServer { get; init; }
+
     /// <summary>Whether the access token has expired as of the given time.</summary>
     /// <param name="asOfUtc">Reference time.</param>
     /// <returns><see langword="true"/> when expired.</returns>

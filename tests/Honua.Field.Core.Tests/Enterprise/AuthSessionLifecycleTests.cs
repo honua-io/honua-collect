@@ -251,6 +251,34 @@ public class AuthSessionLifecycleTests
         Assert.Same(refreshed, store.Current);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Refresh_in_flight_cannot_restore_a_signed_out_or_replaced_session(bool switchAccount)
+    {
+        var began = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (manager, store, persistence, _) = Build(async (_, _) =>
+        {
+            began.SetResult();
+            await resume.Task;
+            return Session(TimeSpan.FromHours(1), token: "refreshed-first");
+        });
+        await manager.SignInAsync(Session(TimeSpan.FromMinutes(-1), refresh: "rt"));
+        var attempt = manager.EnsureValidAsync();
+        await began.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var replacement = switchAccount ? Session(TimeSpan.FromHours(1)) with { UserId = "second" } : null;
+        if (replacement is null)
+            await manager.SignOutAsync();
+        else
+            await manager.SignInAsync(replacement);
+        resume.SetResult();
+
+        Assert.Null(await attempt);
+        Assert.Same(replacement, store.Current);
+        Assert.Same(replacement, persistence.Stored);
+    }
+
     [Fact]
     public async Task EnsureValidAsync_expiring_refresh_refused_keeps_current()
     {
