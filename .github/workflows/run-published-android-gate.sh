@@ -172,7 +172,7 @@ fi
 if "$workspace/scripts/e2e/seed-feature-sync.sh" "$candidate" "$container" postgres honua &&
     Licensing__DevGrantEdition=Pro "$HONUA_E2E_RESTART_SERVER_COMMAND"; then
     if ! HONUA_E2E_SERVER="http://127.0.0.1:${HONUA_E2E_HTTP_PORT:?}" HONUA_E2E_APIKEY="$(cat "$working_dir/admin-key")" \
-        "$RUNNER_TEMP/field-dotnet/dotnet" test "$workspace/tests/Honua.Field.Core.Tests" --no-build --no-restore \
+        "$RUNNER_TEMP/field-dotnet/dotnet" test "$workspace/tests/Honua.Field.Core.Tests" -c Release --no-build --no-restore \
         --filter FullyQualifiedName~FeatureSyncE2ETests --logger 'trx;LogFileName=feature-sync.trx' \
         --results-directory "$report_root/feature-sync"; then
         fail_gate "Live feature sync integration tests failed"
