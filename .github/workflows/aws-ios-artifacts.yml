@@ -84,23 +84,21 @@ jobs:
                 "$settings" > "$settings.fixture"
               mv "$settings.fixture" "$settings"
               (cd "$checkout" && git apply -) <<'PATCH'
-          --- a/src/Honua.Field.App/Capture/CaptureFiles.cs
-          +++ b/src/Honua.Field.App/Capture/CaptureFiles.cs
-          @@ -44,4 +44,12 @@
-                   using var source = await file.OpenReadAsync();
-          -        using var output = File.Create(destination);
-          -        await source.CopyToAsync(output);
-          +        using (var output = File.Create(destination))
-          +        {
-          +            await source.CopyToAsync(output);
-          +        }
+          --- a/src/Honua.Field.App/Views/FormPage.xaml.cs
+          +++ b/src/Honua.Field.App/Views/FormPage.xaml.cs
+          @@ -300,6 +300,12 @@
+                           annotationOverlay: overlay),
+                       finalPath,
+                       compressed);
           +
-          +        using var imported = File.OpenRead(destination);
-          +        var digest = System.Security.Cryptography.SHA256.HashData(imported);
+          +        using var attachment = File.OpenRead(finalPath);
+          +        var digest = System.Security.Cryptography.SHA256.HashData(attachment);
           +        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-          +        var digestPath = Path.Combine(documents, "honua-imported-attachment.sha256");
+          +        var digestPath = Path.Combine(documents, "honua-captured-attachment.sha256");
           +        File.WriteAllText(digestPath, Convert.ToHexString(digest).ToLowerInvariant());
-                   return destination;
+               }
+
+               private async Task CaptureVideoAsync(FieldViewModel field)
           PATCH
             fi
             (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \

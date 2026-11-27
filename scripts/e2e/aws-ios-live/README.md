@@ -57,8 +57,8 @@ OIDC JWT to `POST /sharing/rest/generateToken` for exchange. Keep JWTs out of
 build inputs, screenshots and evidence. Revoke the worker access and tear down
 the fixture after the sessions. Record the build run and artifact digests.
 Attach one photo through Field's native camera or photo picker. The
-HTTPS fixture build writes the SHA-256 of the imported bytes to a Documents
-file. Appium can read it through
+HTTPS fixture build writes the SHA-256 of the final attachment bytes to a Documents file
+after compression and any markup. Appium can read it through
 [XCUITest file transfer](https://appium.github.io/appium-xcuitest-driver/latest/guides/file-transfer/).
 With the baseline still installed and the record offline, record the digest
 in the scenario's evidence:
@@ -68,7 +68,7 @@ from base64 import b64decode
 from re import fullmatch
 
 digest = b64decode(
-    driver.pull_file("@io.honua.collect:documents/honua-imported-attachment.sha256")
+    driver.pull_file("@io.honua.collect:documents/honua-captured-attachment.sha256")
 ).decode("ascii").strip()
 assert fullmatch(r"[0-9a-f]{64}", digest)
 ```
