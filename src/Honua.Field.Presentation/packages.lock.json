@@ -61,29 +61,6 @@
         "resolved": "5.1.1-fieldforms.3",
         "contentHash": "cKllKUyvZA99lmeHTzmgj53nYGosyTxwIS10cx+aFg7T32vvB8aOZULtBt9l8IUSIRh2F+eDGfMHtIdVKYDRPQ=="
       },
-      "Honua.Sdk.Geometry": {
-        "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "bxPJwaRurAV/gmeF1OWTp31bu9amrN+aYZRJJTyhHuuFxgu7ri5mfM6Yp5CRwuwShA1xJElucKfLj4NOQnno2Q==",
-        "dependencies": {
-          "Geospatial.Grpc": "1.0.0",
-          "Honua.Sdk.Abstractions": "1.10.0",
-          "NetTopologySuite": "2.6.0",
-          "NetTopologySuite.IO.GeoJSON4STJ": "4.0.0",
-          "ProjNET": "2.1.0"
-        }
-      },
-      "Honua.Sdk.GeoServices": {
-        "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "/rYog4+BSxH4Nux2dB8wxa2CTeOpig3J9nYgxGEh59B7OK0f9rI/A4Xa0fCoV5zQ1VkHsPK2xcjSuzlcVctPsQ==",
-        "dependencies": {
-          "Honua.Sdk.Abstractions": "1.10.0",
-          "Honua.Sdk.Geometry": "1.10.0",
-          "Microsoft.Extensions.Http": "10.0.7",
-          "Microsoft.Extensions.Http.Resilience": "10.5.0"
-        }
-      },
       "Honua.Sdk.Grpc": {
         "type": "Transitive",
         "resolved": "1.10.0",
@@ -366,6 +343,8 @@
           "Honua.Mobile.Offline": "[0.1.0-operationqueue.2, )",
           "Honua.Mobile.Sdk": "[0.1.0-operationqueue.2, )",
           "Honua.Sdk.Field": "[5.1.1-fieldforms.3, )",
+          "Honua.Sdk.GeoServices": "[2.2.0, )",
+          "Honua.Sdk.Geometry": "[2.2.0, )",
           "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
           "SkiaSharp": "[4.156.1, )"
@@ -410,6 +389,31 @@
           "Honua.Sdk.Grpc": "1.10.0",
           "Honua.Sdk.OgcFeatures": "1.10.0",
           "Honua.Sdk.Scenes": "1.10.0"
+        }
+      },
+      "Honua.Sdk.Geometry": {
+        "type": "CentralTransitive",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "iskvfVAI2XgfdJFkOb3C1v+US54lkBp9/TB9D8wuA1dBjFbMN5B6acQCIz8GuQoRmOWSbnH3FNZrbRfqj4DuCg==",
+        "dependencies": {
+          "Geospatial.Grpc": "1.0.2",
+          "Honua.Sdk.Abstractions": "2.2.0",
+          "NetTopologySuite": "2.6.0",
+          "NetTopologySuite.IO.GeoJSON4STJ": "4.0.0",
+          "ProjNET": "2.1.0"
+        }
+      },
+      "Honua.Sdk.GeoServices": {
+        "type": "CentralTransitive",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "ea93O5PaRbn2W7aArrF2NVNdTcYkZKITh8zjqU1prr8LicjyCvUqN2hYsYr3RFf0n0iEAqeOk7HcbPRletkUYA==",
+        "dependencies": {
+          "Honua.Sdk.Abstractions": "2.2.0",
+          "Honua.Sdk.Geometry": "2.2.0",
+          "Microsoft.Extensions.Http": "10.0.7",
+          "Microsoft.Extensions.Http.Resilience": "10.5.0"
         }
       },
       "Microsoft.Extensions.Http": {

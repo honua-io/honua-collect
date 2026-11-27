@@ -3,11 +3,14 @@
 import argparse
 import hashlib
 import json
+import plistlib
 import re
 import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import boto3
 import requests
@@ -85,6 +88,86 @@ def smoke(driver, output, *, android):
     label("Point: 0 vertex(es)")
 
 
+def upload_app(farm, path, project, *, android):
+    with path.open("rb") as app:
+        digest = hashlib.file_digest(app, "sha256").hexdigest()
+        app.seek(0)
+        upload = farm.create_upload(projectArn=project, name=path.name,
+                                    type="ANDROID_APP" if android else "IOS_APP")["upload"]
+        response = requests.put(upload["url"], data=app, timeout=(15, 150))
+        if not response.ok:
+            raise RuntimeError(f"App upload returned HTTP {response.status_code}")
+    ready(lambda: farm.get_upload(arn=upload["arn"])["upload"], "SUCCEEDED", 240)
+    return upload["arn"], digest
+
+
+def read_device_build(path):
+    with ZipFile(path) as archive:
+        (plist,) = (name for name in archive.namelist()
+                    if re.fullmatch(r"Payload/[^/]+\.app/Info\.plist", name))
+        info = plistlib.loads(archive.read(plist))
+    if info["CFBundleSupportedPlatforms"] != ["iPhoneOS"] or info["CFBundleIdentifier"] != "io.honua.collect":
+        raise ValueError("Expected a physical iPhone IPA for io.honua.collect")
+    return int(info["CFBundleVersion"])
+
+
+def check_ios_build(driver, build, screenshot):
+    bundle = "io.honua.collect"
+
+    def installed(browser):
+        apps = browser.execute_script("mobile: listApps", {"returnAttributes": ["CFBundleVersion"]})
+        return str(apps.get(bundle, {}).get("CFBundleVersion", "")) == str(build)
+
+    WebDriverWait(driver, 90, 2).until(installed, f"Expected installed Field build {build}")
+    driver.execute_script("mobile: launchApp", {"bundleId": bundle})
+    WebDriverWait(driver, 35, 1).until(
+        lambda browser: browser.query_app_state(bundle) == 4, f"Field build {build} did not reach the foreground")
+    driver.save_screenshot(str(screenshot))
+
+
+def ios_element(driver, xpath):
+    return WebDriverWait(driver, 25, 1).until(
+        lambda browser: next((e for e in browser.find_elements(AppiumBy.XPATH, xpath)
+                              if e.is_displayed()), False), xpath)
+
+
+def tap_ios_label(driver, label, kind="XCUIElementTypeButton"):
+    element = ios_element(driver, f"//{kind}[@label='{label}' or @name='{label}']")
+    rect = element.rect
+    driver.execute_script("mobile: tap", {"x": int(rect["x"] + rect["width"] / 2),
+                                         "y": int(rect["y"] + rect["height"] / 2)})
+
+
+def ios_outbox(driver, expected_count):
+    def inspect(browser):
+        labels = {element.get("label", "") for element in ElementTree.fromstring(browser.page_source).iter()
+                  if element.get("visible") == "true"}
+        ids = sorted(label for label in labels if re.fullmatch(r"[0-9a-f]{32}", label))
+        if len(ids) == expected_count and any(
+            re.fullmatch(fr"Drafts 0 · Outbox {expected_count} · Conflicts 0 · Sent 0", label) for label in labels
+        ):
+            return {"count": expected_count, "recordIds": ids}
+        return False
+
+    return WebDriverWait(driver, 25, 1).until(inspect, f"Expected {expected_count} visible Outbox records")
+
+
+def queue_ios_sample(driver):
+    tap_ios_label(driver, "Records")
+    ios_outbox(driver, 0)
+    tap_ios_label(driver, "Capture")
+    tap_ios_label(driver, "Sample Inspection Demo")
+    ios_element(driver, "//XCUIElementTypeTextField[@name='site_name']").send_keys("PhysicalUpgrade")
+    tap_ios_label(driver, "Done")
+    status = ios_element(driver, "(//XCUIElementTypeStaticText[@label='Status']/following::XCUIElementTypeButton)[1]")
+    status.click()
+    ios_element(driver, "//XCUIElementTypePickerWheel").send_keys("In progress")
+    tap_ios_label(driver, "Done")
+    tap_ios_label(driver, "Submit")
+    ios_element(driver, "//XCUIElementTypeNavigationBar//XCUIElementTypeButton").click()
+    tap_ios_label(driver, "Records")
+
+
 def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
     farm = boto3.client("devicefarm", region_name="us-west-2",
@@ -96,25 +179,49 @@ def run(args):
         device = farm.get_device(arn=args.device_arn)["device"]
         android = device["platform"] == "ANDROID"
         report.update(device=device["name"], os=device["os"], platform=device["platform"])
-        with args.app.open("rb") as app:
-            report["sha256"] = hashlib.file_digest(app, "sha256").hexdigest()
-            app.seek(0)
-            upload = farm.create_upload(projectArn=args.project_arn, name=args.app.name,
-                                        type="ANDROID_APP" if android else "IOS_APP")["upload"]
-            response = requests.put(upload["url"], data=app, timeout=(15, 150))
-            if not response.ok:
-                raise RuntimeError(f"App upload returned HTTP {response.status_code}")
-        ready(lambda: farm.get_upload(arn=upload["arn"])["upload"], "SUCCEEDED", 240)
+        upgrade = args.upgrade_app is not None
+        if upgrade:
+            if android or "iPhone" not in device["name"] or "Simulator" in device["name"]:
+                raise ValueError("The install upgrade check requires a physical iPhone")
+            baseline_build = read_device_build(args.app)
+            candidate_build = read_device_build(args.upgrade_app)
+            if candidate_build <= baseline_build:
+                raise ValueError("The upgrade IPA must have a higher build number")
+            report["scope"] = "same-session-sample-outbox" if args.sample_inspection else "same-session-install"
+            report["upgradeRevision"] = args.upgrade_revision
+        app_arn, report["sha256"] = upload_app(farm, args.app, args.project_arn, android=android)
+        if upgrade:
+            candidate_arn, report["upgradeSha256"] = upload_app(farm, args.upgrade_app, args.project_arn, android=False)
         session = farm.create_remote_access_session(projectArn=args.project_arn, deviceArn=args.device_arn,
-                                                    appArn=upload["arn"], name="Field native smoke")["remoteAccessSession"]["arn"]
+                                                    appArn=app_arn, name="Field native smoke")["remoteAccessSession"]["arn"]
         report["sessionArn"] = session
         running = ready(lambda: farm.get_remote_access_session(arn=session)["remoteAccessSession"], "RUNNING", 480)
         endpoint = running["endpoints"]["remoteDriverEndpoint"]
         options = UiAutomator2Options() if android else XCUITestOptions()
         if android:
             options.auto_grant_permissions = True
+        if upgrade:
+            options.no_reset = True
         driver = webdriver.Remote(options=options, client_config=AppiumClientConfig(remote_server_addr=endpoint, timeout=120))
-        smoke(driver, args.output, android=android)
+        if upgrade:
+            check_ios_build(driver, baseline_build, args.output / "baseline.png")
+            report["installedBaselineBuild"] = baseline_build
+            if args.sample_inspection:
+                queue_ios_sample(driver)
+                report["baselineOutbox"] = ios_outbox(driver, 1)
+                driver.save_screenshot(str(args.output / "baseline-outbox.png"))
+            driver.terminate_app("io.honua.collect")
+            farm.install_to_remote_access_session(remoteAccessSessionArn=session, appArn=candidate_arn)
+            check_ios_build(driver, candidate_build, args.output / "candidate.png")
+            report["installedCandidateBuild"] = candidate_build
+            if args.sample_inspection:
+                tap_ios_label(driver, "Records")
+                report["candidateOutbox"] = ios_outbox(driver, 1)
+                driver.save_screenshot(str(args.output / "candidate-outbox.png"))
+                if report["baselineOutbox"] != report["candidateOutbox"]:
+                    raise RuntimeError("Candidate Outbox record differs from the baseline")
+        else:
+            smoke(driver, args.output, android=android)
         report["outcome"] = "passed"
     except Exception as error:
         report["failure"] = re.sub(r"https?://\S+|/remote-endpoint/\S+", "[endpoint]", str(error).split("Stacktrace:")[0])[:1200]
@@ -143,4 +250,12 @@ if __name__ == "__main__":
     parser.add_argument("--app", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--output", type=Path, required=True, help="New evidence directory")
-    raise SystemExit(run(parser.parse_args()))
+    parser.add_argument("--upgrade-app", type=Path, help="Candidate IPA for same-session installation on physical iPhone")
+    parser.add_argument("--upgrade-revision", help="Source revision for the candidate IPA")
+    parser.add_argument("--sample-inspection", action="store_true", help="Verify a bundled demo Outbox record across the upgrade")
+    args = parser.parse_args()
+    if bool(args.upgrade_app) != bool(args.upgrade_revision):
+        parser.error("--upgrade-app and --upgrade-revision must be supplied together")
+    if args.sample_inspection and not args.upgrade_app:
+        parser.error("--sample-inspection requires --upgrade-app")
+    raise SystemExit(run(args))

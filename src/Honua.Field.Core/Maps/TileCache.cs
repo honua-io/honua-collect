@@ -96,9 +96,17 @@ public sealed class TileCache
 
         // Write to a temp file then move, so a crash mid-write never leaves a
         // truncated tile that would later decode to garbage offline.
-        var tmp = path + ".tmp";
-        await File.WriteAllBytesAsync(tmp, bytes, cancellationToken).ConfigureAwait(false);
-        File.Move(tmp, path, overwrite: true);
+        var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllBytesAsync(tmp, bytes, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(tmp, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
     }
 
     /// <summary>

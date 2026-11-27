@@ -20,6 +20,7 @@
   -->
   <PropertyGroup>
     <HonuaSdkDotNetTrainVersion>5.1.1-fieldforms.3</HonuaSdkDotNetTrainVersion>
+    <HonuaSdkOrdinaryClientVersion>2.2.0</HonuaSdkOrdinaryClientVersion>
     <!-- Validation only. Replace with the signed published Mobile version and remove the artifact feed before merge. -->
     <HonuaMobileVersion>0.1.0-operationqueue.2</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>
@@ -33,6 +34,8 @@
   <!-- First-party Honua platform packages (private github-honua feed). -->
   <ItemGroup>
     <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
+    <PackageVersion Include="Honua.Sdk.GeoServices" Version="$(HonuaSdkOrdinaryClientVersion)" />
+    <PackageVersion Include="Honua.Sdk.Geometry" Version="$(HonuaSdkOrdinaryClientVersion)" />
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline.Tasks" Version="$(HonuaMobileVersion)" Condition="'$(EnableAssignedWorkPilot)' == 'true'" />

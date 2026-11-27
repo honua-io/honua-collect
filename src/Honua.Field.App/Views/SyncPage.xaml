@@ -26,7 +26,7 @@
         <VerticalStackLayout Grid.Row="3" Padding="16,8" Spacing="8">
             <Label IsVisible="{Binding HasRejectedSubmissions}" Text="Review rejected submissions in Records." />
             <Label x:Name="ResultLabel" />
-            <Button Text="Sync now" Command="{Binding SyncCommand}" />
+            <Button x:Name="SyncButton" Text="Sync now" />
             <Button Text="Pull from server" Clicked="OnPull" />
             <Button Text="Resilient paged inbox pull" Clicked="OnOpenPagedInboxPull" />
         </VerticalStackLayout>

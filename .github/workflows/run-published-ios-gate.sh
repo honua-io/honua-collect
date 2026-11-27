@@ -30,11 +30,16 @@ db_password=$(openssl rand -hex 24)
 printf '127.0.0.1:%s:*:postgres:%s\n' "$PGPORT" "$db_password" > "$PGPASSFILE"
 printf '%s\n' "$db_password" > "$working_dir/db-password"
 initdb -D "$working_dir/pg" --username=postgres --pwfile="$working_dir/db-password" \
-    --auth-local=scram-sha-256 --auth-host=scram-sha-256 > "$working_dir/initdb.log"
+    --encoding=UTF8 --locale=C --auth-local=scram-sha-256 --auth-host=scram-sha-256 > "$working_dir/initdb.log"
 # Suppress Unix socket creation. The cluster uses a private data directory and listens on loopback only.
 pg_ctl -D "$working_dir/pg" -l "$working_dir/postgres.log" -o "-h 127.0.0.1 -p $PGPORT -c unix_socket_directories=''" \
     -w -t 60 start
 createdb -w -h 127.0.0.1 -p "$PGPORT" -U postgres honua
+encoding=$(psql -X -A -t -w -h 127.0.0.1 -p "$PGPORT" -U postgres -d honua -v ON_ERROR_STOP=1 -c 'SHOW server_encoding')
+if [[ $encoding != UTF8 ]]; then
+    echo "Expected a UTF8 fixture database, got $encoding" >&2
+    exit 1
+fi
 psql -X -w -h 127.0.0.1 -p "$PGPORT" -U postgres -d honua -v ON_ERROR_STOP=1 \
     -c 'CREATE EXTENSION postgis' -c 'SELECT postgis_full_version()'
 
@@ -77,20 +82,90 @@ export Authentication__PortalToken__Enabled=true Authentication__PortalToken__Re
 export Authentication__PortalCredentialVerifier__FallBackToAdminVerifier=true
 export FileStorage__Provider=Local FileStorage__LocalStorage__BasePath="$state/attachments"
 export Geocoding__Enabled=false
+report_startup_diagnostics() {
+    python3 - "$state" <<'PYTHON'
+from collections import deque
+from itertools import islice
+from pathlib import Path
+import re
+import sys
+from urllib.parse import quote, quote_plus
+
+state = Path(sys.argv[1])
+secrets = set()
+for filename in ("db-password", "admin-key", "master-key", "encryption-salt", "worker-key"):
+    secret_file = state / filename
+    if secret_file.exists():
+        value = secret_file.read_text().strip()
+        if value:
+            secrets.update((value, quote(value, safe=""), quote_plus(value, safe="")))
+for secret in tuple(secrets):
+    secrets.add(re.sub(r"%[0-9A-F]{2}", lambda match: match[0].lower(), secret))
+
+patterns = {
+    "migration.log": r"migrat|error|fail|exception|schema",
+    "server.log": r"\b(?:WRN|ERR|FTL|warn|fail|critical)\b|migrat|now listening|exception",
+    "server-host.trace": r"error|failed|not found|could not|permission denied",
+    "postgres.log": r"\b(?:ERROR|FATAL|PANIC|DETAIL|HINT)\b",
+}
+redactions = sorted(secrets, key=len, reverse=True)
+for filename, pattern in patterns.items():
+    log = state / filename
+    if not log.exists():
+        continue
+    with log.open(errors="replace") as entries:
+        matching = (line for line in entries if re.search(pattern, line, re.IGNORECASE))
+        selected = [*islice(matching, 24), *deque(matching, maxlen=12)]
+    print(f"Startup diagnostics from {filename}", file=sys.stderr)
+    for line in selected:
+        for secret in redactions:
+            line = line.replace(secret, "[REDACTED]")
+        print(line.rstrip()[:1500], file=sys.stderr)
+PYTHON
+}
 cd "$RUNNER_TEMP/published-server"
-nohup ./Honua.Server </dev/null >> "$state/server.log" 2>&1 &
-echo "$!" > "$pid_file"
+export DOTNET_HOST_TRACE=1 DOTNET_HOST_TRACEFILE="$state/server-host.trace"
+if [[ ${HONUA_E2E_MIGRATION_PREFLIGHT:-0} = 1 && ! -f "$pid_file" ]]; then
+    if ! HONUA_MIGRATE_ONLY=true ./Honua.Server </dev/null > "$state/migration.log" 2>&1; then
+        echo "::error::The fixture database migration failed" >&2
+        report_startup_diagnostics
+        exit 1
+    fi
+    if ! psql -X -w -h 127.0.0.1 -U postgres -d honua -Atqc \
+        "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'honua')" | grep -qx t; then
+        echo "::error::The migration exited without creating the honua schema" >&2
+        report_startup_diagnostics
+        exit 1
+    fi
+fi
+# Keep the fixture running across the restart helper's exit, without requiring nohup.
+(
+    trap '' HUP
+    exec ./Honua.Server
+) </dev/null > "$state/server.log" 2>&1 &
+server_pid=$!
+echo "$server_pid" > "$pid_file"
 for ((attempt = 0; attempt < 90; ++attempt)); do
     if curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null; then
         exit 0
     fi
-    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        echo "::error::The fixture server exited before becoming ready" >&2
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        server_status=0
+        wait "$server_pid" || server_status=$?
+        echo "::error::The fixture server exited before becoming ready (status $server_status)" >&2
+        report_startup_diagnostics
         exit 1
     fi
     sleep 2
 done
 echo "::error::Timed out waiting for the fixture server" >&2
+ps -o pid,ppid,state,comm -p "$server_pid" >&2 || true
+curl --silent --max-time 2 --output /dev/null --dump-header "$state/readiness.headers" \
+    --write-out 'Fixture readiness HTTP %{http_code}\n' "$base_url/healthz/ready" >&2 || true
+if [[ -s "$state/readiness.headers" ]]; then
+    awk 'tolower($1) == "x-honua-readiness-reason:" && $2 ~ /^[a-z-]+\r?$/ { print $1, $2 }' "$state/readiness.headers" >&2
+fi
+report_startup_diagnostics
 exit 1
 RESTART
 chmod 700 "$HONUA_E2E_RESTART_SERVER_COMMAND"
@@ -135,14 +210,27 @@ echo "Installing previous Field build on $device ($(du -sh "$previous_app" | cut
 test "$bundle_id" = "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$previous_app/Info.plist")"
 run_bounded 480 xcrun simctl install "$device" "$previous_app"
 export HONUA_E2E_IOS_UPGRADE_APP="$app"
+if [[ -z ${HONUA_E2E_IOS_PREVIOUS_REVISION:-} ]]; then
+    HONUA_E2E_IOS_PREVIOUS_REVISION=$(git -C "$workspace/field-previous" rev-parse HEAD)
+fi
 export HONUA_E2E_IOS_PREVIOUS_REVISION
-HONUA_E2E_IOS_PREVIOUS_REVISION=$(git -C "$workspace/field-previous" rev-parse HEAD)
 echo "App install complete. Starting published form journey."
 
+upgrade_report="$report_dir/installed-upgrade.json"
+rm -f -- "$upgrade_report"
 if ! run_bounded 2100 bash "$workspace/scripts/e2e/run-published-ios.sh" \
     "$device" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
     if [[ ! -s "$report_dir/failure.png" ]]; then
         run_bounded 60 xcrun simctl io "$device" screenshot "$report_dir/failure.png" || true
     fi
+    exit 1
+fi
+if ! jq -e --arg state "${HONUA_E2E_UPGRADE_STATE:-draft}" \
+    --arg previous "$HONUA_E2E_IOS_PREVIOUS_REVISION" --arg candidate "${GITHUB_SHA:-}" \
+    --arg server "${HONUA_E2E_SERVER_REVISION:-}" \
+    '.upgradedWith == $state and .previousFieldRevision == $previous
+        and .fieldRevision == $candidate and .serverRevision == $server' \
+    "$upgrade_report" >/dev/null; then
+    echo "Published form journey did not record the selected iOS upgrade." >&2
     exit 1
 fi
