@@ -110,6 +110,13 @@ def main():
         run_flow(args, 4, "verify-ordinary-photo-sent")
         after_restart = readback(layer_url, key, marker, photo)
         check(after_restart == first, "Feature or attachment identity changed after restart")
+        after_restart["apkSha256"] = helpers["installed_digest"](device)
+        if "HONUA_E2E_SERVER_REVISION" in os.environ:
+            pin = Path(__file__).parent / "fixtures" / "server-revision.txt"
+            check(os.environ["HONUA_E2E_SERVER_REVISION"] == pin.read_text().strip(),
+                  "The running fixture checkout differs from the pinned server revision")
+            after_restart["serverRevision"] = os.environ["HONUA_E2E_SERVER_REVISION"]
+            after_restart["fieldRevision"] = os.environ["GITHUB_SHA"]
         (args.report / "server-readback.json").write_text(json.dumps(after_restart, indent=2) + "\n")
     except Exception:
         helpers["capture_failure"](args, device)
