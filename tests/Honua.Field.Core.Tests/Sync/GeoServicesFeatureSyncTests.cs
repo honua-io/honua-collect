@@ -156,12 +156,13 @@ public class GeoServicesFeatureSyncTests
         try
         {
             var result = await sync.AddAttachmentAsync(42, file, "image/jpeg",
-                new GeoServicesTarget("http://server:18080", "mobile_offline_demo", 68910));
+                new GeoServicesTarget("http://server:18080/proxy", "folder/mobile_offline_demo", 68910));
 
             Assert.True(result.Success);
             Assert.Equal(555, result.ObjectId);
             Assert.Equal(HttpMethod.Post, handler.CapturedMethod);
-            Assert.EndsWith("/rest/services/mobile_offline_demo/FeatureServer/68910/42/addAttachment", handler.CapturedUri!.AbsoluteUri);
+            Assert.Equal("http://server:18080/proxy/rest/services/folder/mobile_offline_demo/FeatureServer/68910/42/addAttachment",
+                handler.CapturedUri!.AbsoluteUri);
             Assert.Equal("multipart/form-data", handler.CapturedMediaType);
             Assert.Contains("name=attachment", handler.CapturedBody!.Replace("\"", ""));
             Assert.Contains("name=f", handler.CapturedBody.Replace("\"", ""));
@@ -754,7 +755,7 @@ public class GeoServicesFeatureSyncTests
             var unexpected = await new GeoServicesFeatureSync(http1)
                 .AddAttachmentAsync(1, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
             Assert.False(unexpected.Success);
-            Assert.Contains("no addAttachmentResult", unexpected.Error);
+            Assert.Contains("addAttachmentResult", unexpected.Error);
 
             using var http2 = new HttpClient(new CapturingMultipartHandler(HttpStatusCode.OK, "garbage"));
             var invalid = await new GeoServicesFeatureSync(http2)

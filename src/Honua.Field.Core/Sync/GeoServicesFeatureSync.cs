@@ -3,7 +3,10 @@
 
 using System.Globalization;
 using System.Text.Json;
+using Honua.Sdk.Abstractions.Features;
 using Honua.Sdk.Field.Records;
+using Honua.Sdk.GeoServices.FeatureServer;
+using Honua.Sdk.GeoServices.FeatureServer.Exceptions;
 
 namespace Honua.Field.Core.Sync;
 
@@ -470,42 +473,49 @@ public sealed class GeoServicesFeatureSync
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        using var content = new MultipartFormDataContent();
-
-        var textPart = new StringContent("json");
-        content.Add(textPart, "f");
-
-        // Stream the file straight from disk instead of buffering the whole thing
-        // into a byte[] — a field photo/video can be tens to hundreds of MB, and
-        // ReadAllBytes would pin all of it in managed memory (OOM/GC risk on a
-        // memory-constrained device). The MultipartFormDataContent owns the
-        // StreamContent and disposes the FileStream when `content` is disposed.
-        var fileStream = new FileStream(
+        using var fileStream = new FileStream(
             filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 81920, useAsync: true);
-        var filePart = new StreamContent(fileStream);
-        filePart.Headers.ContentType =
-            new System.Net.Http.Headers.MediaTypeHeaderValue(
-                string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
-        content.Add(filePart, "attachment", Path.GetFileName(filePath));
-
         using var uploadCts = UploadDeadline.Start(fileStream.Length, cancellationToken);
+        var client = new HonuaFeatureServerClient(_uploadHttp, new HonuaFeatureServerClientOptions
+        {
+            RootAddress = new Uri(target.BaseUrl, UriKind.Absolute)
+        });
 
-        // Convert transport faults into a failed result like SubmitBatchAsync/
-        // QueryAsync/PostEditsAsync do, rather than letting them escape: an uncaught
-        // throw here reaches the upload caller (which has no catch) and can MarkFailed
-        // a record that was already MarkSynced, re-queuing it and risking a duplicate
-        // attachment add on the next drain.
-        string body;
         try
         {
-            using var response = await _uploadHttp.PostAsync(target.AttachmentUrl(objectId), content, uploadCts.Token).ConfigureAwait(false);
-            body = await response.Content.ReadAsStringAsync(uploadCts.Token).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
+            var result = await client.AddAttachmentAsync(new FeatureAttachmentAddRequest
             {
-                return new FeatureSyncResult(false, null, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
-            }
+                Source = new FeatureSource { ServiceId = target.ServiceId, LayerId = target.LayerId },
+                ObjectId = objectId,
+                Name = Path.GetFileName(filePath),
+                ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                Content = fileStream
+            }, uploadCts.Token).ConfigureAwait(false);
+            return result.Succeeded
+                ? new FeatureSyncResult(true, result.AttachmentId, null)
+                : new FeatureSyncResult(false, result.AttachmentId,
+                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code);
+        }
+        catch (HonuaFeatureServerException ex) when (ex.GeoServicesErrorCode is { } code)
+        {
+            return new FeatureSyncResult(false, null, ex.Message, code);
+        }
+        catch (HonuaFeatureServerException ex) when ((int)ex.StatusCode >= 400)
+        {
+            return new FeatureSyncResult(false, null, $"HTTP {(int)ex.StatusCode}: {ex.ResponseBody ?? ex.Message}", (int)ex.StatusCode);
+        }
+        catch (HonuaFeatureServerException ex)
+        {
+            return FeatureSyncResult.Fail(ex.Message);
+        }
+        catch (Honua.Sdk.Abstractions.HonuaException ex)
+        {
+            return FeatureSyncResult.Fail(ex.Message);
+        }
+        catch (JsonException ex)
+        {
+            return FeatureSyncResult.Fail($"Invalid response: {ex.Message}");
         }
         catch (HttpRequestException ex)
         {
@@ -518,8 +528,6 @@ public sealed class GeoServicesFeatureSync
             // user cancel. Surface it as a failed result so the upload is retried.
             return FeatureSyncResult.Fail(ex.Message);
         }
-
-        return ParseAttachmentResult(body);
     }
 
     /// <summary>
@@ -861,13 +869,12 @@ public sealed class GeoServicesFeatureSync
 
     /// <summary>
     /// Reads a single GeoServices per-edit result item
-    /// (<c>{success, objectId, error:{description,code}}</c>) shared by the
-    /// add/update/delete and addAttachment result shapes.
+    /// (<c>{success, objectId, error:{description,code}}</c>) from an
+    /// add, update, or delete operation.
     /// </summary>
     /// <param name="item">The per-edit result element.</param>
     /// <param name="defaultDetail">
     /// The failure detail to use when the item omits an error description
-    /// (context-specific, e.g. "Edit was not applied." vs "Attachment was not added.").
     /// </param>
     /// <returns>The decoded outcome.</returns>
     private static EditOutcome ReadEditOutcome(JsonElement item, string defaultDetail)
@@ -1220,34 +1227,6 @@ public sealed class GeoServicesFeatureSync
             }
 
             return new FeatureSyncResult(false, null, $"Unexpected response: no {resultKey}.");
-        }
-        catch (JsonException ex)
-        {
-            return new FeatureSyncResult(false, null, $"Invalid response: {ex.Message}");
-        }
-    }
-
-    private static FeatureSyncResult ParseAttachmentResult(string body)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-
-            if (TryReadServerError(root, out var msg, out var code))
-            {
-                return new FeatureSyncResult(false, null, msg, code);
-            }
-
-            if (root.TryGetProperty("addAttachmentResult", out var result))
-            {
-                var outcome = ReadEditOutcome(result, "Attachment was not added.");
-                return outcome.Success
-                    ? new FeatureSyncResult(true, outcome.ObjectId, null)
-                    : new FeatureSyncResult(false, outcome.ObjectId, outcome.Detail, outcome.Code);
-            }
-
-            return new FeatureSyncResult(false, null, "Unexpected response: no addAttachmentResult.");
         }
         catch (JsonException ex)
         {
