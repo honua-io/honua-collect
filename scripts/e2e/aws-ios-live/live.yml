@@ -1,0 +1,9 @@
+version: 0.1
+ios_test_host: macos_tahoe
+phases:
+  test:
+    commands:
+      - cd "$DEVICEFARM_TEST_PACKAGE_PATH"
+      - bash live.sh
+artifacts:
+  - $DEVICEFARM_LOG_DIR
