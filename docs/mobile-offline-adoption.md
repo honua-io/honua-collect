@@ -5,11 +5,44 @@ and [mobile #421](https://github.com/honua-io/honua-mobile/issues/421).
 This document defines the migration boundary and installation acceptance
 journey. It is a test script, not evidence that the migration has shipped.
 
+## Capability ownership
+
+| Capability | Owner | Verification |
+| --- | --- | --- |
+| Portable XLSForm conversion, field schemas, validation and expression semantics | `honua-sdk-dotnet` provides the shared form model and evaluator. Honua Server owns publication and submission acceptance. Field renders the published version and preserves it with each draft. | Run the same fixtures through workbook conversion and published-form evaluation. Cover repeat scope, multi-select `selected()`, empty answers, division and modulo. |
+| Feature queries, edits, attachment requests, sync contracts and the reconciliation algorithm | `honua-sdk-dotnet` owns the protocol clients, per-edit results, and sync engine. | Against Honua Server, distinguish an explicit rejection from acceptance followed by a lost response. Verify remote feature and attachment counts after retry. |
+| Encrypted GeoPackage storage and device lifecycle | `honua-mobile` implements the journal, checkpoints and local transactions, integrates with platform key storage, and schedules sync on connectivity changes. | Reopen after process death, reject a wrong key without replacing the database, and interrupt replay between server acceptance and durable local acknowledgement. |
+| Phone and tablet capture, record identity and operator decisions | Field owns the draft's pinned form, local UUID to remote object ID association, outbox presentation, conflict choices, and map editor interactions. | Exercise the installed app at phone and tablet sizes. Save offline, restart, reconnect, and verify one server record and one copy of each photo. Record the device type and server version with the result. |
+
+### Migration order
+
+1. **Protect pending records during storage migration.** Field currently uses
+   [SqliteRecordStore](../src/Honua.Field.Core/Storage/SqliteRecordStore.cs).
+   Switch its persistence adapter only after the encrypted upgrade and
+   interrupted-replay checks below pass on populated data.
+   [Field #173](https://github.com/honua-io/honua-field/issues/173)
+2. **Consolidate feature and attachment transport.** Replace hand-built requests in
+   [GeoServicesFeatureSync](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs)
+   with typed SDK operations. Preserve the distinction between a rejected add
+   and one with an unknown outcome. Field decides how the worker verifies an
+   uncertain upload before sending again.
+   [Field #209](https://github.com/honua-io/honua-field/issues/209) and
+   [Field #214](https://github.com/honua-io/honua-field/issues/214)
+3. **Consolidate XLSForm semantics.** Compare the [row importer](../src/Honua.Field.Core/Field/Forms/Authoring/XlsFormImporter.cs)
+   and [published-expression adapter](../src/Honua.Field.Core/Forms/PublishedXlsFormExpressions.cs)
+   with the SDK converter and evaluator using the same workbook, answers and
+   expected diagnostics. Move portable expression support upstream before
+   removing the Field fallback. Field keeps widget selection and draft display.
+   [Field #169](https://github.com/honua-io/honua-field/issues/169)
+4. **Reuse geometry primitives.** Compare Field’s [planar geometry operations](../src/Honua.Field.Core/Field/Geometry/PlanarTopology.cs)
+   with the SDK geometry package using the same coordinate system, distances and
+   ties. Mobile supplies device positions. Field chooses the snap target and
+   tolerance for the active tool and owns undo.
+
 ## Adapter boundary
 
-Keep the tested form runtime, record lifecycle and presentation contracts. Put
-adapters behind those contracts that use published `Honua.Mobile.Offline`
-packages. Do not introduce another HTTP upload loop, retry scheduler or store.
+Preserve the app’s record lifecycle and presentation contracts when adopting
+published `Honua.Mobile.Offline` packages behind its storage interfaces. Do not introduce another HTTP upload loop, retry scheduler or store.
 The app supplies the native SQLite provider and obtains its encryption key from
 platform secure storage before opening the SDK database. A missing or incorrect
 key must fail closed without replacing the existing database.
