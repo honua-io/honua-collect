@@ -5,6 +5,7 @@ using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Mvvm;
+using Honua.Field.Presentation.Records;
 using Honua.Field.Presentation.Sync;
 using Honua.Sdk.Field.Records;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,71 @@ public class SyncCenterCommandTests
         var entry = new FieldRecordEntry(record);
         entry.MarkPending();
         return entry;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Ordinary_photo_outbox_waits_for_original_target_and_retries_without_resending_feature(bool batch)
+    {
+        var entry = PendingEntry("inspection");
+        var originalTarget = new GeoServicesTarget("https://field.example/", "inspections", 1);
+        var currentTarget = originalTarget with { LayerId = 2 };
+        var photo = new OrdinaryFeaturePhoto(Guid.NewGuid(), "/photo.jpg", "image/jpeg", "photo.jpg", "hash", originalTarget);
+        entry.AddOrdinaryPhoto(photo);
+        var uploads = 0;
+        var photoAttempts = 0;
+        var saves = 0;
+        BatchRecordUploader? batchUploader = batch ? (rows, _) =>
+        {
+            Assert.Same(entry, Assert.Single(rows));
+            uploads++;
+            return Task.FromResult<IReadOnlyList<FeatureSyncResult>>([FeatureSyncResult.Ok(17)]);
+        } : null;
+        var vm = new SyncCenterViewModel([entry], (row, _) =>
+        {
+            Assert.False(batch);
+            Assert.Same(entry, row);
+            uploads++;
+            return Task.FromResult(FeatureSyncResult.Ok(17));
+        }, puller: null, form: null, persist: _ =>
+        {
+            saves++;
+            return Task.CompletedTask;
+        }, batchUploader: batchUploader,
+            replayOrdinaryPhotos: row =>
+            {
+                Assert.Equal("17", row.RemoteId);
+                if (++photoAttempts == 1)
+                {
+                    return Task.FromResult(false);
+                }
+
+                row.UpdateOrdinaryPhoto(photo with { State = OrdinaryPhotoState.Synced, ServerAttachmentId = 2 });
+                return Task.FromResult(true);
+            },
+            canDispatchOrdinaryRecord: row => Assert.Single(row.OrdinaryPhotos).Target == currentTarget);
+
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(0, uploads);
+        Assert.Equal(0, saves);
+        Assert.Equal(0, photoAttempts);
+        Assert.True(entry.IsPendingUpload);
+
+        currentTarget = originalTarget;
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(1, uploads);
+        Assert.Equal(1, photoAttempts);
+        Assert.False(entry.IsPendingUpload);
+        Assert.Equal(RecordBox.Outbox, entry.Box);
+        Assert.Contains("Photos still need sync", new RecordRowViewModel(entry).StatusText);
+        Assert.True(vm.SyncCommand.CanExecute(null));
+
+        Assert.Equal(1, await vm.SyncAsync());
+        Assert.Equal(1, uploads);
+        Assert.Equal(2, photoAttempts);
+        Assert.Equal(RecordBox.Sent, entry.Box);
+        Assert.False(vm.SyncCommand.CanExecute(null));
     }
 
     [Theory]

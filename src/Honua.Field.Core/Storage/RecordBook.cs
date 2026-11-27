@@ -92,9 +92,10 @@ public sealed class RecordBook
     /// <param name="record">The submitted record (review status past Draft).</param>
     /// <param name="submission">Optional versioned submission captured with this record.</param>
     /// <param name="editorSnapshot">Optional editor state retained for correcting a confirmed rejection.</param>
+    /// <param name="ordinaryPhotos">Captured photos for an ordinary feature.</param>
     /// <returns>The tracked entry.</returns>
     public async Task<FieldRecordEntry> AddSubmittedAsync(FieldRecord record, PublishedFormSubmission? submission = null,
-        PublishedFormDraft? editorSnapshot = null)
+        PublishedFormDraft? editorSnapshot = null, IReadOnlyList<OrdinaryFeaturePhoto>? ordinaryPhotos = null)
     {
         ArgumentNullException.ThrowIfNull(record);
         if (editorSnapshot is not null
@@ -106,6 +107,11 @@ public sealed class RecordBook
         }
 
         var entry = new FieldRecordEntry(record) { PublishedSubmission = submission, PublishedDraft = editorSnapshot };
+        foreach (var photo in ordinaryPhotos ?? [])
+        {
+            entry.AddOrdinaryPhoto(photo);
+        }
+
         if (record.Status != RecordStatus.Draft)
         {
             entry.MarkPending();
