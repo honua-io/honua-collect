@@ -14,7 +14,7 @@ The .NET package table is verified against `Directory.Packages.props` and `src/*
 | Honua.Mobile.Maui | 0.1.0-ci.45949637544.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
 | Honua.Mobile.Offline | 0.1.0-ci.45949637544.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
 | Honua.Mobile.Sdk | 0.1.0-ci.45949637544.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
-| Honua.Sdk.Field | 2.2.0 | Apache-2.0 | https://github.com/honua-io/honua-sdk-dotnet |
+| Honua.Sdk.Field | 5.1.1-fieldforms.2 | Apache-2.0 | https://github.com/honua-io/honua-sdk-dotnet |
 | Microsoft.Data.Sqlite.Core | 11.0.0 | MIT | https://docs.microsoft.com/dotnet/standard/data/sqlite/ |
 | Microsoft.Extensions.Http | 11.0.0 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Debug | 11.0.0 | MIT | https://dot.net/ |

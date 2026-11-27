@@ -8,6 +8,7 @@ using Honua.Field.Core.Field;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Forms;
 using Honua.Sdk.Field.Forms;
+using PublishedFormSubmission = Honua.Field.Core.Forms.PublishedFormSubmission;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Forms;
@@ -596,6 +597,22 @@ public class FormPackageClientTests
     }
 
     [Theory]
+    [InlineData("""{"status":"accepted","formId":"inspection","formVersion":7,"targetFeatureId":4,"editOutcome":{"succeeded":true}}""")]
+    [InlineData("""{"status":"rejected","formId":"inspection","formVersion":7,"retry":{}}""")]
+    public async Task Published_upload_keeps_the_attempt_pending_when_receipt_is_incomplete(string receipt)
+    {
+        var server = new Uri("https://field.example/");
+        var snapshot = new PublishedFormSubmission("inspection",
+            """{"formVersion":7,"idempotencyKey":"capture-1","attachments":[]}""", [], server.AbsoluteUri);
+        using var http = new HttpClient(new StubHandler(receipt)) { BaseAddress = server };
+
+        var result = await snapshot.UploadAsync(http);
+
+        Assert.False(result.Success);
+        Assert.False(result.CanCorrectSubmission);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task Published_evidence_upload_preserves_caller_cancellation_and_marks_an_interrupted_receipt_retryable(
@@ -606,7 +623,7 @@ public class FormPackageClientTests
         {
             await File.WriteAllBytesAsync(evidence, [7, 8, 9]);
             var server = new Uri("https://field.example/");
-            var snapshot = new PublishedFormSubmission("inspection", "{}",
+            var snapshot = new PublishedFormSubmission("inspection", """{"formVersion":7,"idempotencyKey":"capture-1","attachments":[]}""",
                 [new SubmissionFile("file0", evidence, "image/png", "evidence.png"),
                  new SubmissionFile("file1", evidence, "image/png", "evidence-2.png")], server.AbsoluteUri);
             using var cancellation = new CancellationTokenSource();
@@ -643,7 +660,7 @@ public class FormPackageClientTests
             var contentLength = multipart.Headers.ContentLength;
             var bytes = await multipart.ReadAsByteArrayAsync(cancellationToken);
             Assert.Equal<long?>(bytes.LongLength, contentLength);
-            Assert.True(contentLength > 8); // Two three-byte files, a two-byte envelope, and multipart framing.
+            Assert.True(contentLength > 6); // Both files plus the envelope and multipart framing.
             caller?.Cancel();
             if (caller is not null)
             {

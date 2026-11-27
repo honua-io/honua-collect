@@ -85,8 +85,8 @@
       },
       "Honua.Sdk.Abstractions": {
         "type": "Transitive",
-        "resolved": "2.2.0",
-        "contentHash": "QC8C0CwgBsTkPiqtxhb2dZ72EQ9OVyK73RldRyLsKhyA6NKKXt9uBUktH73uxNN6PYum6zwcAGiQ589jbToOTg=="
+        "resolved": "5.1.1-fieldforms.2",
+        "contentHash": "+jK5hTm7TPQtblF1YKzS1p7yrw1On2+DAbJpEfkm5FhTxne6mAYqZHYx4U9htmr9A41myxz0FEb+YREmz8zz4w=="
       },
       "Honua.Sdk.Geometry": {
         "type": "Transitive",
@@ -455,7 +455,7 @@
           "Geospatial.Grpc": "[1.0.2, )",
           "Honua.Mobile.Offline": "[0.1.0-ci.45949637544.1, )",
           "Honua.Mobile.Sdk": "[0.1.0-ci.45949637544.1, )",
-          "Honua.Sdk.Field": "[2.2.0, )",
+          "Honua.Sdk.Field": "[5.1.1-fieldforms.2, )",
           "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
           "SkiaSharp": "[4.156.1, )"
@@ -504,11 +504,11 @@
       },
       "Honua.Sdk.Field": {
         "type": "CentralTransitive",
-        "requested": "[2.2.0, )",
-        "resolved": "2.2.0",
-        "contentHash": "U7ZiLr1ObHWbvVgrBXq1yGTWOgMhKNYezIqZMaoh/vIcHIqfDSIUFAjfve/shWWAn/3/GKn5lxE/AAwXEQpb4Q==",
+        "requested": "[5.1.1-fieldforms.2, )",
+        "resolved": "5.1.1-fieldforms.2",
+        "contentHash": "iYHKmMtKQiUEN1UljBHJmrS5VpEOSijL8jVIa3PDl8+mzH8kBQTsmoaOCh1nYIx4q4NrWf/Xqo3aWTFygpK6bw==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "2.2.0"
+          "Honua.Sdk.Abstractions": "5.1.1-fieldforms.2"
         }
       },
       "Microsoft.Data.Sqlite.Core": {

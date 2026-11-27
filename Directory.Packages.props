@@ -19,7 +19,7 @@
     in #31), then re-run restore to refresh the lockfiles.
   -->
   <PropertyGroup>
-    <HonuaSdkDotNetTrainVersion>2.2.0</HonuaSdkDotNetTrainVersion>
+    <HonuaSdkDotNetTrainVersion>5.1.1-fieldforms.2</HonuaSdkDotNetTrainVersion>
     <!-- Validation only. Replace with the signed published Mobile version and remove the artifact feed before merge. -->
     <HonuaMobileVersion>0.1.0-ci.45949637544.1</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>

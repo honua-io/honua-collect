@@ -6,6 +6,7 @@ using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Sync;
 using Honua.Sdk.Field.Forms;
+using PublishedFormSubmission = Honua.Field.Core.Forms.PublishedFormSubmission;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Presentation.Tests;
