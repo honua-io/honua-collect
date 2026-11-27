@@ -20,8 +20,8 @@
   -->
   <PropertyGroup>
     <!-- Validation only. Replace both pins with signed published versions and remove the artifact feed before merge. -->
-    <HonuaSdkDotNetTrainVersion>5.1.1-fieldcombined.1</HonuaSdkDotNetTrainVersion>
-    <HonuaMobileVersion>0.1.0-fieldcombined.45975064870.1</HonuaMobileVersion>
+    <HonuaSdkDotNetTrainVersion>5.1.1-fieldcombined.4</HonuaSdkDotNetTrainVersion>
+    <HonuaMobileVersion>0.1.0-ci.46062303570.1</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>
   </PropertyGroup>
 
