@@ -9,6 +9,10 @@ previous_revision=${HONUA_E2E_IOS_PREVIOUS_REVISION:-6e3db0b0c48c63d1bdb6fd1d7f0
 upgrade_state=${HONUA_E2E_UPGRADE_STATE:-outbox}
 picker_revision=${HONUA_E2E_IOS_PICKER_REVISION:-394051063939253a18e67d45fa76ef4ed509b364}
 harness_revision=$(git -C "$field" rev-parse HEAD)
+if ! git -C "$field" diff --quiet "$harness_revision" -- scripts/e2e/aws-ios-live/stage.sh; then
+    echo "Commit stage.sh before staging a pinned run" >&2
+    exit 2
+fi
 for revision in "$server_revision" "$field_revision" "$previous_revision" "$picker_revision"; do
     [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected a full Git revision" >&2; exit 2; }
 done
@@ -23,8 +27,8 @@ fi
 destination=$1
 mkdir -- "$destination"
 destination=$(cd "$destination" && pwd)
-cp "$setup"/{live.sh,live.yml,schedule.py,pack.sh,requirements.txt} "$destination/"
-cp -R "$setup/tests" "$destination/"
+harness_path=scripts/e2e/aws-ios-live
+git -C "$field" archive "$harness_revision" "$harness_path" | tar -x --strip-components=3 -C "$destination"
 (
     cd "$2"
     for revision in "$previous_revision" "$field_revision"; do
@@ -45,7 +49,7 @@ mkdir -p "$fixture"/{server-candidate/tests/seed,.github/workflows}
 git -C "$field" archive "$field_revision" scripts/e2e | tar -x -C "$fixture"
 git -C "$field" show "$picker_revision:scripts/e2e/maestro/capture-ios.yaml" \
     > "$fixture/scripts/e2e/maestro/capture-ios.yaml"
-cp "$field/.github/workflows/run-published-ios-gate.sh" "$fixture/.github/workflows/"
+git -C "$field" archive "$harness_revision" .github/workflows/run-published-ios-gate.sh | tar -x -C "$fixture"
 git -C "$3" show "$server_revision:tests/seed/base-schema.sql" > "$fixture/server-candidate/tests/seed/base-schema.sql"
 tar -cf "$destination/fixture.tar" -C "$fixture" .
 # The upload validator expects a pytest package. The custom test spec

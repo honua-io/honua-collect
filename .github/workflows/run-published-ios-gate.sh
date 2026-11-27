@@ -30,11 +30,16 @@ db_password=$(openssl rand -hex 24)
 printf '127.0.0.1:%s:*:postgres:%s\n' "$PGPORT" "$db_password" > "$PGPASSFILE"
 printf '%s\n' "$db_password" > "$working_dir/db-password"
 initdb -D "$working_dir/pg" --username=postgres --pwfile="$working_dir/db-password" \
-    --auth-local=scram-sha-256 --auth-host=scram-sha-256 > "$working_dir/initdb.log"
+    --encoding=UTF8 --locale=C --auth-local=scram-sha-256 --auth-host=scram-sha-256 > "$working_dir/initdb.log"
 # Suppress Unix socket creation. The cluster uses a private data directory and listens on loopback only.
 pg_ctl -D "$working_dir/pg" -l "$working_dir/postgres.log" -o "-h 127.0.0.1 -p $PGPORT -c unix_socket_directories=''" \
     -w -t 60 start
 createdb -w -h 127.0.0.1 -p "$PGPORT" -U postgres honua
+encoding=$(psql -X -A -t -w -h 127.0.0.1 -p "$PGPORT" -U postgres -d honua -v ON_ERROR_STOP=1 -c 'SHOW server_encoding')
+if [[ $encoding != UTF8 ]]; then
+    echo "Expected a UTF8 fixture database, got $encoding" >&2
+    exit 1
+fi
 psql -X -w -h 127.0.0.1 -p "$PGPORT" -U postgres -d honua -v ON_ERROR_STOP=1 \
     -c 'CREATE EXTENSION postgis' -c 'SELECT postgis_full_version()'
 
