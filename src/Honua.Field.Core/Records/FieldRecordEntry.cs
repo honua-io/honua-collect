@@ -342,6 +342,23 @@ public sealed class FieldRecordEntry
         OrdinaryPhotos = Array.AsReadOnly(OrdinaryPhotos.Select(item => item.Id == photo.Id ? photo : item).ToArray());
     }
 
+    internal async Task UpdateOrdinaryPhotoAsync(OrdinaryFeaturePhoto photo, Func<FieldRecordEntry, Task> persist)
+    {
+        var previousPhotos = OrdinaryPhotos;
+        var previousPersistedPhotos = PersistedOrdinaryPhotos;
+        UpdateOrdinaryPhoto(photo);
+        try
+        {
+            await persist(this).ConfigureAwait(false);
+        }
+        catch
+        {
+            OrdinaryPhotos = previousPhotos;
+            PersistedOrdinaryPhotos = previousPersistedPhotos;
+            throw;
+        }
+    }
+
     internal void RestoreOrdinaryPhotos(OrdinaryFeaturePhoto[]? photos)
     {
         OrdinaryPhotos = Array.AsReadOnly(photos ?? []);

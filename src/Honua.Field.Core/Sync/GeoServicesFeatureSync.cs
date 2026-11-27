@@ -497,6 +497,52 @@ public sealed class GeoServicesFeatureSync
     private static readonly string[] AbsentFeaturePatterns =
         ["not found", "does not exist", "unknown object", "cannot find", "no feature"];
 
+    internal async Task<long?> FindMatchingAttachmentAsync(
+        long objectId,
+        Honua.Field.Core.Records.OrdinaryFeaturePhoto photo,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = new HonuaFeatureServerClient(_http, new HonuaFeatureServerClientOptions
+            {
+                RootAddress = new Uri(photo.Target.BaseUrl, UriKind.Absolute),
+            });
+            var source = new FeatureSource { ServiceId = photo.Target.ServiceId, LayerId = photo.Target.LayerId };
+            var attachments = await client.ListAttachmentsAsync(
+                new FeatureAttachmentListRequest { Source = source, ObjectId = objectId }, cancellationToken).ConfigureAwait(false);
+            var matches = attachments.Where(item => StringComparer.Ordinal.Equals(item.Name, photo.FileName)).ToArray();
+            if (matches.Length != 1)
+            {
+                return null;
+            }
+
+            if (matches[0].AttachmentId is not > 0)
+            {
+                return null;
+            }
+
+            var attachmentId = matches[0].AttachmentId.GetValueOrDefault();
+            var attachment = await client.DownloadAttachmentAsync(new FeatureAttachmentDownloadRequest
+            {
+                Source = source,
+                ObjectId = objectId,
+                AttachmentId = attachmentId,
+            }, cancellationToken).ConfigureAwait(false);
+            await using var stream = attachment.Content;
+            var hash = await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+            return StringComparer.OrdinalIgnoreCase.Equals(Convert.ToHexString(hash), photo.Sha256) ? attachmentId : null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is Honua.Sdk.Abstractions.HonuaException or HttpRequestException or JsonException or IOException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Uploads a media file to a feature's <c>addAttachment</c> endpoint as a
     /// <c>multipart/form-data</c> POST. Call this after <see cref="SubmitAsync"/>
