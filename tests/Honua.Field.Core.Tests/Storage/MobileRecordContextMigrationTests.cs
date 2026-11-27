@@ -6,6 +6,8 @@ using Honua.Field.Core.Field.Related;
 using Honua.Field.Core.History;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
+using Honua.Field.Core.Sync;
+using Honua.Sdk.Field.Forms;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Storage;
@@ -41,7 +43,10 @@ public sealed class MobileRecordContextMigrationTests
 
             var assignment = new FieldAssignment
             {
-                AssignmentId = "hydrant-42", FormId = parent.Record.FormId, AssignedToUserId = worker, Title = "Inspect hydrant",
+                AssignmentId = "hydrant-42",
+                FormId = parent.Record.FormId,
+                AssignedToUserId = worker,
+                Title = "Inspect hydrant",
             };
             assignment.Start(parent.Record.RecordId);
             await new SqliteAssignmentStore(path, key).SaveAsync(assignment);
@@ -78,6 +83,81 @@ public sealed class MobileRecordContextMigrationTests
             Assert.Equal(new FieldChange("condition", "dry", "leaking"), Assert.Single(edit.Changes));
             Assert.Equal(1, restored.Version);
             Assert.Equal(restored.Version, await history.GetNextSequenceAsync(restored.Record.RecordId));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(RecordSyncState.Pending)]
+    [InlineData(RecordSyncState.Uploading)]
+    [InlineData(RecordSyncState.Failed)]
+    [InlineData(RecordSyncState.Conflicted)]
+    public async Task Reopened_edit_keeps_the_server_feature_it_must_update(RecordSyncState state)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(directory.FullName, "records.db");
+            const string key = "device-test-key";
+            var syncedAt = DateTimeOffset.UnixEpoch.AddDays(20_000);
+            var record = new FieldRecord { RecordId = "inspection-42", FormId = "inspection", Status = RecordStatus.Submitted };
+            var entry = new FieldRecordEntry(record);
+            entry.MarkSynced("42", syncedAt);
+            entry.MarkEditedAfterSync();
+            record.Values["condition"] = "leaking";
+            var form = new FormDefinition
+            {
+                FormId = record.FormId,
+                Name = "Inspection",
+                Sections = [new FormSection { SectionId = "s", Label = "Inspection", Fields =
+                    [new FormField { FieldId = "condition", Label = "Condition", Type = FormFieldType.Text }] }],
+            };
+            var server = new FieldRecord { RecordId = record.RecordId, FormId = record.FormId, Status = record.Status };
+            server.Values["condition"] = "dry";
+            switch (state)
+            {
+                case RecordSyncState.Pending:
+                    entry.MarkPending();
+                    break;
+                case RecordSyncState.Uploading:
+                    entry.MarkUploading();
+                    break;
+                case RecordSyncState.Failed:
+                    entry.MarkFailed("Disconnected");
+                    break;
+                case RecordSyncState.Conflicted:
+                    entry.MarkConflicted(RecordConflictDetector.Detect(form, record, server));
+                    break;
+            }
+
+            var legacy = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            await legacy.SaveAsync(entry);
+            var migrated = await MobileRecordStore.OpenEncryptedAsync(path, key);
+            AssertStoredEdit(Assert.Single(await migrated.LoadAllAsync()));
+
+            await migrated.SaveAsync(entry);
+            var restarted = await MobileRecordStore.OpenEncryptedAsync(path, key);
+            var reopened = Assert.Single(await restarted.LoadAllAsync());
+            AssertStoredEdit(reopened);
+            if (state == RecordSyncState.Conflicted)
+            {
+                var conflict = RecordConflictDetector.Detect(form, reopened.Record, server);
+                reopened.ApplyResolution(conflict.ResolveAll(ConflictResolution.KeepLocal));
+                Assert.True(reopened.IsServerUpdate);
+                Assert.Equal("leaking", reopened.Record.Values["condition"]?.ToString());
+            }
+
+            void AssertStoredEdit(FieldRecordEntry stored)
+            {
+                Assert.Equal(state, stored.SyncState);
+                Assert.Equal("42", stored.RemoteId);
+                Assert.Equal(syncedAt, stored.LastSyncedUtc);
+                Assert.Equal(entry.FailedAttempts, stored.FailedAttempts);
+                Assert.Equal(entry.LastError, stored.LastError);
+            }
         }
         finally
         {

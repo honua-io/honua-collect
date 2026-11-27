@@ -171,10 +171,15 @@ public sealed class FieldRecordEntry
     public void MarkSynced(string? remoteId = null, DateTimeOffset? syncedAtUtc = null)
     {
         SyncState = RecordSyncState.Synced;
-        RemoteId = remoteId;
-        LastSyncedUtc = syncedAtUtc ?? DateTimeOffset.UtcNow;
+        RestoreServerIdentity(remoteId, syncedAtUtc ?? DateTimeOffset.UtcNow);
         LastError = null;
         FailedAttempts = 0;
+    }
+
+    internal void RestoreServerIdentity(string? remoteId, DateTimeOffset? lastSyncedUtc)
+    {
+        RemoteId = remoteId;
+        LastSyncedUtc = lastSyncedUtc;
     }
 
     /// <summary>Records a failed upload attempt.</summary>
