@@ -14,6 +14,7 @@ The .NET package table is verified against `Directory.Packages.props` and `src/*
 | Honua.Mobile.Offline | 0.1.0-alpha.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
 | Honua.Mobile.Sdk | 0.1.0-alpha.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
 | Honua.Sdk.Field | 2.2.0 | Apache-2.0 | https://github.com/honua-io/honua-sdk-dotnet |
+| Honua.Sdk.Geometry | 2.2.0 | Apache-2.0 | https://github.com/honua-io/honua-sdk-dotnet |
 | Microsoft.Data.Sqlite.Core | 11.0.0 | MIT | https://docs.microsoft.com/dotnet/standard/data/sqlite/ |
 | Microsoft.Extensions.Http | 11.0.0 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Debug | 11.0.0 | MIT | https://dot.net/ |
@@ -31,4 +32,4 @@ The following attribution notices are preserved in accordance with Apache Licens
 - **SQLitePCL.raw (`SQLitePCLRaw.bundle_e_sqlcipher`)** — Copyright Eric Sink and contributors. Licensed under the Apache License, Version 2.0. Bundles SQLCipher (Copyright Zetetic LLC, BSD-3-Clause) and SQLite (Public Domain).
 - **ZXing.Net (`ZXing.Net`)** — Copyright 2012 Michael Jahn and ZXing authors. Licensed under the Apache License, Version 2.0. Port of ZXing ("Zebra Crossing") barcode scanning library (Copyright ZXing authors, Apache-2.0).
 - **SkiaSharp (`SkiaSharp`)** — Copyright Microsoft Corporation. Licensed under the MIT License. Bundles the Skia graphics library (Copyright Google Inc., BSD-3-Clause).
-- **Honua SDK packages (`Honua.Sdk.Field`, `Honua.Mobile.*`)** — Copyright Honua Geo Inc. Licensed under the Apache License, Version 2.0.
+- **Honua SDK packages (`Honua.Sdk.Field`, `Honua.Sdk.Geometry`, `Honua.Mobile.*`)** — Copyright Honua Geo Inc. Licensed under the Apache License, Version 2.0.

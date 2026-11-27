@@ -41,15 +41,24 @@
         "resolved": "4.0.1",
         "contentHash": "8CoAaZkniVekR1ycJyxn+hOz+6ZQCDPcoIsIs6ujd4WyFcBMlxGNU15Qb8Uxd4iO4UmOuETb0M6vzBbwX/mfLA=="
       },
+      "Geospatial.Grpc": {
+        "type": "Transitive",
+        "resolved": "1.0.2",
+        "contentHash": "kR3TThy8DUzHiL3ad/76gsx+GbqyXse5JWus17CXA/7KPzqFEzAcBjacxsHoDF8J5oZTH6n0vgoU01gv5DwxrQ==",
+        "dependencies": {
+          "Google.Protobuf": "3.36.2",
+          "Grpc.Core.Api": "2.84.0"
+        }
+      },
       "Google.Protobuf": {
         "type": "Transitive",
-        "resolved": "3.33.1",
-        "contentHash": "RztiFmX9aOWDwfhxFzx/nS4fjs4DX7ZC7/XBEBl56k15lPGBftvbSwZkeo1mMCJHrNp1kK5iQYrFXB4MqCmBCA=="
+        "resolved": "3.36.2",
+        "contentHash": "Ci1q1iJg74qAE5riTA2FbMS0wPbpruPQI/JQ9DrAsRo2VsSxgt1e/pmxGxgrci+pXJEgrSYg2vPl8rrStZkclQ=="
       },
       "Grpc.Core.Api": {
         "type": "Transitive",
-        "resolved": "2.71.0",
-        "contentHash": "QquqUC37yxsDzd1QaDRsH2+uuznWPTS8CVE2Yzwl3CvU4geTNkolQXoVN812M2IwT6zpv3jsZRc9ExJFNFslTg=="
+        "resolved": "2.84.0",
+        "contentHash": "p2SOMl6q/GZ4/5MLkgboC/z55g4zKUEruRn/g46QgppjQBVnsLZVBU/9VO7n60ll38G3Eo8Zu9b7x+W01GKFVg=="
       },
       "Grpc.Net.Client": {
         "type": "Transitive",
@@ -104,6 +113,33 @@
         "dependencies": {
           "Microsoft.TestPlatform.ObjectModel": "18.12.0"
         }
+      },
+      "NetTopologySuite": {
+        "type": "Transitive",
+        "resolved": "2.6.0",
+        "contentHash": "1B1OTacTd4QtFyBeuIOcThwSSLUdRZU3bSFIwM8vk36XiZlBMi3K36u74e4OqwwHRHUuJC1PhbDx4hyI266X1Q=="
+      },
+      "NetTopologySuite.Features": {
+        "type": "Transitive",
+        "resolved": "2.1.0",
+        "contentHash": "Iq+Ie9WZJj8Pyu3asHZ/UwZLim786QzWC0DmLEzFK2u3BeLHDK7iWfsYBLDb/RCBUql8VBmW6LMlsJ+LKUHduA==",
+        "dependencies": {
+          "NetTopologySuite": "[2.0.0, 3.0.0-A)"
+        }
+      },
+      "NetTopologySuite.IO.GeoJSON4STJ": {
+        "type": "Transitive",
+        "resolved": "4.0.0",
+        "contentHash": "Jdm9qBVDcHkrVn3fm3knw6pGu3Ggn31tGVRyIP1/5HSL+8EDPfUnEZF0+oVFBkOKR9tqu9aV2jmEX42Kq8F2Yw==",
+        "dependencies": {
+          "NetTopologySuite": "[2.0.0, 3.0.0-A)",
+          "NetTopologySuite.Features": "[2.1.0, 3.0.0-A)"
+        }
+      },
+      "ProjNET": {
+        "type": "Transitive",
+        "resolved": "2.1.0",
+        "contentHash": "4F0xEYe+cQCgWgnf1UaDlRPFm9RxTaSFt4C/axNnCgSCNWU1AFDNvTyVdN/RwNmTYoGEWxo4sOYMQrW9kQtwpg=="
       },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
@@ -202,6 +238,7 @@
           "Honua.Mobile.Offline": "[0.1.0-alpha.1, )",
           "Honua.Mobile.Sdk": "[0.1.0-alpha.1, )",
           "Honua.Sdk.Field": "[2.2.0, )",
+          "Honua.Sdk.Geometry": "[2.2.0, )",
           "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
           "SkiaSharp": "[4.156.1, )"
@@ -251,6 +288,19 @@
         "contentHash": "U7ZiLr1ObHWbvVgrBXq1yGTWOgMhKNYezIqZMaoh/vIcHIqfDSIUFAjfve/shWWAn/3/GKn5lxE/AAwXEQpb4Q==",
         "dependencies": {
           "Honua.Sdk.Abstractions": "2.2.0"
+        }
+      },
+      "Honua.Sdk.Geometry": {
+        "type": "CentralTransitive",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "iskvfVAI2XgfdJFkOb3C1v+US54lkBp9/TB9D8wuA1dBjFbMN5B6acQCIz8GuQoRmOWSbnH3FNZrbRfqj4DuCg==",
+        "dependencies": {
+          "Geospatial.Grpc": "1.0.2",
+          "Honua.Sdk.Abstractions": "2.2.0",
+          "NetTopologySuite": "2.6.0",
+          "NetTopologySuite.IO.GeoJSON4STJ": "4.0.0",
+          "ProjNET": "2.1.0"
         }
       },
       "Microsoft.Data.Sqlite.Core": {
