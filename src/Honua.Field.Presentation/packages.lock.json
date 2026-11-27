@@ -1,7 +1,7 @@
 {
   "version": 2,
   "dependencies": {
-    "net11.0-android37.0": {
+    "net11.0": {
       "Honua.Sdk.Field": {
         "type": "Direct",
         "requested": "[5.1.1-fieldforms.2, )",
@@ -26,7 +26,8 @@
         "resolved": "4.156.1",
         "contentHash": "DFlbYk/Rxnqm+UM/EaynxLlucc07+fuWzT84KsyT8aCDAT1PZOPlp5eATD7eYczTgV771bnxQKSrLbNmUCaSLQ==",
         "dependencies": {
-          "SkiaSharp.NativeAssets.Android": "4.156.1"
+          "SkiaSharp.NativeAssets.Win32": "4.156.1",
+          "SkiaSharp.NativeAssets.macOS": "4.156.1"
         }
       },
       "Google.Protobuf": {
@@ -324,20 +325,25 @@
         "resolved": "2.1.0",
         "contentHash": "4F0xEYe+cQCgWgnf1UaDlRPFm9RxTaSFt4C/axNnCgSCNWU1AFDNvTyVdN/RwNmTYoGEWxo4sOYMQrW9kQtwpg=="
       },
-      "SkiaSharp.NativeAssets.Android": {
+      "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
         "resolved": "4.156.1",
-        "contentHash": "suFBH48lYyzjx+E5C1E0pnnf0d7kaur5GLmcuhf0+7Q8FdKnx+7G+N+0Bgo2pxwA5upPacZKdyUEDo+PbyULow=="
+        "contentHash": "c05wS/CpRum9JKzk77bXrUsBdxIhv4QBk+sbE3nlEfoEV53Uq9VY4yxuae20lO42kE8PoLShuh6dbbvRrE4/iw=="
+      },
+      "SkiaSharp.NativeAssets.Win32": {
+        "type": "Transitive",
+        "resolved": "4.156.1",
+        "contentHash": "BFSUQxmxG9KI2UV7MW1Xb4XhCLSB7Rwsg9E94KelNi8L6ptGXnHIOm3yqU/y3djwg4ZNiBWhOB8XAGUVaF9LuA=="
       },
       "SQLitePCLRaw.core": {
         "type": "Transitive",
         "resolved": "3.0.5",
         "contentHash": "k81AYXXRCw3Zj8rOhyBoCsx/U97KYDFI2CSKr/ijl5BwpsW/hX/4kBiDmerFaoust8nxBwa0IHQFw8MmSHRtnQ=="
       },
-      "SQLitePCLRaw.lib.e_sqlcipher.android": {
+      "SQLitePCLRaw.lib.e_sqlcipher": {
         "type": "Transitive",
         "resolved": "2.1.11",
-        "contentHash": "Urehfbyce/CRzvquSBVtQWvzpouioLiJvbdEQ8/jPntR5wITTM6QmEDrouhX9bzSyp8RTLOBOORku/vfrVGW3A=="
+        "contentHash": "Cg6UPeDbH8jyaOs1vqXYIgeewH0wYrBnmbC5Ml3GYBo+GKzNmyxrWSO52JV68bfB7Addt/PZLMekJV1RH2ftWQ=="
       },
       "SQLitePCLRaw.provider.e_sqlcipher": {
         "type": "Transitive",
@@ -422,7 +428,7 @@
         "resolved": "2.1.11",
         "contentHash": "NFuxa/rD3Ah88jbFOgsoUjuWcLiBkj3iqgO2gJXola9NtjtCTRI3HMQtVjQDnrhCvdBOAJ4RqbwnqoEMLht8GQ==",
         "dependencies": {
-          "SQLitePCLRaw.lib.e_sqlcipher.android": "2.1.11",
+          "SQLitePCLRaw.lib.e_sqlcipher": "2.1.11",
           "SQLitePCLRaw.provider.e_sqlcipher": "2.1.11"
         }
       }
