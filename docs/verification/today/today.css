@@ -1,0 +1,47 @@
+/* Field prototype uses the Honua design system's semantic light/dark palette. */
+:root {
+  color-scheme: light;
+  --bg: #f7f9f8; --surface: #fff; --text: #171c1a; --muted: #4b5551;
+  --line: #7f8c87; --accent: #0f766e; --inverse: #fff; --selected: #e6f6f2;
+  --map: #e6ebe9; --road: #fff;
+  font: 100%/1.5 "Geist", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #08131a; --surface: #0e1e27; --text: #e6efee; --muted: #b3c6c4;
+    --line: #8ea7a6; --accent: #5fc4a6; --inverse: #04151a; --selected: #12332e;
+    --map: #162a34; --road: #22343f;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+header { background: var(--surface); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: 1rem max(1rem, calc((100vw - 64rem) / 2)); gap: 1rem; }
+header span:first-child, label { font-weight: 650; }
+main { max-width: 66rem; margin: auto; padding: 1rem; }
+h1, h2, h3 { line-height: 1.15; margin: 1rem 0 .5rem; }
+h1 { font-size: 2.25rem; }
+p { margin: .4rem 0 1rem; }
+button, select, textarea { color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: .375rem; font: inherit; }
+button, select, summary { min-height: 48px; padding: .65rem .9rem; cursor: pointer; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 1rem; }
+button[aria-pressed=true], .primary { background: var(--accent); color: var(--inverse); border-color: var(--accent); }
+.stop { width: 100%; display: grid; text-align: left; gap: .15rem; padding: .8rem 1rem; margin-bottom: .5rem; }
+.stop[aria-current=true] { background: var(--selected); border: 2px solid var(--accent); }
+.stop span, #asset, #history, #attachment { color: var(--muted); }
+#detail { border-top: 2px solid var(--accent); padding: .25rem 1rem 1rem; background: var(--surface); }
+label, textarea { display: block; }
+textarea { padding: .65rem; width: 100%; margin: .35rem 0 .6rem; }
+#map { position: relative; height: 18rem; padding: .75rem; background: var(--map); border: 1px solid var(--line); overflow: hidden; }
+.road { position: absolute; display: block; color: var(--muted); background: var(--road); text-align: end; padding: 0 .5rem; width: 100%; }
+.oak { top: 32%; } .park { top: 73%; }
+.pin { position: absolute; min-width: 48px; font-weight: 700; color: var(--inverse); background: var(--accent); }
+details { border-top: 1px solid var(--line); margin-top: 1rem; }
+summary { padding-left: 0; }
+@media (min-width: 48rem) {
+  main { display: grid; grid-template-columns: minmax(17rem, 5fr) minmax(20rem, 7fr); gap: 1.5rem; align-items: start; }
+  #detail { margin-top: 1rem; }
+  #announcement, details { grid-column: 1 / -1; }
+}
