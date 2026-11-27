@@ -79,6 +79,7 @@ export FileStorage__Provider=Local FileStorage__LocalStorage__BasePath="$state/a
 export Geocoding__Enabled=false
 report_startup_diagnostics() {
     python3 - "$state" <<'PYTHON'
+from collections import deque
 from pathlib import Path
 import re
 import sys
@@ -95,24 +96,23 @@ for filename in ("db-password", "admin-key", "master-key", "encryption-salt", "w
 for secret in tuple(secrets):
     secrets.add(re.sub(r"%[0-9A-F]{2}", lambda match: match[0].lower(), secret))
 
-for filename, host_trace in (("server.log", False), ("server-host.trace", True)):
+patterns = {
+    "server.log": r"\b(?:WRN|ERR|FTL|warn|fail|critical)\b|migrat|now listening|exception",
+    "server-host.trace": r"error|failed|not found|could not|permission denied",
+    "postgres.log": r"\b(?:ERROR|FATAL|PANIC|DETAIL|HINT)\b",
+}
+redactions = sorted(secrets, key=len, reverse=True)
+for filename, pattern in patterns.items():
     log = state / filename
     if not log.exists():
         continue
-    print(f"Startup diagnostics from {filename}", file=sys.stderr)
-    shown = 0
     with log.open(errors="replace") as entries:
-        for line in entries:
-            if host_trace and not re.search(
-                r"error|failed|not found|could not|permission denied", line, re.IGNORECASE
-            ):
-                continue
-            for secret in sorted(secrets, key=len, reverse=True):
-                line = line.replace(secret, "[REDACTED]")
-            print(line.rstrip()[:1500], file=sys.stderr)
-            shown += 1
-            if shown == 16:
-                break
+        selected = deque((line for line in entries if re.search(pattern, line, re.IGNORECASE)), maxlen=24)
+    print(f"Startup diagnostics from {filename}", file=sys.stderr)
+    for line in selected:
+        for secret in redactions:
+            line = line.replace(secret, "[REDACTED]")
+        print(line.rstrip()[:1500], file=sys.stderr)
 PYTHON
 }
 cd "$RUNNER_TEMP/published-server"
@@ -139,7 +139,11 @@ for ((attempt = 0; attempt < 90; ++attempt)); do
 done
 echo "::error::Timed out waiting for the fixture server" >&2
 ps -o pid,ppid,state,comm -p "$server_pid" >&2 || true
-curl --silent --max-time 2 --output /dev/null --write-out 'Fixture readiness HTTP %{http_code}\n' "$base_url/healthz/ready" >&2 || true
+curl --silent --max-time 2 --output /dev/null --dump-header "$state/readiness.headers" \
+    --write-out 'Fixture readiness HTTP %{http_code}\n' "$base_url/healthz/ready" >&2 || true
+if [[ -s "$state/readiness.headers" ]]; then
+    awk 'tolower($1) == "x-honua-readiness-reason:" && $2 ~ /^[a-z-]+\r?$/ { print $1, $2 }' "$state/readiness.headers" >&2
+fi
 report_startup_diagnostics
 exit 1
 RESTART
