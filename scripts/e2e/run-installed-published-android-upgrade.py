@@ -283,15 +283,18 @@ def recover_key(args, device):
 def recover_outbox(args, device):
     before = json.loads((args.report / "before.json").read_text())
     port = os.environ.get("HONUA_E2E_HTTP_PORT", "5189")
+    version = str(before["storage"]["formVersion"])
+    latest_version = subprocess.check_output([
+        str(HERE / "publish-next-inspection-version.sh"), port, version, str(args.admin_key_file),
+    ], text=True, timeout=120).strip()
     device.adb("reverse", f"tcp:{port}", f"tcp:{port}")
     try:
         run_flow(args, "recovered-outbox", "recover-legacy-outbox-android",
                  OUTBOX_ID=before["storage"]["outboxId"])
-        version = str(before["storage"]["formVersion"])
         subprocess.run([
             "python3", str(HERE / "assert-field-record.py"),
             "--server", f"http://127.0.0.1:{port}", "--api-key-file", str(args.admin_key_file),
-            "--form", FORM, "--version", version, "--latest-version", version,
+            "--form", FORM, "--version", version, "--latest-version", latest_version,
             "--name", QUEUE_NAME, "--status", "open", "--status", "closed", "--total", "2",
             "--repeat-note", "Offline visit one", "--repeat-note", "Offline visit two",
             "--longitude=-157.81", "--latitude=21.31",
