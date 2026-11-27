@@ -42,9 +42,8 @@ testable without a device and unblocks every widget and screen above it:
 - **`Field/Forms/FormLocalizer` + `FormTranslations`** — produces a localized
   copy of a form (labels/help/choices) for a target language, with fallback to
   authored text. Backs **F2**.
-- **`Field/Forms/Authoring/XlsFormImporter`** — imports XLSForm survey/choices
-  rows (types, groups/repeats, choices, required, relevant, calculate) into a
-  `FormDefinition`. Backs **F1**.
+- **Published XLSForm capture (F1).** The .NET SDK converts workbooks. Honua
+  Server publishes form versions and Field downloads them for offline capture.
 - **`Field/Capture/*`** — `ICaptureHost`, `MediaCaptureField` (policy-enforcing
   photo/video/audio/signature/sketch), `BarcodeCaptureField`, and the
   `CaptureWidget` kind map. Backs **C1–C6**.

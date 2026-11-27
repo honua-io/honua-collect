@@ -161,7 +161,8 @@ build. Users sign in on the Account tab against that server's token endpoint. Th
 
 ### Forms
 
-For a published XLSForm, set `server.formId` to its Honua Server form ID. The
+Import the XLSForm workbook against a service layer and publish it on Honua Server.
+Set `server.formId` to the published form ID. The
 default is `field_site`. Sign in, then tap **Download Latest Form** on the Capture
 screen and check the version shown. Tap **Start New Inspection** to collect a
 record. Enable offline use when publishing the form so workers can open it after
@@ -224,7 +225,7 @@ Repo docs:
 | --- | --- |
 | [Self-hosting guide](docs/self-hosting.md) | Point Field at a self-hosted Honua server (config surface, auth, quickstart). |
 | [GeoServices compatibility matrix](docs/geoservices-compatibility.md) | Supported GeoServices REST behavior, marked honestly with evidence links. |
-| [Shared offline runtime adoption](docs/mobile-offline-adoption.md) | Migration requirements, weekly Android and iOS gates, and the founder phone upgrade journey. |
+| [Capability ownership and offline adoption](docs/mobile-offline-adoption.md) | Where XLSForm, sync and capture changes belong, what still needs to move, and how to verify a device upgrade. |
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
