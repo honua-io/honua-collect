@@ -31,6 +31,10 @@ permissions:
 jobs:
   published-ios:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        upgrade-state: [draft, outbox]
     runs-on: xcode-27
     timeout-minutes: 75
     env:
@@ -42,6 +46,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
+      - name: Check out the previous Field build
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: 6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46
+          path: field-previous
           persist-credentials: false
       - name: Read pinned Honua Server revision
         id: server
@@ -91,13 +101,15 @@ jobs:
           echo "$(brew --prefix postgresql@18)/bin" >> "$GITHUB_PATH"
       - name: Install MAUI iOS workload
         run: dotnet workload install maui-ios
-      - name: Build Field iOS simulator app
+      - name: Build both Field iOS simulator apps
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
-          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
-            -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
-            --configuration Debug --disable-build-servers
+          for checkout in field-previous .; do
+            (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+              -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+              --configuration Debug --disable-build-servers)
+          done
       - name: Publish the candidate server for macOS
         working-directory: server-candidate
         env:
@@ -109,6 +121,7 @@ jobs:
             --output "$RUNNER_TEMP/published-server"
       - name: Verify offline capture and receipt replay on iPhone
         env:
+          HONUA_E2E_UPGRADE_STATE: ${{ matrix.upgrade-state }}
           HONUA_E2E_SERVER_REVISION: ${{ steps.server-checkout.outputs.commit }}
           HONUA_E2E_REPORT_DIR: ${{ runner.temp }}/published-ios-report
         run: bash .github/workflows/run-published-ios-gate.sh
@@ -122,7 +135,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: published-ios-results
+          name: published-ios-results-${{ matrix.upgrade-state }}
           path: |
             ${{ runner.temp }}/published-ios-report/*/junit.xml
             ${{ runner.temp }}/published-ios-report/**/takeScreenshot/*-action.png
