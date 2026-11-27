@@ -45,11 +45,11 @@
       },
       "Honua.Sdk.Field": {
         "type": "Direct",
-        "requested": "[5.1.1-fieldforms.2, )",
-        "resolved": "5.1.1-fieldforms.2",
-        "contentHash": "iYHKmMtKQiUEN1UljBHJmrS5VpEOSijL8jVIa3PDl8+mzH8kBQTsmoaOCh1nYIx4q4NrWf/Xqo3aWTFygpK6bw==",
+        "requested": "[5.1.1-fieldforms.3, )",
+        "resolved": "5.1.1-fieldforms.3",
+        "contentHash": "JR/Xd9hKtZZ8uhJlRD4C47pf28MrOn0GBM3EbMR7+ChKlqryzQgyGeYODYLl8EhVlfSJgHmr7R4dimTmyQsi4Q==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "5.1.1-fieldforms.2"
+          "Honua.Sdk.Abstractions": "5.1.1-fieldforms.3"
         }
       },
       "Microsoft.Data.Sqlite.Core": {
@@ -109,8 +109,8 @@
       },
       "Honua.Sdk.Abstractions": {
         "type": "Transitive",
-        "resolved": "5.1.1-fieldforms.2",
-        "contentHash": "+jK5hTm7TPQtblF1YKzS1p7yrw1On2+DAbJpEfkm5FhTxne6mAYqZHYx4U9htmr9A41myxz0FEb+YREmz8zz4w=="
+        "resolved": "5.1.1-fieldforms.3",
+        "contentHash": "cKllKUyvZA99lmeHTzmgj53nYGosyTxwIS10cx+aFg7T32vvB8aOZULtBt9l8IUSIRh2F+eDGfMHtIdVKYDRPQ=="
       },
       "Honua.Sdk.Geometry": {
         "type": "Transitive",

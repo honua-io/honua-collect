@@ -1,8 +1,8 @@
-name: Honua Mobile branch validation feed
-description: Verify and restore the temporary Mobile validation packages for Field's draft migration
+name: Honua branch validation feeds
+description: Verify the temporary Mobile and SDK packages for Field branch validation
 inputs:
   token:
-    description: Workflow token with read access to the public Mobile validation artifact
+    description: Workflow token with read access to the upstream validation artifacts
     required: true
 runs:
   using: composite
@@ -31,7 +31,25 @@ runs:
         6757da9c9ef0fe821f40de2488a6b6786e7277702ebd6a4a5ebf12b308566ce6  Honua.Mobile.Sdk.0.1.0-ci.45949637544.1.nupkg
         HASHES
         )
-        python3 - "$feed" <<'PY'
+        sdk_repo=honua-io/honua-sdk-dotnet
+        sdk_run=45953326051
+        sdk_artifact=15177499058
+        sdk_revision=71441abb40fec1448d1c248788afbadd049d8059
+        sdk_digest=fee487cd2f768a860ab15bf6622e0de5d094beb7cfc614cfe62ec20f9079077b
+        sdk_feed="$(mktemp -d "$RUNNER_TEMP/honua-sdk-feed.XXXXXX")"
+        test "$(gh api "repos/$sdk_repo/actions/runs/$sdk_run" --jq '.head_sha + ":" + .conclusion')" = "$sdk_revision:success"
+        test "$(gh api "repos/$sdk_repo/actions/artifacts/$sdk_artifact" --jq '(.workflow_run.id | tostring) + ":" + .digest')" = "$sdk_run:sha256:$sdk_digest"
+        gh api "repos/$sdk_repo/actions/artifacts/$sdk_artifact/zip" > "$sdk_feed/packages.zip"
+        (cd "$sdk_feed" && printf '%s  packages.zip\n' "$sdk_digest" | shasum -a 256 -c)
+        unzip -jq "$sdk_feed/packages.zip" '*.nupkg' -d "$sdk_feed"
+        (
+          cd "$sdk_feed"
+          shasum -a 256 -c <<'HASHES'
+        021211f9d2694acab4a73d6dbda79f17a8292a44c19d4f4d25d6b9fa07fe2d7c  Honua.Sdk.Abstractions.5.1.1-fieldforms.3.nupkg
+        2b6e0172dc42a01e77067d2e7ea1c3d419fdc0d1e330d01eb63ebf17aa9e5b78  Honua.Sdk.Field.5.1.1-fieldforms.3.nupkg
+        HASHES
+        )
+        python3 - "$feed" "$sdk_feed" <<'PY'
         import sys
         import xml.etree.ElementTree as ET
         tree = ET.parse("NuGet.config")
@@ -40,6 +58,11 @@ runs:
         mapping = ET.SubElement(tree.find("packageSourceMapping"), "packageSource", key=name)
         for assembly in ("Maui", "Offline", "Sdk"):
             ET.SubElement(mapping, "package", pattern=f"Honua.Mobile.{assembly}")
+        name = "sdk-validation"
+        ET.SubElement(tree.find("packageSources"), "add", key=name, value=sys.argv[2])
+        mapping = ET.SubElement(tree.find("packageSourceMapping"), "packageSource", key=name)
+        for assembly in ("Field", "Abstractions"):
+            ET.SubElement(mapping, "package", pattern=f"Honua.Sdk.{assembly}")
         ET.indent(tree)
         tree.write("NuGet.config", encoding="utf-8", xml_declaration=True)
         PY
