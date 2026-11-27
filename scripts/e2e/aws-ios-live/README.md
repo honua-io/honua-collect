@@ -38,9 +38,14 @@ override accepts only development loopback addresses. Dispatch
 `AWS iOS artifacts` with `runtime=ios-arm64` and the fixture's HTTPS origin
 as `fixture_url` to package the two pinned source revisions with the
 fixture service, layer and form IDs. The origin must contain no credentials.
-Record the build run and artifact digests. The simulator's loopback override
-and `simctl` media injection apply only to the simulator. Use the native picker with a known JPEG on the physical device
-and record the digest of the bytes Field actually stored before syncing.
+Seed `field_inspections` layer `68950` and publish version 1 of
+`field_runtime_inspection` using `scripts/e2e/publish-field-runtime-fixture.sh`.
+Give the test operator a short-lived fixture worker login scoped to that form,
+layer and their attachments. Enter it in Field's Account screen and confirm
+that the fixture issues its worker token through `/sharing/rest/generateToken`.
+Revoke the login and token after the sessions. Record the build run and
+artifact digests. Use the native picker with a known JPEG on the physical
+device and record the digest of the bytes Field actually stored before syncing.
 
 To check device installation before setting up the workbook fixture, run
 `run-devicefarm-smoke.py` with the baseline `--app` and `--revision`,
@@ -71,3 +76,9 @@ against the captured digest. Stop each session after evidence collection.
 
 The simulator results above cover both scenarios. Physical qualification
 requires both physical sessions to pass the same readback checks.
+
+The [November 27, 2026 Device Farm preflight](https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/afe2be56-2a71-433e-8d74-1b0354523ff2/sessions/e662226e-e746-428e-883c-b2258c6d0a4b)
+established an XCUITest connection on an Apple iPhone 18 Pro running iOS 27.0.
+Appium listed installed apps and confirmed the device was clean of Field.
+The session ended before Field installation or fixture access. The project had
+no private device or VPC path to the seeded fixture.
