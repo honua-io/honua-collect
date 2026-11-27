@@ -29,6 +29,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Honua.Field.Core\Honua.Field.Core.csproj" />
+    <!-- The live server fixture drives Field through the same Sync Center as the installed app. -->
+    <ProjectReference Include="..\..\src\Honua.Field.Presentation\Honua.Field.Presentation.csproj" />
   </ItemGroup>
 
 </Project>

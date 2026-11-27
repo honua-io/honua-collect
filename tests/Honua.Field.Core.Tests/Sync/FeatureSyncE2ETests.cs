@@ -3,7 +3,10 @@
 
 using System.Globalization;
 using System.Text.Json;
+using Honua.Field.Core.Records;
+using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
+using Honua.Field.Presentation.Sync;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Sync;
@@ -27,9 +30,9 @@ public class FeatureSyncE2ETests
     private static bool Enabled => !string.IsNullOrWhiteSpace(ServerUrl);
     private static GeoServicesTarget Target => new(ServerUrl!, ServiceId, LayerId);
 
-    private static HttpClient Authed()
+    private static HttpClient Authed(HttpMessageHandler? handler = null)
     {
-        var http = new HttpClient { BaseAddress = new Uri(ServerUrl!) };
+        var http = new HttpClient(handler ?? new HttpClientHandler()) { BaseAddress = new Uri(ServerUrl!) };
         if (!string.IsNullOrWhiteSpace(ApiKey))
         {
             http.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
@@ -72,6 +75,95 @@ public class FeatureSyncE2ETests
     }
 
     // ---- Add / update / delete happy paths -----------------------------------
+
+    [SkippableFact]
+    public async Task Lost_add_acknowledgment_survives_reopen_without_creating_a_second_feature()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is required for the live sync test.");
+
+        var marker = Marker();
+        var fault = new DropCommittedAddResponse();
+        using var uploadHttp = Authed(fault);
+        using var readHttp = Authed();
+        var sync = new GeoServicesFeatureSync(uploadHttp);
+        var directory = Directory.CreateTempSubdirectory();
+        var path = Path.Combine(directory.FullName, "field.db");
+        const string key = "lost-ack-test-key";
+
+        SyncCenterViewModel OpenCenter(SqliteRecordStore store, IReadOnlyList<FieldRecordEntry> entries) =>
+            new(entries, (entry, ct) => sync.SubmitAsync(entry.Record, Target, ct), null, null,
+                persist: entry => store.SaveAsync(entry),
+                batchUploader: (batch, ct) => sync.SubmitBatchAsync(batch.Select(entry => entry.Record).ToArray(), Target, ct));
+
+        try
+        {
+            var store = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            var record = Site(marker, r => r.Status = RecordStatus.Submitted);
+            var entry = new FieldRecordEntry(record);
+            entry.MarkPending();
+            await store.SaveAsync(entry);
+
+            Assert.Equal(0, await OpenCenter(store, [entry]).SyncAsync());
+            Assert.NotNull(fault.CommittedObjectId);
+            var requestsAfterCommit = fault.EditRequests;
+
+            var reopened = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            var entries = await reopened.LoadAllAsync();
+            var held = Assert.Single(entries);
+            Assert.Equal(record.RecordId, held.Record.RecordId);
+            Assert.Equal(marker, held.Record.Values["site_name"]?.ToString());
+            Assert.True(held.RequiresServerVerification);
+            var secondPass = await OpenCenter(reopened, entries).SyncAsync();
+
+            var feature = Assert.Single((await QueryByNameAsync(readHttp, marker)).EnumerateArray());
+            Assert.Equal(fault.CommittedObjectId, ReadLong(feature.GetProperty("attributes"), "objectid"));
+            Assert.Equal(0, secondPass);
+            Assert.Equal(requestsAfterCommit, fault.EditRequests);
+            Assert.False(held.IsPendingUpload);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+            var cleanup = new GeoServicesFeatureSync(readHttp);
+            foreach (var feature in (await QueryByNameAsync(readHttp, marker)).EnumerateArray())
+            {
+                var deleted = await cleanup.DeleteAsync(ReadLong(feature.GetProperty("attributes"), "objectid"), Target);
+                Assert.True(deleted.Success, deleted.Error);
+            }
+        }
+    }
+
+    // Deliver all protocol errors normally. Drop the first actual success only after the server
+    // returns the assigned ID, as happens when the response is lost on the way back to Field.
+    private sealed class DropCommittedAddResponse() : DelegatingHandler(new HttpClientHandler())
+    {
+        public long? CommittedObjectId { get; private set; }
+        public int EditRequests { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var response = await base.SendAsync(request, ct);
+            if (request.RequestUri?.AbsolutePath.EndsWith("/applyEdits", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                return response;
+            }
+
+            EditRequests++;
+            if (CommittedObjectId is null && response.IsSuccessStatusCode)
+            {
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+                if (body.RootElement.TryGetProperty("addResults", out var results) && results.GetArrayLength() == 1
+                    && results[0].GetProperty("success").GetBoolean())
+                {
+                    CommittedObjectId = ReadLong(results[0], "objectId");
+                    response.Dispose();
+                    throw new HttpRequestException("The committed response was lost.");
+                }
+            }
+
+            return response;
+        }
+    }
 
     [SkippableFact]
     public async Task Batch_add_persists_each_feature_once_and_returns_matching_object_ids()

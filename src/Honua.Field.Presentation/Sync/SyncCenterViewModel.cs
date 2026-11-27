@@ -82,6 +82,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     private readonly BatchRecordUploader? _batchUploader;
     private readonly int _batchSize;
     private readonly RecordStatePersister? _persist;
+    private readonly Func<bool>? _canDispatchOrdinaryAdd;
     private readonly FeaturePuller? _puller;
     private readonly FormDefinition? _form;
     private readonly FeaturePullService _pullService = new();
@@ -119,6 +120,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// </param>
     /// <param name="batchSize">Maximum records per batch round-trip (defaults to <see cref="DefaultBatchSize"/>).</param>
     /// <param name="logger">Optional structured logger.</param>
+    /// <param name="canDispatchOrdinaryAdd">Whether the device can attempt an ordinary add now.</param>
     public SyncCenterViewModel(
         IEnumerable<FieldRecordEntry> entries,
         RecordUploader uploader,
@@ -127,7 +129,8 @@ public sealed class SyncCenterViewModel : ObservableObject
         RecordStatePersister? persist = null,
         BatchRecordUploader? batchUploader = null,
         int batchSize = DefaultBatchSize,
-        ILogger<SyncCenterViewModel>? logger = null)
+        ILogger<SyncCenterViewModel>? logger = null,
+        Func<bool>? canDispatchOrdinaryAdd = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
@@ -137,6 +140,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         _persist = persist;
         _puller = puller;
         _form = form;
+        _canDispatchOrdinaryAdd = canDispatchOrdinaryAdd;
         _logger = logger ?? NullLogger<SyncCenterViewModel>.Instance;
         _entries = entries.ToList();
         Pending = new ObservableCollection<FieldRecordEntry>(_entries.Where(e => e.IsPendingUpload));
@@ -339,8 +343,7 @@ public sealed class SyncCenterViewModel : ObservableObject
                 // New-record adds can be batched into one applyEdits round-trip; a
                 // server update (PendingUpdate keyed by RemoteId) stays one-at-a-time
                 // because applyEdits batching here targets the adds array only.
-                var adds = pending.Where(e => e.PublishedSubmission is null && e.RemoteId is null
-                    && e.Record.Status != Honua.Sdk.Field.Records.RecordStatus.Deleted).ToList();
+                var adds = pending.Where(e => e.IsOrdinaryAdd).ToList();
                 var updates = pending.Except(adds).ToList();
                 synced += await SyncBatchedAsync(adds, cancellationToken);
                 synced += await SyncPerRecordAsync(updates, cancellationToken);
@@ -369,11 +372,23 @@ public sealed class SyncCenterViewModel : ObservableObject
         var synced = 0;
         foreach (var entry in entries)
         {
-            entry.MarkUploading();
+            var ordinaryAdd = entry.IsOrdinaryAdd;
+            if (ordinaryAdd)
+            {
+                if (!await PrepareOrdinaryAddAsync(entry))
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                entry.MarkUploading();
+            }
+
             try
             {
                 var result = await _uploader(entry, cancellationToken);
-                if (ApplyResult(entry, result))
+                if (ordinaryAdd ? entry.ApplyOrdinaryAddResult(result) : ApplyResult(entry, result))
                 {
                     synced++;
                 }
@@ -384,10 +399,16 @@ public sealed class SyncCenterViewModel : ObservableObject
                     ex,
                     "Upload threw {ExceptionType} for record {RecordId}.",
                     ex.GetType().Name, entry.Record.RecordId);
-                entry.MarkFailed(ex.Message);
+                if (!ordinaryAdd)
+                {
+                    entry.MarkFailed(ex.Message);
+                }
             }
 
-            await PersistAsync(entry);
+            if (!entry.RequiresServerVerification)
+            {
+                await PersistAsync(entry);
+            }
         }
 
         return synced;
@@ -402,10 +423,18 @@ public sealed class SyncCenterViewModel : ObservableObject
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var chunk = adds.Skip(start).Take(_batchSize).ToList();
-            foreach (var entry in chunk)
+            var chunk = new List<FieldRecordEntry>();
+            foreach (var entry in adds.Skip(start).Take(_batchSize))
             {
-                entry.MarkUploading();
+                if (await PrepareOrdinaryAddAsync(entry))
+                {
+                    chunk.Add(entry);
+                }
+            }
+
+            if (chunk.Count == 0)
+            {
+                continue;
             }
 
             IReadOnlyList<FeatureSyncResult> results;
@@ -419,31 +448,24 @@ public sealed class SyncCenterViewModel : ObservableObject
                     ex,
                     "Batch upload threw {ExceptionType} for {ChunkCount} record(s).",
                     ex.GetType().Name, chunk.Count);
-                // A whole-batch transport failure fails every record in the chunk;
-                // they stay in the Outbox to retry on the next pass.
-                foreach (var entry in chunk)
-                {
-                    entry.MarkFailed(ex.Message);
-                    await PersistAsync(entry);
-                }
-
                 continue;
             }
 
             for (var i = 0; i < chunk.Count; i++)
             {
-                // A result list shorter than the chunk means the server did not
-                // report that entry — treat the unreported tail as failed rather than
-                // silently marking it synced.
+                // Missing results leave the durable verification hold in place.
                 var result = i < results.Count
                     ? results[i]
                     : FeatureSyncResult.Fail("The server did not return a result for this record.");
-                if (ApplyResult(chunk[i], result))
+                if (chunk[i].ApplyOrdinaryAddResult(result))
                 {
                     synced++;
                 }
 
-                await PersistAsync(chunk[i]);
+                if (!chunk[i].RequiresServerVerification)
+                {
+                    await PersistAsync(chunk[i]);
+                }
             }
         }
 
@@ -476,6 +498,25 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
 
         return false;
+    }
+
+    private async Task<bool> PrepareOrdinaryAddAsync(FieldRecordEntry entry)
+    {
+        if (!entry.IsPendingUpload || _canDispatchOrdinaryAdd?.Invoke() == false)
+        {
+            return false;
+        }
+
+        try
+        {
+            await entry.PrepareOrdinaryAddAsync(e => _persist?.Invoke(e) ?? Task.CompletedTask);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not prepare record {RecordId} for upload.", entry.Record.RecordId);
+            return false;
+        }
     }
 
     private async Task PersistAsync(FieldRecordEntry entry)

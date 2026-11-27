@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Text.Json;
+using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
 
@@ -994,6 +995,61 @@ public class GeoServicesFeatureSyncTests
 
         Assert.False(result.Success);
         Assert.Null(result.ObjectId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Adds_stay_in_the_outbox_when_the_payload_cannot_be_encoded(bool batch)
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, OkAdd);
+        using var http = new HttpClient(handler);
+        var sync = new GeoServicesFeatureSync(http, FastRetry);
+        var invalid = Record("invalid");
+        invalid.Location = new FieldGeoPoint(21.30, double.PositiveInfinity);
+
+        var records = batch ? new[] { Record(), invalid } : new[] { invalid };
+        var results = batch
+            ? await sync.SubmitBatchAsync(records, T)
+            : new[] { await sync.SubmitAsync(invalid, T) };
+
+        Assert.Null(handler.CapturedUri);
+        Assert.Equal(records.Length, results.Count);
+        for (var i = 0; i < records.Length; i++)
+        {
+            records[i].Status = RecordStatus.Submitted;
+            var entry = new FieldRecordEntry(records[i]);
+            entry.MarkPending();
+            entry.MarkAddNeedsVerification();
+
+            Assert.False(entry.ApplyOrdinaryAddResult(results[i]));
+            Assert.Equal(0, results[i].Attempts);
+            Assert.Equal(RecordSyncState.AddRejected, entry.SyncState);
+            Assert.True(entry.IsPendingUpload);
+            Assert.False(entry.RequiresServerVerification);
+        }
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.NameResolutionError)]
+    [InlineData(HttpRequestError.ConnectionError)]
+    public async Task Adds_hold_for_verification_after_transport_failure(HttpRequestError error)
+    {
+        using var http = new HttpClient(new ThrowingHandler(new HttpRequestException(error, "network failure")));
+        var sync = new GeoServicesFeatureSync(http, FastRetry);
+
+        var direct = await sync.SubmitAsync(Record(), T);
+        var batch = Assert.Single(await sync.SubmitBatchAsync([Record()], T));
+        foreach (var result in new[] { direct, batch })
+        {
+            var record = new FieldRecordEntry(Record());
+            record.Record.Status = RecordStatus.Submitted;
+            record.MarkPending();
+            record.MarkAddNeedsVerification();
+            Assert.False(record.ApplyOrdinaryAddResult(result));
+            Assert.True(record.RequiresServerVerification);
+            Assert.False(record.IsPendingUpload);
+        }
     }
 
     [Fact]

@@ -109,9 +109,9 @@ public class SyncCenterCommandTests
         await vm.SyncAsync();
 
         Assert.Equal(RecordSyncState.Synced, entry.SyncState);
-        var saved = Assert.Single(persisted);
-        Assert.Equal("r1", saved.Id);
-        Assert.Equal(RecordSyncState.Synced, saved.State); // durable state reflects the upload
+        Assert.Equal(
+            new[] { ("r1", RecordSyncState.AddNeedsVerification), ("r1", RecordSyncState.Synced) },
+            persisted);
     }
 
     [Fact]
@@ -126,7 +126,9 @@ public class SyncCenterCommandTests
             (_, _) => Task.FromResult(FeatureSyncResult.Ok(1)),
             puller: null,
             form: null,
-            persist: _ => throw new InvalidOperationException("disk full"));
+            persist: e => e.SyncState == RecordSyncState.Synced
+                ? throw new InvalidOperationException("disk full")
+                : Task.CompletedTask);
 
         var synced = await vm.SyncAsync();
 
@@ -161,7 +163,7 @@ public class SyncCenterCommandTests
     }
 
     [Fact]
-    public async Task SyncAsync_batch_marks_an_unreported_tail_record_as_failed()
+    public async Task SyncAsync_batch_holds_an_unreported_tail_record_for_verification()
     {
         var entries = new[] { PendingEntry("r1"), PendingEntry("r2") };
         BatchRecordUploader batch = (_, _) =>
@@ -175,11 +177,11 @@ public class SyncCenterCommandTests
 
         Assert.Equal(1, synced);
         Assert.Equal(RecordSyncState.Synced, entries[0].SyncState);
-        Assert.Equal(RecordSyncState.Failed, entries[1].SyncState);
+        Assert.Equal(RecordSyncState.AddNeedsVerification, entries[1].SyncState);
     }
 
     [Fact]
-    public async Task SyncAsync_persists_acknowledged_batch_member_and_retries_only_unresolved_member()
+    public async Task SyncAsync_persists_acknowledged_batch_member_and_holds_unresolved_member()
     {
         var entries = new[] { PendingEntry("r1"), PendingEntry("r2") };
         var sent = new List<string[]>();
@@ -205,12 +207,59 @@ public class SyncCenterCommandTests
 
         Assert.Equal(1, await vm.SyncAsync());
         Assert.Contains(("r1", RecordSyncState.Synced, "17"), persisted);
-        Assert.Contains(("r2", RecordSyncState.Failed, null), persisted);
+        Assert.Equal(("r2", RecordSyncState.AddNeedsVerification, null),
+            Assert.Single(persisted, change => change.RecordId == "r2"));
+
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(["r1", "r2"], Assert.Single(sent));
+        Assert.True(entries[1].RequiresServerVerification);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Ordinary_add_stays_pending_until_connected_and_dispatch_hold_is_saved(bool batch)
+    {
+        var entry = PendingEntry("r1");
+        var connected = false;
+        var saveAttempts = 0;
+        var sends = 0;
+        var vm = new SyncCenterViewModel(
+            [entry], (_, _) =>
+            {
+                sends++;
+                return Task.FromResult(FeatureSyncResult.Ok(17));
+            },
+            puller: null, form: null, persist: _ =>
+            {
+                if (++saveAttempts == 1)
+                {
+                    throw new IOException("Temporary disk error");
+                }
+
+                return Task.CompletedTask;
+            },
+            batchUploader: batch ? (_, _) =>
+            {
+                sends++;
+                return Task.FromResult<IReadOnlyList<FeatureSyncResult>>([FeatureSyncResult.Ok(17)]);
+            } : null,
+            canDispatchOrdinaryAdd: () => connected);
+
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(0, saveAttempts);
+        Assert.Equal(0, sends);
+        Assert.True(entry.IsPendingUpload);
+
+        connected = true;
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(1, saveAttempts);
+        Assert.Equal(0, sends);
+        Assert.True(entry.IsPendingUpload);
 
         Assert.Equal(1, await vm.SyncAsync());
-        Assert.Equal(["r1", "r2"], sent[0]);
-        Assert.Equal(["r2"], sent[1]);
-        Assert.Contains(("r2", RecordSyncState.Synced, "18"), persisted);
+        Assert.Equal(1, sends);
+        Assert.Equal(RecordSyncState.Synced, entry.SyncState);
     }
 
     [Fact]
@@ -246,7 +295,9 @@ public class SyncCenterCommandTests
             (_, _) => Task.FromResult(FeatureSyncResult.Ok(42)),
             puller: null,
             form: null,
-            persist: _ => throw new IOException("disk full"),
+            persist: e => e.SyncState == RecordSyncState.Synced
+                ? throw new IOException("disk full")
+                : Task.CompletedTask,
             logger: logger);
 
         var synced = await vm.SyncAsync();

@@ -167,4 +167,36 @@ else
     fail_gate "Android rejection and correction setup failed"
 fi
 
+# The ordinary feature layer uses its own metadata snapshot. Activate it after
+# the published-workbook flows have finished exercising historical versions.
+if "$workspace/scripts/e2e/seed-feature-sync.sh" "$candidate" "$container" postgres honua &&
+    Licensing__DevGrantEdition=Pro "$HONUA_E2E_RESTART_SERVER_COMMAND"; then
+    if ! HONUA_E2E_SERVER="http://127.0.0.1:${HONUA_E2E_HTTP_PORT:?}" HONUA_E2E_APIKEY="$(cat "$working_dir/admin-key")" \
+        "$RUNNER_TEMP/field-dotnet/dotnet" test "$workspace/tests/Honua.Field.Core.Tests" --no-build --no-restore \
+        --filter FullyQualifiedName~FeatureSyncE2ETests --logger 'trx;LogFileName=feature-sync.trx' \
+        --results-directory "$report_root/feature-sync"; then
+        fail_gate "Live feature sync integration tests failed"
+    elif ! python3 - "$report_root/feature-sync/feature-sync.trx" <<'PYTEST'
+import sys
+import xml.etree.ElementTree as ET
+
+results = ET.parse(sys.argv[1]).findall(".//{*}UnitTestResult")
+required = {
+    "Batch_add_persists_each_feature_once_and_returns_matching_object_ids",
+    "Ordinary_attachment_round_trips_metadata_and_photo_bytes",
+    "Lost_add_acknowledgment_survives_reopen_without_creating_a_second_feature",
+}
+executed = {result.get("testName", "").rsplit(".", 1)[-1] for result in results}
+if missing := required - executed:
+    sys.exit("Missing live feature sync evidence: " + ", ".join(sorted(missing)))
+if any(result.get("outcome") != "Passed" for result in results):
+    sys.exit("The live feature sync suite must execute every selected test successfully")
+PYTEST
+    then
+        fail_gate "Live feature sync integration evidence is incomplete"
+    fi
+else
+    fail_gate "Live feature sync integration fixture failed"
+fi
+
 exit "$failed"

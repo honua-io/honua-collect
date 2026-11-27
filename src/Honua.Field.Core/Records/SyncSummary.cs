@@ -20,10 +20,13 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
     public int Total => Drafts + Outbox + Conflicts + Sent;
 
     /// <summary>Whether anything is waiting to upload or retry.</summary>
-    public bool HasPendingWork => Outbox > Rejected;
+    public bool HasPendingWork => Outbox > Rejected + Verification;
 
     /// <summary>Published submissions parked after a definitive rejection.</summary>
     public int Rejected { get; init; }
+
+    /// <summary>Ordinary adds parked for server verification.</summary>
+    public int Verification { get; init; }
 
     /// <summary>Whether any records are waiting on manual conflict review.</summary>
     public bool HasConflicts => Conflicts > 0;
@@ -40,6 +43,7 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
         var sent = 0;
         var failed = 0;
         var rejected = 0;
+        var verification = 0;
         var conflicts = 0;
         DateTimeOffset? lastSynced = null;
 
@@ -52,9 +56,15 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
                     break;
                 case RecordBox.Outbox:
                     outbox++;
-                    if (entry.SyncState is RecordSyncState.Failed or RecordSyncState.SubmissionRejected)
+                    if (entry.RequiresServerVerification || entry.SyncState is
+                        (RecordSyncState.Failed or RecordSyncState.SubmissionRejected or RecordSyncState.AddRejected))
                     {
                         failed++;
+                    }
+
+                    if (entry.RequiresServerVerification)
+                    {
+                        verification++;
                     }
 
                     if (entry.SyncState == RecordSyncState.SubmissionRejected)
@@ -77,6 +87,6 @@ public sealed record SyncSummary(int Drafts, int Outbox, int Sent, int Failed, i
             }
         }
 
-        return new SyncSummary(drafts, outbox, sent, failed, conflicts, lastSynced) { Rejected = rejected };
+        return new SyncSummary(drafts, outbox, sent, failed, conflicts, lastSynced) { Rejected = rejected, Verification = verification };
     }
 }
