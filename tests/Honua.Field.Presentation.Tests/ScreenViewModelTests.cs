@@ -45,7 +45,8 @@ public class ScreenViewModelTests
     public async Task SyncCenter_marks_failures_and_keeps_them_pending()
     {
         var entries = new[] { Outbox("a") };
-        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult(FeatureSyncResult.Fail("rejected"))); // rejected
+        var vm = new SyncCenterViewModel(entries, (_, _) => Task.FromResult(
+            FeatureSyncResult.Fail("rejected") with { DefinitiveEditRejection = true }));
 
         var synced = await vm.SyncAsync();
 

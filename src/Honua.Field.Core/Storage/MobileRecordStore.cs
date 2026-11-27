@@ -45,9 +45,14 @@ public sealed class MobileRecordStore : IRecordStore
     public async Task SaveAsync(FieldRecordEntry entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        var document = ToDocument(entry);
+        var expectedPhotos = entry.PersistedOrdinaryPhotos;
+        var photos = entry.OrdinaryPhotos;
+        var document = ToDocument(entry, photos);
         var previous = await _store.LoadDocumentAsync(Collection, document.Id, ct).ConfigureAwait(false);
         var previousEntry = previous is null ? null : ReadDocument(previous);
+        FieldRecordEntry.ValidateOrdinaryPhotos(expectedPhotos, previousEntry?.OrdinaryPhotos ?? []);
+        SqliteRecordStore.ValidateOrdinaryWrite(entry, previousEntry?.SyncState, previousEntry?.RemoteId is not null,
+            previousEntry?.PublishedSubmission is not null);
         bool committed;
         if (entry.PublishedSubmission is { } submission)
         {
@@ -88,6 +93,7 @@ public sealed class MobileRecordStore : IRecordStore
         {
             throw new InvalidOperationException("This record changed before it could be saved. Reopen it and try again.");
         }
+        entry.AcceptPersistedOrdinaryPhotos(photos);
     }
 
     /// <summary>Claims and replays one durable published-form request through the shared Mobile outbox.</summary>
@@ -248,7 +254,9 @@ public sealed class MobileRecordStore : IRecordStore
         }
     }
 
-    private static OfflineDocument ToDocument(FieldRecordEntry entry)
+    private static OfflineDocument ToDocument(FieldRecordEntry entry) => ToDocument(entry, entry.OrdinaryPhotos);
+
+    private static OfflineDocument ToDocument(FieldRecordEntry entry, IReadOnlyList<OrdinaryFeaturePhoto> photos)
     {
         var record = entry.Record;
         var data = new MobileRecordData(
@@ -259,7 +267,8 @@ public sealed class MobileRecordStore : IRecordStore
             entry.Version, entry.PublishedSubmission, entry.PublishedDraft, entry.LastAttemptUtc,
             entry.Conflict is { } conflict ? new MobileRecordConflictData(
                 JsonSerializer.SerializeToElement(conflict.ServerValues, SqliteRecordStore.ValuesJsonOptions),
-                conflict.FieldConflicts.Select(field => new MobileRecordConflictField(field.FieldId, field.Label)).ToArray()) : null);
+                conflict.FieldConflicts.Select(field => new MobileRecordConflictField(field.FieldId, field.Label)).ToArray()) : null,
+            photos.Count == 0 ? null : photos.ToArray());
         return new OfflineDocument(record.RecordId, JsonSerializer.Serialize(data, MobileRecordJsonContext.Default.MobileRecordData));
     }
 
@@ -283,6 +292,7 @@ public sealed class MobileRecordStore : IRecordStore
         var entry = new FieldRecordEntry(record) { PublishedSubmission = data.Submission, PublishedDraft = data.Draft };
         entry.RestoreSyncState(data.SyncState, data.RemoteId, data.LastError, data.FailedAttempts, data.LastAttemptUtc, data.LastSyncedUtc);
         entry.SetVersion(data.Version);
+        entry.RestoreOrdinaryPhotos(data.OrdinaryPhotos);
         if (entry.IsConflicted && data.Conflict is { } conflict)
         {
             var server = new FieldRecord { RecordId = record.RecordId, FormId = record.FormId };
@@ -314,7 +324,7 @@ internal sealed record MobileRecordData(
     JsonElement Values, RecordSyncState SyncState, string? RemoteId, string? LastError,
     int FailedAttempts, DateTimeOffset? LastSyncedUtc, int Version,
     PublishedFormSubmission? Submission, PublishedFormDraft? Draft, DateTimeOffset? LastAttemptUtc = null,
-    MobileRecordConflictData? Conflict = null);
+    MobileRecordConflictData? Conflict = null, OrdinaryFeaturePhoto[]? OrdinaryPhotos = null);
 
 [JsonSerializable(typeof(MobileRecordData))]
 [JsonSerializable(typeof(PublishedFormSubmission))]

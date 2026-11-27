@@ -27,16 +27,19 @@ public partial class InboxPage : ContentPage
     private readonly Core.Storage.RecordBook _book;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IRelatedRecordStore _relatedStore;
+    private readonly AppSettings _settings;
     private InboxViewModel? _viewModel;
 
     public InboxPage(
         Core.Storage.RecordBook book,
         IHttpClientFactory httpClientFactory,
-        IRelatedRecordStore relatedStore)
+        IRelatedRecordStore relatedStore,
+        AppSettings settings)
     {
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _relatedStore = relatedStore ?? throw new ArgumentNullException(nameof(relatedStore));
+        _settings = settings;
         InitializeComponent();
     }
 
@@ -77,21 +80,14 @@ public partial class InboxPage : ContentPage
         var seed = new FieldRecord { RecordId = recordId, FormId = assignment.FormId };
         seed.Values["site_name"] = assignment.Title;
 
-        var session = FormSession.CreateForNewRecord(
-            SampleForms.FieldSite(),
-            recordId,
-            seedFrom: seed);
+        var session = SampleForms.CreateFieldSiteSession(recordId, seed);
 
         // Mark the assignment in-progress, linked to the record being captured.
         _viewModel?.Start(assignment, recordId);
 
         var viewModel = new FormPageViewModel(session);
-        viewModel.SubmitSucceeded += async (_, record) =>
-        {
-            record.Location = assignment.Location ?? new FieldGeoPoint(21.31, -157.81);
-            await _book.AddSubmittedAsync(record);
-        };
-
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
+        var page = new FormPage(viewModel, _httpClientFactory, _relatedStore, _book);
+        page.OnOrdinarySubmission(_settings.Target, assignment.Location);
+        await Navigation.PushAsync(page);
     }
 }

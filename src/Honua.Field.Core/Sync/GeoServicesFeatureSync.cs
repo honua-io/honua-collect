@@ -51,6 +51,12 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
     /// <param name="code">The server/HTTP error code, when known.</param>
     public static FeatureSyncResult Fail(string error, int? code = null) => new(false, null, error, code);
 
+    /// <summary>The server explicitly rejected this edit without assigning an object ID.</summary>
+    public bool DefinitiveEditRejection { get; init; }
+
+    /// <summary>Feature encoding failed before an add request could be sent.</summary>
+    public bool AddNotDispatched { get; init; }
+
     /// <summary>
     /// A single one-line description of this result's failure (message plus code when
     /// present), suitable for surfacing in the sync center; empty when successful.
@@ -200,7 +206,7 @@ public sealed class GeoServicesFeatureSync
     /// may have committed before the connection dropped) it is impossible to tell
     /// whether the add already committed, so this method does <strong>not</strong>
     /// auto-retry an add in that ambiguous window — it surfaces the failure for the
-    /// caller to reconcile (re-queue once) instead of silently duplicating. Adds are
+    /// caller to verify the outcome on the server before retrying. Adds are
     /// still retried on a server-acknowledged transient per-edit failure
     /// (HTTP 200 with <c>success:false</c> under <c>rollbackOnFailure</c>), which is
     /// provably non-committed.
@@ -225,9 +231,18 @@ public sealed class GeoServicesFeatureSync
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
+        string addsJson;
+        try
+        {
+            addsJson = BuildFeaturesJson(record, null, includeGlobalId: true);
+        }
+        catch (ArgumentException)
+        {
+            return Task.FromResult(AddEncodingFailure());
+        }
+
         return PostEditsAsync(
-            target, "adds", BuildFeaturesJson(record, null, includeGlobalId: true), "addResults",
-            idempotent: false, useGlobalIds: true, cancellationToken);
+            target, "adds", addsJson, "addResults", idempotent: false, useGlobalIds: true, cancellationToken);
     }
 
     /// <summary>
@@ -275,7 +290,7 @@ public sealed class GeoServicesFeatureSync
     /// <remarks>
     /// Like <see cref="SubmitAsync"/>, a batch of <c>adds</c> is <em>not idempotent</em>;
     /// a transport failure with no server response is ambiguous, so the batch is not
-    /// auto-retried here — the failed records stay queued for the caller to re-submit.
+    /// auto-retried here. The Outbox holds unacknowledged adds for server verification.
     /// <c>rollbackOnFailure</c> is intentionally <em>not</em> set for the batch so one
     /// bad record does not reject the whole batch; each record's outcome is reported
     /// independently in its result.
@@ -292,7 +307,15 @@ public sealed class GeoServicesFeatureSync
             return [];
         }
 
-        var addsJson = BuildFeaturesArrayJson(records);
+        string addsJson;
+        try
+        {
+            addsJson = BuildFeaturesArrayJson(records);
+        }
+        catch (ArgumentException)
+        {
+            return Enumerable.Repeat(AddEncodingFailure(), records.Count).ToArray();
+        }
 
         try
         {
@@ -308,6 +331,12 @@ public sealed class GeoServicesFeatureSync
             return FailEach(records.Count, ex.Message); // request timeout
         }
     }
+
+    private static FeatureSyncResult AddEncodingFailure() =>
+        new(false, null, "The upload could not be prepared. Check the record values and location.", Attempts: 0)
+        {
+            AddNotDispatched = true
+        };
 
     private async Task<IReadOnlyList<FeatureSyncResult>> AttemptBatchAsync(
         GeoServicesTarget target,
@@ -353,7 +382,7 @@ public sealed class GeoServicesFeatureSync
     {
         var httpError = (int)status is >= 200 and < 300 ? null : (int?)status;
         var unresolved = httpError is null
-            ? FeatureSyncResult.Fail("The server returned no valid result for this record.")
+            ? FeatureSyncResult.Fail("The server returned no addResults entry that confirms the outcome for this record.")
             : FeatureSyncResult.Fail($"HTTP {httpError}: {body}", httpError);
 
         try
@@ -396,7 +425,13 @@ public sealed class GeoServicesFeatureSync
                 else if (success.ValueKind == JsonValueKind.False)
                 {
                     var outcome = ReadEditOutcome(item, unresolved.Error ?? "Edit was not applied.");
-                    results[i] = FeatureSyncResult.Fail(outcome.Detail!, outcome.Code ?? unresolved.ErrorCode);
+                    results[i] = FeatureSyncResult.Fail(outcome.Detail!, outcome.Code ?? unresolved.ErrorCode) with
+                    {
+                        DefinitiveEditRejection = !item.TryGetProperty("objectId", out var rejectedId)
+                            || rejectedId.ValueKind == JsonValueKind.Null
+                            || (rejectedId.ValueKind == JsonValueKind.Number
+                                && rejectedId.TryGetInt64(out var id) && id <= 0)
+                    };
                 }
             }
 
@@ -488,6 +523,52 @@ public sealed class GeoServicesFeatureSync
     private static readonly string[] AbsentFeaturePatterns =
         ["not found", "does not exist", "unknown object", "cannot find", "no feature"];
 
+    internal async Task<long?> FindMatchingAttachmentAsync(
+        long objectId,
+        Honua.Field.Core.Records.OrdinaryFeaturePhoto photo,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = new HonuaFeatureServerClient(_http, new HonuaFeatureServerClientOptions
+            {
+                RootAddress = new Uri(photo.Target.BaseUrl, UriKind.Absolute),
+            });
+            var source = new FeatureSource { ServiceId = photo.Target.ServiceId, LayerId = photo.Target.LayerId };
+            var attachments = await client.ListAttachmentsAsync(
+                new FeatureAttachmentListRequest { Source = source, ObjectId = objectId }, cancellationToken).ConfigureAwait(false);
+            var matches = attachments.Where(item => StringComparer.Ordinal.Equals(item.Name, photo.FileName)).ToArray();
+            if (matches.Length != 1)
+            {
+                return null;
+            }
+
+            if (matches[0].AttachmentId is not > 0)
+            {
+                return null;
+            }
+
+            var attachmentId = matches[0].AttachmentId.GetValueOrDefault();
+            var attachment = await client.DownloadAttachmentAsync(new FeatureAttachmentDownloadRequest
+            {
+                Source = source,
+                ObjectId = objectId,
+                AttachmentId = attachmentId,
+            }, cancellationToken).ConfigureAwait(false);
+            await using var stream = attachment.Content;
+            var hash = await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+            return StringComparer.OrdinalIgnoreCase.Equals(Convert.ToHexString(hash), photo.Sha256) ? attachmentId : null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is Honua.Sdk.Abstractions.HonuaException or HttpRequestException or JsonException or IOException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Uploads a media file to a feature's <c>addAttachment</c> endpoint as a
     /// <c>multipart/form-data</c> POST. Call this after <see cref="SubmitAsync"/>
@@ -531,7 +612,19 @@ public sealed class GeoServicesFeatureSync
             return result.Succeeded
                 ? new FeatureSyncResult(true, result.AttachmentId, null)
                 : new FeatureSyncResult(false, result.AttachmentId,
-                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code);
+                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code)
+                {
+                    DefinitiveEditRejection = (result.AttachmentId is null or <= 0)
+                        && IsDefinitiveAttachmentRejection(result.Error?.Code)
+                };
+        }
+        catch (HonuaFeatureServerException ex) when (IsDefinitiveAttachmentRejection((int)ex.StatusCode)
+            || ((int)ex.StatusCode is 200 or 400 && IsDefinitiveAttachmentRejection(ex.GeoServicesErrorCode)))
+        {
+            return new FeatureSyncResult(false, null, ex.Message, ex.GeoServicesErrorCode ?? (int)ex.StatusCode)
+            {
+                DefinitiveEditRejection = true
+            };
         }
         catch (HonuaFeatureServerException ex) when (ex.GeoServicesErrorCode is { } code)
         {
@@ -559,12 +652,14 @@ public sealed class GeoServicesFeatureSync
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // The caller's token was not cancelled, so this is the upload deadline
-            // firing (or an HttpClient request timeout) — a transport failure, not a
-            // user cancel. Surface it as a failed result so the upload is retried.
+            // The upload timed out and its outcome is unknown. The caller can
+            // verify whether the server stored it.
             return FeatureSyncResult.Fail(ex.Message);
         }
     }
+
+    private static bool IsDefinitiveAttachmentRejection(int? code) =>
+        code is 401 or 403 or 413 or 415 or 422 or 1006;
 
     /// <summary>
     /// Pulls existing features from the target layer's <c>query</c> endpoint and
@@ -954,7 +1049,8 @@ public sealed class GeoServicesFeatureSync
                 result = (await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds, cancellationToken).ConfigureAwait(false))
                     with { Attempts = attempt };
 
-                if (result.Success || isLast || !IsRetryable(result, idempotent))
+                if (result.Success || isLast || (!idempotent && !result.DefinitiveEditRejection)
+                    || !IsRetryable(result, idempotent))
                 {
                     return result;
                 }
@@ -1017,6 +1113,11 @@ public sealed class GeoServicesFeatureSync
             // same attributes and let the layer allocate its own object ID.
             return await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds: false, cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        if (editKey == "adds")
+        {
+            return ParseBatchResults(body, 1, response.StatusCode)[0];
         }
 
         if (!response.IsSuccessStatusCode)
@@ -1244,6 +1345,12 @@ public sealed class GeoServicesFeatureSync
                 break;
             case float or double or decimal:
                 writer.WriteNumber(key, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+                break;
+            case JsonElement { ValueKind: JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False } element:
+                writer.WritePropertyName(key);
+                element.WriteTo(writer);
+                break;
+            case JsonElement { ValueKind: JsonValueKind.Null }:
                 break;
             default:
                 writer.WriteString(key, value.ToString() ?? string.Empty);

@@ -461,6 +461,15 @@
           "SkiaSharp": "[4.156.1, )"
         }
       },
+      "honua.field.presentation": {
+        "type": "Project",
+        "dependencies": {
+          "Honua.Field.Core": "[1.0.0, )",
+          "Honua.Sdk.Field": "[5.1.1-fieldcombined.1, )",
+          "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
+          "SkiaSharp": "[4.156.1, )"
+        }
+      },
       "BouncyCastle.Cryptography": {
         "type": "CentralTransitive",
         "requested": "[2.7.0, )",

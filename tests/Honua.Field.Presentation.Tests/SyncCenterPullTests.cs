@@ -338,7 +338,8 @@ public class SyncCenterPullTests
         // operator can tell a permissions/token failure from a transient one.
         var entries = new[] { PendingEntry("a", "A") };
         var vm = new SyncCenterViewModel(
-            entries, (_, _) => Task.FromResult(FeatureSyncResult.Fail("Token expired", 498)));
+            entries, (_, _) => Task.FromResult(
+                FeatureSyncResult.Fail("Token expired", 498) with { DefinitiveEditRejection = true }));
 
         var synced = await vm.SyncAsync();
 
@@ -348,7 +349,7 @@ public class SyncCenterPullTests
     }
 
     [Fact]
-    public async Task SyncAsync_marks_failed_and_continues_on_a_thrown_error()
+    public async Task SyncAsync_holds_an_unacknowledged_add_and_continues_on_a_thrown_error()
     {
         var entries = new[] { PendingEntry("a", "A"), PendingEntry("b", "B") };
         var vm = new SyncCenterViewModel(entries, (e, _) =>
@@ -359,7 +360,8 @@ public class SyncCenterPullTests
         var synced = await vm.SyncAsync();
 
         Assert.Equal(1, synced); // "b" still succeeds after "a" failed
-        Assert.Equal("network down", entries[0].LastError);
+        Assert.True(entries[0].RequiresServerVerification);
+        Assert.Equal(FieldRecordEntry.OrdinaryAddVerificationMessage, entries[0].LastError);
         Assert.Equal("202", entries[1].RemoteId);
     }
 
