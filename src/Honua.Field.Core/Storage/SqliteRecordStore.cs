@@ -228,6 +228,10 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         int failedAttempts,
         DateTimeOffset? lastSyncedUtc)
     {
+        // A retry or conflict can belong to a previously synced feature.
+        // Its server identity survives every subsequent upload state.
+        entry.RestoreServerIdentity(remoteId, lastSyncedUtc);
+
         // Local records (including drafts) never transitioned; the constructor's
         // default already models that, so leave them untouched.
         if (syncState == RecordSyncState.Local)
