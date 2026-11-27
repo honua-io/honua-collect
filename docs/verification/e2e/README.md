@@ -47,6 +47,8 @@ The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45
 
 The ordinary inspection scenario picks a fixture image from the Android gallery in airplane mode, submits the inspection to the outbox and restarts Field. Before reconnecting, the gate checks that the server has no matching feature. It then syncs, compares the downloaded attachment byte for byte against the JPEG saved by Field, and restarts again to verify that the feature and attachment IDs stay the same. The counts, IDs, photo checksum and installed APK checksum are recorded in `ordinary-photo/server-readback.json`. CI also records the Field and Honua Server revisions.
 
+On November 27, 2026, all four Maestro phases passed on the local Android emulator with a signed .NET 11 Debug APK and a layer-scoped worker. After the offline restart, Honua Server had zero matching features. After sync and a second restart, the server returned one feature (ID 52) and one attachment (ID 7). The downloaded JPEG matched all 952 bytes of Field’s private copy. The report includes both source revisions and the APK and photo checksums. [Server readback](ordinary-photo-android.json)
+
 For a local run, install the candidate Debug APK on a disposable emulator with a freshly cleared Field sandbox. Start the seeded `mobile_offline_demo` server and provision a worker key with read and write access to layer `68910` as shown below. Only this key goes to the device. The default host port is `5189`. Set `HONUA_E2E_HTTP_PORT` if your fixture uses another port. The harness toggles airplane mode and uses `adb reverse` to reconnect the app to the fixture.
 
 ```bash

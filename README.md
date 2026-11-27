@@ -30,10 +30,11 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
   runtime, records, sync, conflicts, export, provenance, …) and the
   `Honua.Field.Presentation` MVVM layer are implemented and unit-tested, with
   coverage gates and mutation testing in CI.
-- **Verified on device (Android emulator):** login, form-package download,
-  offline capture with live validation and repeats, SQLite persistence,
-  GeoServices feature sync, and attachment upload — with captured evidence in
-  [`docs/verification/`](docs/verification/).
+- On the Android emulator, Field downloaded a published XLSForm and captured
+  an inspection offline with validation and repeats. A separate feature-layer
+  inspection survived a restart in airplane mode with its photo. After sync
+  and another restart, Honua Server returned one feature and one byte-matched
+  JPEG. [Android verification](docs/verification/e2e/README.md#published-xlsform-android-gate) · [Photo readback](docs/verification/e2e/ordinary-photo-android.json)
 - Field places editing controls below the map in narrow windows and beside it
   in wide windows, including a phone turned sideways.
   Rotating or resizing the window preserves the captured vertices. Sign-in and

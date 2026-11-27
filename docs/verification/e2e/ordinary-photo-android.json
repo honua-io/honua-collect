@@ -1,0 +1,11 @@
+{
+  "featureId": 52,
+  "featureCount": 1,
+  "attachmentId": 7,
+  "attachmentCount": 1,
+  "bytes": 952,
+  "sha256": "177362b8c88ce936dc833eb29cd1b55ce2c187b410bda09ec3b032af28cb93f3",
+  "apkSha256": "58415306518970a71e2b6187d445892403b1f40676d3862aa6351f773613dfa4",
+  "serverRevision": "ea127fc0916f2bce70596deb7e4f11784ce9f7d1",
+  "fieldRevision": "c94ad097ccfde1336f709a4841f3ebbdf8947b74"
+}
