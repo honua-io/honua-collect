@@ -34,7 +34,9 @@ def upload_artifact(project_arn, artifact_path, artifact_type):
         "--type", artifact_type,
     )["upload"]
     transfer = subprocess.run(
-        ["curl", "-fsS", "--max-time", "900", "--upload-file", artifact_path, upload["url"]],
+        ["curl", "-fsS", "--max-time", "900", "--upload-file", artifact_path, "--config", "-"],
+        input=f"url = {json.dumps(upload['url'])}\n",
+        text=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
