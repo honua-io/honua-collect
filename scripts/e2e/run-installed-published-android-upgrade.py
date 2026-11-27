@@ -215,7 +215,7 @@ def seed(args, device):
     for flow, name in (("capture", QUEUE_NAME), ("resume-draft", QUEUE_NAME), ("capture", DRAFT_NAME)):
         stop(device)
         run_flow(args, "before-queued" if name == QUEUE_NAME else "before-saved", flow,
-                 INSPECTION_NAME=name, LEGACY_CAPTURE="true")
+                 INSPECTION_NAME=name, LEGACY_CAPTURE=str(args.manual_repeat_default).lower())
     evidence = snapshot(args, device, "before")
     check(evidence["formVersion"] == form["version"], "Cached form version differs from downloaded version")
     write_report(args, "before", {"identity": identity, "storage": evidence})
@@ -282,6 +282,10 @@ def main():
     seed_args = phases.add_parser("seed")
     seed_args.add_argument("apk", type=Path)
     seed_args.add_argument("key_file", type=Path)
+    seed_args.add_argument(
+        "--manual-repeat-default", action="store_true",
+        help="Enter the first repeat note on historical APKs that lack XLSForm repeat defaults.",
+    )
     phases.add_parser("verify").add_argument("apk", type=Path)
     phases.add_parser("recover-key")
     args = parser.parse_args()
