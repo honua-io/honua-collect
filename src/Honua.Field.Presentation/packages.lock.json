@@ -30,24 +30,15 @@
           "SkiaSharp.NativeAssets.macOS": "4.156.1"
         }
       },
-      "Geospatial.Grpc": {
-        "type": "Transitive",
-        "resolved": "1.0.0",
-        "contentHash": "NA0FapqNiP/cQlM4qMP2ZHRBA/HPhE06e9mKo3TiFjeFbclh0qYuvtbo6D6JMpF4/pi54n5AJ7Z+TSjVzsk1HQ==",
-        "dependencies": {
-          "Google.Protobuf": "3.35.1",
-          "Grpc.Core.Api": "2.80.0"
-        }
-      },
       "Google.Protobuf": {
         "type": "Transitive",
-        "resolved": "3.35.1",
-        "contentHash": "pxtkuXhR8svkvDTQrYew9GZQt6eWhblz/V/WKUFrQgkHYlQPsumJTeF6ppHRJpe6j9ffukkd5lQULiiKaek4xA=="
+        "resolved": "3.36.2",
+        "contentHash": "Ci1q1iJg74qAE5riTA2FbMS0wPbpruPQI/JQ9DrAsRo2VsSxgt1e/pmxGxgrci+pXJEgrSYg2vPl8rrStZkclQ=="
       },
       "Grpc.Core.Api": {
         "type": "Transitive",
-        "resolved": "2.80.0",
-        "contentHash": "i/8s+MOrYa6n7BmZ5bilcbHk+EMJDQHm2MKLhwGAT+urQqlZ6cpjvSivYvuULjebuX+UKieLYZbLRCmVQxFRkw=="
+        "resolved": "2.84.0",
+        "contentHash": "p2SOMl6q/GZ4/5MLkgboC/z55g4zKUEruRn/g46QgppjQBVnsLZVBU/9VO7n60ll38G3Eo8Zu9b7x+W01GKFVg=="
       },
       "Grpc.Net.Client": {
         "type": "Transitive",
@@ -371,6 +362,7 @@
         "type": "Project",
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
+          "Geospatial.Grpc": "[1.0.2, )",
           "Honua.Mobile.Offline": "[0.1.0-ci.45949637544.1, )",
           "Honua.Mobile.Sdk": "[0.1.0-ci.45949637544.1, )",
           "Honua.Sdk.Field": "[2.2.0, )",
@@ -384,6 +376,16 @@
         "requested": "[2.7.0, )",
         "resolved": "2.7.0",
         "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
+      },
+      "Geospatial.Grpc": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.2, )",
+        "resolved": "1.0.2",
+        "contentHash": "kR3TThy8DUzHiL3ad/76gsx+GbqyXse5JWus17CXA/7KPzqFEzAcBjacxsHoDF8J5oZTH6n0vgoU01gv5DwxrQ==",
+        "dependencies": {
+          "Google.Protobuf": "3.36.2",
+          "Grpc.Core.Api": "2.84.0"
+        }
       },
       "Honua.Mobile.Offline": {
         "type": "CentralTransitive",

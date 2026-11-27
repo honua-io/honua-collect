@@ -68,6 +68,22 @@ jobs:
           dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
             -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
             --disable-build-servers
+      - name: Package iPhone simulator app
+        if: matrix.family == 'iPhone'
+        run: |
+          app=$(find src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64 -maxdepth 1 -name '*.app' -type d)
+          test -d "$app"
+          staging=$(mktemp -d)
+          mkdir "$staging/Payload"
+          ditto "$app" "$staging/Payload/${app##*/}"
+          (cd "$staging" && ditto -c -k --keepParent Payload "$RUNNER_TEMP/field-ios-simulator.ipa")
+      - name: Upload iPhone simulator app
+        if: matrix.family == 'iPhone'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: field-ios-simulator-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/field-ios-simulator.ipa
+          if-no-files-found: error
       - name: Capture and undo a polygon on ${{ matrix.family }}
         env:
           FAMILY: ${{ matrix.family }}

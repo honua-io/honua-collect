@@ -31,6 +31,7 @@
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
+    <PackageVersion Include="Geospatial.Grpc" Version="1.0.2" />
   </ItemGroup>
 
   <!--
