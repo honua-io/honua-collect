@@ -216,10 +216,21 @@ fi
 export HONUA_E2E_IOS_PREVIOUS_REVISION
 echo "App install complete. Starting published form journey."
 
+upgrade_report="$report_dir/installed-upgrade.json"
+rm -f -- "$upgrade_report"
 if ! run_bounded 2100 bash "$workspace/scripts/e2e/run-published-ios.sh" \
     "$device" "$HONUA_E2E_WORKER_KEY_FILE" "$working_dir/admin-key"; then
     if [[ ! -s "$report_dir/failure.png" ]]; then
         run_bounded 60 xcrun simctl io "$device" screenshot "$report_dir/failure.png" || true
     fi
+    exit 1
+fi
+if ! jq -e --arg state "${HONUA_E2E_UPGRADE_STATE:-draft}" \
+    --arg previous "$HONUA_E2E_IOS_PREVIOUS_REVISION" --arg candidate "${GITHUB_SHA:-}" \
+    --arg server "${HONUA_E2E_SERVER_REVISION:-}" \
+    '.upgradedWith == $state and .previousFieldRevision == $previous
+        and .fieldRevision == $candidate and .serverRevision == $server' \
+    "$upgrade_report" >/dev/null; then
+    echo "Published form journey did not record the selected iOS upgrade." >&2
     exit 1
 fi
