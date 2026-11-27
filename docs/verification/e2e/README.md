@@ -108,3 +108,17 @@ integer attributes in the shared `features` JSONB column round-trip as strings
 All nine tests passed on Field `889b8d1` against the repository’s seeded layer 68910, Honua Server `83127df`, PostgreSQL 18.6 and PostGIS 3.6.4. This live suite exercises Field’s GeoServices client directly. The Maestro workflow above covers the installed Android app and published XLSForm path.
 
 Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.
+
+### AWS Device Farm native smoke
+
+Run the Records and geometry journey on a Device Farm phone or tablet. Use a fresh device session and an installable Android APK or iOS IPA built for the selected device architecture. The iPhone simulator IPA is available from the Field on Apple platforms workflow. Use Python 3.11 or newer and an AWS profile with Device Farm project, device, upload and remote session permissions in us-west-2.
+
+```sh
+python3 -m venv .venv-devicefarm
+.venv-devicefarm/bin/pip install boto3==1.44.12 Appium-Python-Client==6.5.0 requests==2.34.2
+.venv-devicefarm/bin/python scripts/e2e/run-devicefarm-smoke.py \
+  --project-arn "$DEVICEFARM_PROJECT_ARN" --device-arn "$DEVICEFARM_DEVICE_ARN" \
+  --app "$FIELD_APP" --revision "$FIELD_COMMIT" --output "$NEW_EVIDENCE_DIR"
+```
+
+The runner uploads that binary, waits for a device, verifies the three empty record groups, captures a point, checks the GeoJSON and undoes the edit. It records the binary digest, device, OS, session ARN, outcome and screenshots, then stops the session. Device Farm accounts meter device minutes. For workbook publication, disconnected capture, in-place upgrades and server-side receipt verification, run the published Android and iOS gates above.
