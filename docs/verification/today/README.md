@@ -22,3 +22,16 @@ Record observations against each task before deciding whether to implement the p
 The current candidate submits a title plus the asset and asset profile IDs. Server checks write permission and uses the asset’s geometry. In this simulation, notes and the sample photo reference remain in browser storage before and after the receipt, with no upload path. The proposed scenario simulates delivery of the complete evidence set. A queued request keeps its original scenario across reload and retry. The production request flow depends on the Server contract, a released Mobile adapter, and the partner research gate. See [Mobile #458](https://github.com/honua-io/honua-mobile/pull/458) and [Server #7301](https://github.com/honua-io/honua-server/issues/7301).
 
 Physical camera capture, authentication and real Server receipt verification have separate native integration gates.
+
+## Chromium regression
+
+Run from the repository root with Node.js and npm. Install Playwright and Chromium in a temporary directory to keep the prototype independent of browser tooling.
+
+```sh
+today_test_dir="$(mktemp -d)"
+npm install --prefix "$today_test_dir" --no-save playwright@1.65.0
+"$today_test_dir/node_modules/.bin/playwright" install chromium
+NODE_PATH="$today_test_dir/node_modules" node docs/verification/today/request-regression.cjs
+```
+
+The regression runs both delivery scenarios at phone and tablet widths. It verifies draft and evidence persistence, a reload after a lost acknowledgement, receipt identity after reconnect and subsequent reload, and the absence of duplicate receipts. The runner serves the checked-in files to Chromium directly and uses simulated delivery.
