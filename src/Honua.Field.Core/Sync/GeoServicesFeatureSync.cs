@@ -293,28 +293,10 @@ public sealed class GeoServicesFeatureSync
 
         var addsJson = BuildFeaturesArrayJson(records);
 
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["f"] = "json",
-            ["adds"] = addsJson,
-            // Each batched add carries its stable client GlobalID (see SubmitAsync);
-            // useGlobalIds lets a dedupe-aware server treat a re-sent add as a no-op.
-            ["useGlobalIds"] = "true",
-            // No rollbackOnFailure: report each record's outcome independently rather
-            // than failing the whole batch on one bad record.
-            ["rollbackOnFailure"] = "false",
-        });
-
-        string body;
         try
         {
-            using var response = await _http.PostAsync(target.ApplyEditsUrl, content, cancellationToken).ConfigureAwait(false);
-            body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return FailEach(records.Count, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
-            }
+            return await AttemptBatchAsync(target, addsJson, records.Count, useGlobalIds: true, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
@@ -324,8 +306,41 @@ public sealed class GeoServicesFeatureSync
         {
             return FailEach(records.Count, ex.Message); // request timeout
         }
+    }
 
-        return ParseBatchResults(body, records.Count);
+    private async Task<IReadOnlyList<FeatureSyncResult>> AttemptBatchAsync(
+        GeoServicesTarget target,
+        string addsJson,
+        int count,
+        bool useGlobalIds,
+        CancellationToken cancellationToken)
+    {
+        var fields = new Dictionary<string, string>
+        {
+            ["f"] = "json",
+            ["adds"] = addsJson,
+            // Report each record's outcome independently.
+            ["rollbackOnFailure"] = "false",
+        };
+
+        if (useGlobalIds)
+        {
+            fields["useGlobalIds"] = "true";
+        }
+
+        using var content = new FormUrlEncodedContent(fields);
+        using var response = await _http.PostAsync(target.ApplyEditsUrl, content, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        if (useGlobalIds && IsUnsupportedGlobalIdResponse(response.StatusCode, body))
+        {
+            return await AttemptBatchAsync(target, addsJson, count, useGlobalIds: false, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return response.IsSuccessStatusCode
+            ? ParseBatchResults(body, count)
+            : FailEach(count, $"HTTP {(int)response.StatusCode}: {body}", (int)response.StatusCode);
     }
 
     private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null)
@@ -973,8 +988,7 @@ public sealed class GeoServicesFeatureSync
         using var response = await _http.PostAsync(target.ApplyEditsUrl, content, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        if (useGlobalIds && (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            && IsUnsupportedGlobalIdMode(body))
+        if (useGlobalIds && IsUnsupportedGlobalIdResponse(response.StatusCode, body))
         {
             // The server rejected the edit mode before applying any writes. Keep the
             // same attributes and let the layer allocate its own object ID.
@@ -991,8 +1005,13 @@ public sealed class GeoServicesFeatureSync
         return ParseResult(body, resultKey);
     }
 
-    private static bool IsUnsupportedGlobalIdMode(string body)
+    private static bool IsUnsupportedGlobalIdResponse(System.Net.HttpStatusCode statusCode, string body)
     {
+        if (statusCode is not (System.Net.HttpStatusCode.OK or System.Net.HttpStatusCode.BadRequest))
+        {
+            return false;
+        }
+
         static bool IsUnsupportedDetail(string? value) =>
             string.Equals(value, "useGlobalIds is not supported", StringComparison.OrdinalIgnoreCase)
             || string.Equals(value, "useGlobalIds is not supported for this layer", StringComparison.OrdinalIgnoreCase);
@@ -1000,6 +1019,9 @@ public sealed class GeoServicesFeatureSync
         {
             using var document = JsonDocument.Parse(body);
             if (document.RootElement.ValueKind != JsonValueKind.Object
+                || document.RootElement.TryGetProperty("addResults", out _)
+                || document.RootElement.TryGetProperty("updateResults", out _)
+                || document.RootElement.TryGetProperty("deleteResults", out _)
                 || !document.RootElement.TryGetProperty("error", out var error)
                 || error.ValueKind != JsonValueKind.Object
                 || !error.TryGetProperty("code", out var code)

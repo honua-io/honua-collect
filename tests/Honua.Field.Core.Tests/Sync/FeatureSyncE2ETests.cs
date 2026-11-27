@@ -75,6 +75,43 @@ public class FeatureSyncE2ETests
     // ---- Add / update / delete happy paths -----------------------------------
 
     [SkippableFact]
+    public async Task Batch_add_persists_each_feature_once_and_returns_matching_object_ids()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
+        using var http = Authed();
+        var sync = new GeoServicesFeatureSync(http);
+        var markers = new[] { Marker(), Marker() };
+        var records = markers.Select((marker, index) => Site(marker, r => r.Values["sync_version"] = index + 1)).ToArray();
+        try
+        {
+            var results = await sync.SubmitBatchAsync(records, Target);
+
+            Assert.Equal(records.Length, results.Count);
+            Assert.All(results, result => Assert.True(result.Success, result.Error));
+            Assert.NotEqual(results[0].ObjectId, results[1].ObjectId);
+            for (var index = 0; index < markers.Length; index++)
+            {
+                var feature = Assert.Single((await QueryByNameAsync(http, markers[index])).EnumerateArray());
+                var attributes = feature.GetProperty("attributes");
+                Assert.Equal(ReadLong(attributes, "objectid"), results[index].ObjectId);
+                Assert.Equal(index + 1, ReadLong(attributes, "sync_version"));
+            }
+        }
+        finally
+        {
+            foreach (var marker in markers)
+            {
+                foreach (var feature in (await QueryByNameAsync(http, marker)).EnumerateArray())
+                {
+                    var deleted = await sync.DeleteAsync(ReadLong(feature.GetProperty("attributes"), "objectid"), Target);
+                    Assert.True(deleted.Success, deleted.Error);
+                }
+            }
+        }
+    }
+
+    [SkippableFact]
     public async Task Add_persists_and_round_trips_geometry_and_typed_attributes()
     {
         Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
