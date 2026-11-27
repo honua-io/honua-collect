@@ -35,9 +35,7 @@ version and transaction boundaries; do not infer completion from file existence.
 
 ## Weekly installation and scripted journey
 
-Run on an Android emulator and hosted iOS simulator for each phase; physical
-phone runs may supplement this evidence. Record the emulator image, API level
-and host, or the simulator device, OS and hosted runner. Use an installable build for the selected shell, a dedicated test account and
+Run each phase on an Android emulator and a hosted iOS simulator. Field #173 also requires an installation and journey on the founder’s phones. Track those outcomes separately. Record the emulator image, API level and host, or the simulator device, OS and hosted runner. Use an installable build for the selected shell, a dedicated test account and
 layer, and a form with a required field, a conditional field, a repeat section,
 a geometry field and an attachment field. Record the app commit, build number,
 published SDK versions, OS/device, server version, form version and start time.
@@ -87,6 +85,15 @@ exactly one remote record, the remote ID persists and the queue drains without
 attachment duplication. If checkpoint instrumentation is unavailable, record
 these cases as blocked rather than substituting an offline restart. Never alter the secure-storage key on a real
 phone holding the only copy of field data to simulate these failures.
+
+## Founder phone installation
+
+Use the previous and candidate builds of `io.honua.collect` (the installed app is named Honua Field). Back up any existing field data and use a dedicated test account. Install the previous build, populate the baseline in step 1, and install the candidate over it with the app closed.
+
+- **Android.** Use `apksigner verify --print-certs` on both APKs and confirm the signer matches. Install the candidate with `adb -s "$ANDROID_SERIAL" install -r "$CANDIDATE_APK"`. Independently generated CI debug keys can differ. For a debug upgrade, build both APKs with the same keystore.
+- **iPhone.** Use device builds signed for the same team and app identifier and provisioned for the founder’s phone. On a paired development Mac, extract the candidate IPA with `ditto -x -k "$CANDIDATE_IPA" "$EXTRACT_DIR"` into a new directory. Install the extracted app with `xcrun devicectl device install app --device "$DEVICE" "$EXTRACT_DIR"/Payload/*.app`. Simulator IPAs run only on simulator targets.
+
+Complete steps 2–8 and record the previous and candidate versions, artifact digests, device model, OS, date and receipt IDs. Keep device serials and account credentials private. The [Device Farm smoke](verification/e2e/README.md#aws-device-farm-native-smoke) verifies Records and geometry on the chosen model. The [physical Android upgrade](verification/e2e/README.md#aws-physical-android-in-place-update) checks the installed version, app UID and queued record on one phone before and after updating.
 
 ## Result record
 
