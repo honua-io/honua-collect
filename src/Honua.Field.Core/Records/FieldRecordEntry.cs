@@ -235,6 +235,36 @@ public sealed class FieldRecordEntry
     // Conflict details are recomputed by the next pull.
     internal void RestoreConflicted() => SyncState = RecordSyncState.Conflicted;
 
+    /// <summary>Stages a resolved entry for persistence without changing the live record.</summary>
+    public FieldRecordEntry CreateResolvedSnapshot(FieldRecord merged)
+    {
+        var record = new FieldRecord
+        {
+            RecordId = Record.RecordId,
+            FormId = Record.FormId,
+            CreatedAtUtc = Record.CreatedAtUtc,
+            SubmittedAtUtc = Record.SubmittedAtUtc,
+            CompletedAtUtc = Record.CompletedAtUtc
+        };
+        foreach (var media in Record.Media)
+        {
+            record.Media.Add(media);
+        }
+
+        var snapshot = new FieldRecordEntry(record, SyncState)
+        {
+            PublishedDraft = PublishedDraft,
+            PublishedSubmission = PublishedSubmission,
+            Version = Version,
+            RemoteId = RemoteId,
+            LastSyncedUtc = LastSyncedUtc,
+            LastAttemptUtc = LastAttemptUtc,
+            FailedAttempts = FailedAttempts
+        };
+        snapshot.ApplyResolution(merged);
+        return snapshot;
+    }
+
     /// <summary>
     /// Applies a manual conflict resolution: copies the merged values produced by
     /// the review screen onto the local record, clears the conflict, and re-queues

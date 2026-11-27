@@ -66,6 +66,7 @@ public sealed class ConflictReviewViewModel : ObservableObject
     private readonly RecordConflict _conflict;
     private readonly FieldRecordEntry? _entry;
     private bool _isResolved;
+    private bool _isSaving;
 
     /// <summary>Creates the review over a detected conflict.</summary>
     /// <param name="conflict">The record conflict to resolve.</param>
@@ -127,7 +128,8 @@ public sealed class ConflictReviewViewModel : ObservableObject
     public ICommand ApplyResolutionCommand { get; }
 
     /// <summary>Whether the resolution can be applied back to a bound entry.</summary>
-    public bool CanApply => _entry is not null && !_isResolved;
+    public bool CanApply => !_isSaving && !_isResolved
+        && _entry?.IsConflicted == true && ReferenceEquals(_entry.Conflict, _conflict);
 
     /// <summary>Whether the resolution has already been applied to the bound entry.</summary>
     public bool IsResolved
@@ -137,7 +139,7 @@ public sealed class ConflictReviewViewModel : ObservableObject
         {
             if (SetProperty(ref _isResolved, value))
             {
-                (ApplyResolutionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                NotifyCanApplyChanged();
             }
         }
     }
@@ -163,9 +165,9 @@ public sealed class ConflictReviewViewModel : ObservableObject
             throw new InvalidOperationException("This review is not bound to a record entry; use Resolve() instead.");
         }
 
-        if (_isResolved)
+        if (!CanApply)
         {
-            throw new InvalidOperationException("The conflict has already been resolved.");
+            throw new InvalidOperationException("This conflict review is no longer current or is already being saved.");
         }
 
         var merged = Resolve();
@@ -175,26 +177,44 @@ public sealed class ConflictReviewViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Applies the resolution to the bound entry (see <see cref="ApplyResolution"/>)
-    /// and then durably persists the entry so the merged result survives a restart
-    /// and is re-queued for upload through the normal sync path. This is the call the
-    /// review screen makes — applying without persisting would silently discard the
-    /// resolution on the next launch (the #98 data-loss bug).
+    /// Persists the resolved snapshot before updating the live entry and moving it to the Outbox.
+    /// A failed write leaves the original conflict and the selected choices available for retry.
     /// </summary>
-    /// <param name="persist">
-    /// Sink that durably writes the entry's state (typically the record store's
-    /// <c>SaveAsync</c>); when null, the resolution is applied in memory only.
-    /// </param>
+    /// <param name="persist">Durable record store sink, or null for an in-memory resolution.</param>
     /// <returns>The merged record that was applied.</returns>
     public async Task<FieldRecord> ApplyResolutionAsync(RecordStatePersister? persist)
     {
-        var merged = ApplyResolution();
-        if (persist is not null && _entry is not null)
+        if (persist is null)
         {
-            await persist(_entry).ConfigureAwait(false);
+            return ApplyResolution();
         }
 
-        return merged;
+        if (_entry is null || !CanApply)
+        {
+            throw new InvalidOperationException("This conflict review cannot currently be applied.");
+        }
+
+        _isSaving = true;
+        try
+        {
+            NotifyCanApplyChanged();
+            var merged = Resolve();
+            await persist(_entry.CreateResolvedSnapshot(merged));
+            _entry.ApplyResolution(merged);
+            IsResolved = true;
+            return merged;
+        }
+        finally
+        {
+            _isSaving = false;
+            NotifyCanApplyChanged();
+        }
+    }
+
+    private void NotifyCanApplyChanged()
+    {
+        OnPropertyChanged(nameof(CanApply));
+        (ApplyResolutionCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private void SetAll(ConflictResolution resolution)

@@ -9,6 +9,7 @@ using Honua.Field.Presentation.Sync;
 using Honua.Sdk.Field.Forms;
 using PublishedFormSubmission = Honua.Field.Core.Forms.PublishedFormSubmission;
 using Honua.Sdk.Field.Records;
+using Microsoft.Data.Sqlite;
 
 namespace Honua.Field.Presentation.Tests;
 
@@ -184,7 +185,19 @@ public class SyncCenterPullTests
         review.Conflicts[0].Resolution = ConflictResolution.KeepLocal;
 
         var persisted = new List<FieldRecordEntry>();
-        await review.ApplyResolutionAsync(entry => { persisted.Add(entry); return Task.CompletedTask; });
+        var write = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resolving = review.ApplyResolutionAsync(entry =>
+        {
+            persisted.Add(entry);
+            return write.Task;
+        });
+
+        Assert.True(entries[0].IsConflicted);
+        Assert.False(review.CanApply);
+        Assert.False(review.IsResolved);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => review.ApplyResolutionAsync(null));
+        write.SetResult();
+        await resolving;
 
         // The chosen merge is applied to the local entry...
         Assert.Equal("Mine", entries[0].Record.Values["name"]);
@@ -194,7 +207,10 @@ public class SyncCenterPullTests
         Assert.Equal(RecordSyncState.PendingUpdate, entries[0].SyncState);
         Assert.Equal(RecordBox.Outbox, entries[0].Box);
         // ...and durably persisted exactly once (no silent discard).
-        Assert.Same(entries[0], Assert.Single(persisted));
+        var saved = Assert.Single(persisted);
+        Assert.NotSame(entries[0], saved);
+        Assert.Equal(RecordSyncState.PendingUpdate, saved.SyncState);
+        Assert.Null(saved.Conflict);
         Assert.True(review.IsResolved);
     }
 
@@ -226,7 +242,41 @@ public class SyncCenterPullTests
             Assert.Equal("Mine", field.LocalText);
             Assert.Equal("Theirs", field.ServerText);
             field.Resolution = ConflictResolution.KeepServer;
+
+            var connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = path,
+                Password = "conflict-test-key",
+                Pooling = false,
+            };
+            await using (var database = new SqliteConnection(connectionString.ToString()))
+            {
+                await database.OpenAsync();
+                await using var command = database.CreateCommand();
+                command.CommandText = """
+                    CREATE TRIGGER fail_conflict_write BEFORE UPDATE ON honua_local_documents
+                    BEGIN
+                        SELECT RAISE(ABORT, 'test interrupted resolution');
+                    END;
+                    """;
+                await command.ExecuteNonQueryAsync();
+
+                await Assert.ThrowsAsync<SqliteException>(() => review.ApplyResolutionAsync(e => reopened.SaveAsync(e)));
+
+                Assert.True(review.CanApply);
+                Assert.False(review.IsResolved);
+                Assert.Equal(ConflictResolution.KeepServer, field.Resolution);
+                var retained = Assert.Single(await reopened.LoadAllAsync());
+                Assert.True(retained.IsConflicted);
+                Assert.Equal("Mine", retained.Record.Values["name"]?.ToString());
+                Assert.NotNull(retained.Conflict);
+
+                command.CommandText = "DROP TRIGGER fail_conflict_write;";
+                await command.ExecuteNonQueryAsync();
+            }
+
             await review.ApplyResolutionAsync(e => reopened.SaveAsync(e));
+            Assert.True(review.IsResolved);
 
             var resolvedStore = await MobileRecordStore.OpenEncryptedAsync(path, "conflict-test-key");
             var resolved = Assert.Single(await resolvedStore.LoadAllAsync());

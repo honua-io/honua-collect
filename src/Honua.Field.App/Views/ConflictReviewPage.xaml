@@ -38,7 +38,7 @@
                 <Button Text="Keep all mine" Command="{Binding KeepAllLocalCommand}" />
                 <Button Grid.Column="1" Text="Keep all server" Command="{Binding KeepAllServerCommand}" />
             </Grid>
-            <Button Text="Resolve" Clicked="OnResolve" />
+            <Button Text="Resolve" IsEnabled="{Binding CanApply}" Clicked="OnResolve" />
             <Label x:Name="ResultLabel" />
         </VerticalStackLayout>
     </Grid>
