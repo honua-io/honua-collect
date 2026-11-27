@@ -118,9 +118,9 @@ public class SyncCenterCommandTests
         await vm.SyncAsync();
 
         Assert.Equal(RecordSyncState.Synced, entry.SyncState);
-        var saved = Assert.Single(persisted);
-        Assert.Equal("r1", saved.Id);
-        Assert.Equal(RecordSyncState.Synced, saved.State); // durable state reflects the upload
+        Assert.Equal(
+            new[] { ("r1", RecordSyncState.AddNeedsVerification), ("r1", RecordSyncState.Synced) },
+            persisted);
     }
 
     [Fact]
@@ -135,7 +135,9 @@ public class SyncCenterCommandTests
             (_, _) => Task.FromResult(FeatureSyncResult.Ok(1)),
             puller: null,
             form: null,
-            persist: _ => throw new InvalidOperationException("disk full"));
+            persist: e => e.SyncState == RecordSyncState.Synced
+                ? throw new InvalidOperationException("disk full")
+                : Task.CompletedTask);
 
         var synced = await vm.SyncAsync();
 
@@ -301,7 +303,9 @@ public class SyncCenterCommandTests
             (_, _) => Task.FromResult(FeatureSyncResult.Ok(42)),
             puller: null,
             form: null,
-            persist: _ => throw new IOException("disk full"),
+            persist: e => e.SyncState == RecordSyncState.Synced
+                ? throw new IOException("disk full")
+                : Task.CompletedTask,
             logger: logger);
 
         var synced = await vm.SyncAsync();
