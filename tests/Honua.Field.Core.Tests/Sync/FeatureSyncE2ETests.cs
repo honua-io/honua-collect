@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
@@ -141,6 +142,69 @@ public class FeatureSyncE2ETests
 
         Assert.True(deleted.Success, deleted.Error);
         Assert.Equal(0, await CountByNameAsync(http, marker));
+    }
+
+    [SkippableFact]
+    public async Task Ordinary_attachment_round_trips_metadata_and_photo_bytes()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
+        using var http = Authed();
+        var sync = new GeoServicesFeatureSync(http);
+        const string fileName = "inspection.png";
+        const string contentType = "image/png";
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", fileName);
+        var sourceBytes = await File.ReadAllBytesAsync(path);
+        var added = await sync.SubmitAsync(Site(Marker()), Target);
+        Assert.True(added.Success, added.Error);
+        Assert.NotNull(added.ObjectId);
+        var featureId = added.ObjectId.Value;
+        var featureUrl = $"/rest/services/{ServiceId}/FeatureServer/{LayerId}/{featureId}";
+        long? attachmentId = null;
+
+        try
+        {
+            var upload = await sync.AddAttachmentAsync(featureId, path, contentType, Target);
+            attachmentId = upload.ObjectId;
+            Assert.True(upload.Success, upload.Error);
+            Assert.NotNull(attachmentId);
+
+            using var metadata = JsonDocument.Parse(await http.GetStringAsync($"{featureUrl}/attachments?f=json"));
+            var info = Assert.Single(metadata.RootElement.GetProperty("attachmentInfos").EnumerateArray());
+            Assert.Equal(attachmentId.Value, ReadLong(info, "id"));
+            Assert.Equal(fileName, info.GetProperty("name").GetString());
+            Assert.Equal(contentType, info.GetProperty("contentType").GetString());
+            Assert.Equal(sourceBytes.LongLength, ReadLong(info, "size"));
+
+            using var download = await http.GetAsync($"{featureUrl}/attachments/{attachmentId}");
+            download.EnsureSuccessStatusCode();
+            Assert.Equal(contentType, download.Content.Headers.ContentType?.MediaType);
+            var bytes = await download.Content.ReadAsByteArrayAsync();
+            Assert.Equal(SHA256.HashData(sourceBytes), SHA256.HashData(bytes));
+        }
+        finally
+        {
+            try
+            {
+                if (attachmentId is long id)
+                {
+                    using var form = new MultipartFormDataContent
+                    {
+                        { new StringContent(id.ToString(CultureInfo.InvariantCulture)), "attachmentIds" }
+                    };
+                    using var response = await http.PostAsync($"{featureUrl}/deleteAttachments", form);
+                    response.EnsureSuccessStatusCode();
+                    using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                    var result = Assert.Single(body.RootElement.GetProperty("deleteAttachmentResults").EnumerateArray());
+                    Assert.True(result.GetProperty("success").GetBoolean());
+                }
+            }
+            finally
+            {
+                var deleted = await sync.DeleteAsync(featureId, Target);
+                Assert.True(deleted.Success, deleted.Error);
+            }
+        }
     }
 
     // ---- Error / rejection cases ---------------------------------------------
