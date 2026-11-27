@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
+using Honua.Field.Core.Records;
+using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
+using Honua.Field.Presentation.Sync;
 using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.Core.Tests.Sync;
@@ -27,9 +31,9 @@ public class FeatureSyncE2ETests
     private static bool Enabled => !string.IsNullOrWhiteSpace(ServerUrl);
     private static GeoServicesTarget Target => new(ServerUrl!, ServiceId, LayerId);
 
-    private static HttpClient Authed()
+    private static HttpClient Authed(HttpMessageHandler? handler = null)
     {
-        var http = new HttpClient { BaseAddress = new Uri(ServerUrl!) };
+        var http = new HttpClient(handler ?? new HttpClientHandler()) { BaseAddress = new Uri(ServerUrl!) };
         if (!string.IsNullOrWhiteSpace(ApiKey))
         {
             http.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
@@ -72,6 +76,223 @@ public class FeatureSyncE2ETests
     }
 
     // ---- Add / update / delete happy paths -----------------------------------
+
+    [SkippableFact]
+    public async Task Lost_add_acknowledgment_survives_reopen_without_creating_a_second_feature()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is required for the live sync test.");
+
+        var marker = Marker();
+        var fault = new DropCommittedAddResponse();
+        using var uploadHttp = Authed(fault);
+        using var readHttp = Authed();
+        var sync = new GeoServicesFeatureSync(uploadHttp);
+        var directory = Directory.CreateTempSubdirectory();
+        var path = Path.Combine(directory.FullName, "field.db");
+        const string key = "lost-ack-test-key";
+
+        SyncCenterViewModel OpenCenter(SqliteRecordStore store, IReadOnlyList<FieldRecordEntry> entries) =>
+            new(entries, (entry, ct) => sync.SubmitAsync(entry.Record, Target, ct), null, null,
+                persist: entry => store.SaveAsync(entry),
+                batchUploader: (batch, ct) => sync.SubmitBatchAsync(batch.Select(entry => entry.Record).ToArray(), Target, ct));
+
+        try
+        {
+            var store = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            var record = Site(marker, r => r.Status = RecordStatus.Submitted);
+            var entry = new FieldRecordEntry(record);
+            entry.MarkPending();
+            await store.SaveAsync(entry);
+
+            Assert.Equal(0, await OpenCenter(store, [entry]).SyncAsync());
+            Assert.NotNull(fault.CommittedObjectId);
+            var requestsAfterCommit = fault.EditRequests;
+
+            var reopened = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            var entries = await reopened.LoadAllAsync();
+            var held = Assert.Single(entries);
+            Assert.Equal(record.RecordId, held.Record.RecordId);
+            Assert.Equal(marker, held.Record.Values["site_name"]?.ToString());
+            Assert.True(held.RequiresServerVerification);
+            var secondPass = await OpenCenter(reopened, entries).SyncAsync();
+
+            var feature = Assert.Single((await QueryByNameAsync(readHttp, marker)).EnumerateArray());
+            Assert.Equal(fault.CommittedObjectId, ReadLong(feature.GetProperty("attributes"), "objectid"));
+            Assert.Equal(0, secondPass);
+            Assert.Equal(requestsAfterCommit, fault.EditRequests);
+            Assert.False(held.IsPendingUpload);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+            var cleanup = new GeoServicesFeatureSync(readHttp);
+            foreach (var feature in (await QueryByNameAsync(readHttp, marker)).EnumerateArray())
+            {
+                var deleted = await cleanup.DeleteAsync(ReadLong(feature.GetProperty("attributes"), "objectid"), Target);
+                Assert.True(deleted.Success, deleted.Error);
+            }
+        }
+    }
+
+    [SkippableFact]
+    public async Task Lost_attachment_acknowledgment_is_verified_after_reopening_without_posting_again()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is required for the live sync test.");
+
+        using var readHttp = Authed();
+        var server = new GeoServicesFeatureSync(readHttp);
+        var record = Site(Marker(), record => record.Status = RecordStatus.Submitted);
+        var entry = new FieldRecordEntry(record);
+        entry.MarkPending();
+        var added = await server.SubmitAsync(record, Target);
+        Assert.True(added.Success, added.Error);
+        var objectId = Assert.IsType<long>(added.ObjectId);
+        using var fault = new DropCommittedAttachmentResponse();
+        using var uploadHttp = Authed(fault);
+        var sync = new GeoServicesFeatureSync(uploadHttp);
+        var directory = Directory.CreateTempSubdirectory();
+        var path = Path.Combine(directory.FullName, "field.db");
+        const string key = "lost-photo-ack-test-key";
+
+        try
+        {
+            var store = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            entry.MarkSynced(objectId.ToString(CultureInfo.InvariantCulture));
+            var photoId = Guid.NewGuid();
+            var name = $"{photoId:N}.png";
+            var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "inspection.png"));
+            await File.WriteAllBytesAsync(Path.Combine(directory.FullName, name), bytes);
+            entry.AddOrdinaryPhoto(new OrdinaryFeaturePhoto(
+                photoId, name, "image/png", name, Convert.ToHexString(SHA256.HashData(bytes)), Target));
+            await store.SaveAsync(entry);
+
+            Assert.False(await OrdinaryPhotoReplay.ReplayAsync(
+                entry, sync, Target, directory.FullName, current => store.SaveAsync(current)));
+            Assert.Equal(OrdinaryPhotoState.NeedsVerification, Assert.Single(entry.OrdinaryPhotos).State);
+            Assert.NotNull(fault.CommittedAttachmentId);
+
+            var reopened = await SqliteRecordStore.OpenEncryptedAsync(path, key);
+            var held = Assert.Single(await reopened.LoadAllAsync());
+            Assert.True(await OrdinaryPhotoReplay.ReplayAsync(
+                held, sync, Target, directory.FullName, current => reopened.SaveAsync(current)));
+            Assert.Equal(1, fault.Uploads);
+
+            var persisted = Assert.Single(await reopened.LoadAllAsync());
+            var photo = Assert.Single(persisted.OrdinaryPhotos);
+            Assert.Equal(OrdinaryPhotoState.Synced, photo.State);
+            Assert.Equal(fault.CommittedAttachmentId, photo.ServerAttachmentId);
+            using var listing = JsonDocument.Parse(await readHttp.GetStringAsync(
+                $"/rest/services/{ServiceId}/FeatureServer/{LayerId}/{objectId}/attachments?f=json"));
+            var attachment = Assert.Single(listing.RootElement.GetProperty("attachmentInfos").EnumerateArray());
+            Assert.Equal(fault.CommittedAttachmentId, ReadLong(attachment, "id"));
+            Assert.Equal(name, attachment.GetProperty("name").GetString());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+            var deleted = await server.DeleteAsync(objectId, Target);
+            Assert.True(deleted.Success, deleted.Error);
+        }
+    }
+
+    private sealed class DropCommittedAttachmentResponse() : DelegatingHandler(new HttpClientHandler())
+    {
+        public long? CommittedAttachmentId { get; private set; }
+        public int Uploads { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var response = await base.SendAsync(request, ct);
+            if (request.RequestUri?.AbsolutePath.EndsWith("/addAttachment", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                return response;
+            }
+
+            Uploads++;
+            if (CommittedAttachmentId is null && response.IsSuccessStatusCode)
+            {
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+                if (body.RootElement.TryGetProperty("addAttachmentResult", out var result)
+                    && result.GetProperty("success").GetBoolean())
+                {
+                    CommittedAttachmentId = ReadLong(result, "objectId");
+                    response.Dispose();
+                    throw new HttpRequestException("The committed attachment response was lost.");
+                }
+            }
+
+            return response;
+        }
+    }
+
+    // Deliver all protocol errors normally. Drop the first actual success only after the server
+    // returns the assigned ID, as happens when the response is lost on the way back to Field.
+    private sealed class DropCommittedAddResponse() : DelegatingHandler(new HttpClientHandler())
+    {
+        public long? CommittedObjectId { get; private set; }
+        public int EditRequests { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var response = await base.SendAsync(request, ct);
+            if (request.RequestUri?.AbsolutePath.EndsWith("/applyEdits", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                return response;
+            }
+
+            EditRequests++;
+            if (CommittedObjectId is null && response.IsSuccessStatusCode)
+            {
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+                if (body.RootElement.TryGetProperty("addResults", out var results) && results.GetArrayLength() == 1
+                    && results[0].GetProperty("success").GetBoolean())
+                {
+                    CommittedObjectId = ReadLong(results[0], "objectId");
+                    response.Dispose();
+                    throw new HttpRequestException("The committed response was lost.");
+                }
+            }
+
+            return response;
+        }
+    }
+
+    [SkippableFact]
+    public async Task Batch_add_persists_each_feature_once_and_returns_matching_object_ids()
+    {
+        Skip.IfNot(Enabled, "HONUA_E2E_SERVER is not set; bring a server up with scripts/e2e/up.sh to run E2E tests.");
+
+        using var http = Authed();
+        var sync = new GeoServicesFeatureSync(http);
+        var markers = new[] { Marker(), Marker() };
+        var records = markers.Select((marker, index) => Site(marker, r => r.Values["sync_version"] = index + 1)).ToArray();
+        try
+        {
+            var results = await sync.SubmitBatchAsync(records, Target);
+
+            Assert.Equal(records.Length, results.Count);
+            Assert.All(results, result => Assert.True(result.Success, result.Error));
+            Assert.NotEqual(results[0].ObjectId, results[1].ObjectId);
+            for (var index = 0; index < markers.Length; index++)
+            {
+                var feature = Assert.Single((await QueryByNameAsync(http, markers[index])).EnumerateArray());
+                var attributes = feature.GetProperty("attributes");
+                Assert.Equal(ReadLong(attributes, "objectid"), results[index].ObjectId);
+                Assert.Equal(index + 1, ReadLong(attributes, "sync_version"));
+            }
+        }
+        finally
+        {
+            foreach (var marker in markers)
+            {
+                foreach (var feature in (await QueryByNameAsync(http, marker)).EnumerateArray())
+                {
+                    var deleted = await sync.DeleteAsync(ReadLong(feature.GetProperty("attributes"), "objectid"), Target);
+                    Assert.True(deleted.Success, deleted.Error);
+                }
+            }
+        }
+    }
 
     [SkippableFact]
     public async Task Add_persists_and_round_trips_geometry_and_typed_attributes()

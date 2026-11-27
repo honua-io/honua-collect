@@ -47,4 +47,10 @@ public enum RecordSyncState
 
     /// <summary>The server rejected the submission before committing an edit.</summary>
     SubmissionRejected = 7,
+
+    /// <summary>An ordinary add may have been applied and needs server verification.</summary>
+    AddNeedsVerification = 8,
+
+    /// <summary>The server definitively rejected this ordinary add.</summary>
+    AddRejected = 9,
 }

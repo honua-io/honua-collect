@@ -1,7 +1,7 @@
 # Importing forms and field data
 
 Use Honua Server to publish a versioned XLSForm for field workers. For applications that
-already have schema rows or exported records, Honua Field also provides in-process importers.
+already have a published layer schema or exported records, Honua Field also provides in-process importers.
 
 ## Importing form definitions
 
@@ -13,26 +13,26 @@ already have schema rows or exported records, Honua Field also provides in-proce
 
 Use a WGS 84 point layer for the form's single top-level geopoint. Place photo questions at the top level. A repeat section supports up to 100 ordered rows of scalar or multiple-choice answers and stores them in a writable text attribute matching the section ID. Relevance and calculated expressions can refer to earlier answers, and repeat rows can also use parent answers. When a question becomes hidden, Field keeps its previous answer in the draft and omits it from submission.
 
-### Importing XLSForm sheet rows in an application
+### Migrating a row-based XLSForm import
 
-XLSForm definitions use `survey` and `choices` sheets, the same sheet model the
-OpenDataKit ecosystem uses. Field imports them directly:
+Workbook conversion belongs to `Honua.Sdk.Field.Forms.Authoring`. Code that
+previously called Field's `XlsFormImporter.Import` can either read an existing
+`.xlsx` stream with `XlsFormWorkbookIO.Read` and take the result's `Value`,
+or construct an `XlsFormWorkbook` from its survey, choices and settings rows.
+Supply `form_id` and `form_title` in settings and preserve worksheet row numbers
+for diagnostics. Pass the workbook to `XlsFormConverter.Import`. Both operations
+return a result with diagnostics if conversion fails.
 
-- `Honua.Field.Core.Field.Forms.Authoring.XlsFormImporter.Import(formId, name, survey, choices)`
-  turns the `survey` and `choices` rows into a `FormDefinition`.
-- Field **types**, **labels**, **required** flags, **choice lists** (single/multi
-  select), and **relevant** expressions in the common single-comparison form
-  (`${field} = value`, `>`, `<`, …) are mapped to Field's form model and its
-  live visibility rules (`FormSession`).
-- Repeating groups map to Field's repeat groups (`RepeatGroup` /
-  `RepeatInstance`).
+The former helper silently skipped some unsupported questions. The shared
+converter reports the sheet, row and column for unsupported behavior and
+returns no partial form. Use `begin_group` / `end_group` and
+`begin_repeat` / `end_repeat` in the survey sheet. Run
+`honua forms import inspection.xlsx --local -o inspection.form.json` to
+check an existing workbook before publishing it. The Field app downloads
+the published package and keeps its version with each offline draft.
+[SDK XLSForm CLI guide](https://github.com/honua-io/honua-sdk-dotnet/blob/trunk/docs/xlsform-cli.md)
 
-Practical path: export the form as XLSForm, read the two sheets into
-`XlsFormSurveyRow` / `XlsFormChoiceRow` sequences (any spreadsheet reader), and
-call `Import`. Calculated fields and cascading selects are evaluated at runtime by
-`FormSession`, so they behave as defined by the imported form.
-
-#### Importing a published GeoServices REST feature layer
+### Importing a published GeoServices REST feature layer
 
 When the original XLSForm isn't on hand, import the **published feature-layer
 schema** instead — the JSON a FeatureServer layer's metadata endpoint returns:

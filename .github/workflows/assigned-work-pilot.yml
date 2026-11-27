@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           for suite in Core Presentation; do
             project="tests/Honua.Field.$suite.Tests/Honua.Field.$suite.Tests.csproj"
-            dotnet restore "$project" -p:EnableAssignedWorkPilot=true
+            dotnet restore "$project" --locked-mode -p:EnableAssignedWorkPilot=true
             dotnet test "$project" -p:EnableAssignedWorkPilot=true --no-restore
           done
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5

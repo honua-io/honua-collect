@@ -3,6 +3,7 @@
 
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
+using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
 using Microsoft.Data.Sqlite;
 
@@ -63,6 +64,48 @@ public class SqliteRecordStoreEncryptionTests : IDisposable
         Assert.Equal("inspection-27", recovered.Record.RecordId);
         Assert.Equal(RecordSyncState.Pending, recovered.SyncState);
         Assert.Equal("Encrypted Site", recovered.Record.Values["site_name"]?.ToString());
+    }
+
+    [Fact]
+    public async Task Finished_local_record_remains_eligible_for_its_first_ordinary_add()
+    {
+        var store = await SqliteRecordStore.OpenEncryptedAsync(_dbPath, "device-test-key");
+        await store.SaveAsync(new FieldRecordEntry(Record("never-sent"), RecordSyncState.Local));
+
+        var entry = Assert.Single(await store.LoadAllAsync());
+        Assert.True(entry.IsPendingUpload);
+        await entry.PrepareOrdinaryAddAsync(held => store.SaveAsync(held));
+        Assert.True(Assert.Single(await store.LoadAllAsync()).RequiresServerVerification);
+    }
+
+    [Fact]
+    public async Task Ordinary_add_hold_blocks_stale_writer_until_definite_rejection()
+    {
+        const string key = "device-test-key";
+        var first = await SqliteRecordStore.OpenEncryptedAsync(_dbPath, key);
+        var second = await SqliteRecordStore.OpenEncryptedAsync(_dbPath, key);
+        await new RecordBook(first).AddSubmittedAsync(Record("ordinary-add"));
+        var claimant = Assert.Single(await first.LoadAllAsync());
+        var stale = Assert.Single(await second.LoadAllAsync());
+
+        await claimant.PrepareOrdinaryAddAsync(entry => first.SaveAsync(entry));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            stale.PrepareOrdinaryAddAsync(entry => second.SaveAsync(entry)));
+        Assert.True(stale.IsPendingUpload);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => second.SaveAsync(stale));
+
+        var reopened = await SqliteRecordStore.OpenEncryptedAsync(_dbPath, key);
+        var held = Assert.Single(await reopened.LoadAllAsync());
+        Assert.True(held.RequiresServerVerification);
+        Assert.False(held.IsPendingUpload);
+
+        claimant.ApplyOrdinaryAddResult(FeatureSyncResult.Fail("value rejected") with { DefinitiveEditRejection = true });
+        await first.SaveAsync(claimant);
+        var rejected = Assert.Single(await reopened.LoadAllAsync());
+        Assert.Equal(RecordSyncState.AddRejected, rejected.SyncState);
+        Assert.True(rejected.IsPendingUpload);
+        await rejected.PrepareOrdinaryAddAsync(entry => reopened.SaveAsync(entry));
+        Assert.True(Assert.Single(await second.LoadAllAsync()).RequiresServerVerification);
     }
 
     [Fact]

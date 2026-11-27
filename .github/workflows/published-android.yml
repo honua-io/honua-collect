@@ -79,6 +79,15 @@ jobs:
           DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
         with:
           global-json-file: global.json
+      # The APK restore writes Android RID lock entries to the shared projects.
+      - name: Build ordinary feature sync integration tests
+        env:
+          MSBuildEnableWorkloadResolver: "false"
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
+            -c Release -p:RestoreLockedMode=true
+
       - name: Build current standalone .NET 11 Debug APK
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
@@ -161,6 +170,7 @@ jobs:
             ${{ runner.temp }}/published-android-report/*/[0-9]-*.xml
             ${{ runner.temp }}/published-android-report/upgrade/*.xml
             ${{ runner.temp }}/published-android-report/adaptive/*
+            ${{ runner.temp }}/published-android-report/gps-geometry/*
             ${{ runner.temp }}/published-android-report/upgrade/failure-state.json
             ${{ runner.temp }}/published-android-report/upgrade/before.json
             ${{ runner.temp }}/published-android-report/upgrade/after.json

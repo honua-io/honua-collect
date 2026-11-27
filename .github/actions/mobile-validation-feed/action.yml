@@ -13,10 +13,10 @@ runs:
       run: |
         set -euo pipefail
         repo=honua-io/honua-mobile
-        run=45949637544
-        artifact=15175754423
-        revision=4bb9d1af80524f79715cfda853a40ebd92131d0c
-        digest=a4373d71d98eaa1c1e5ba03f80e9013d1138e91bf748c606812cf5659ef019ce
+        run=45956969211
+        artifact=15179501279
+        revision=d9c07224f7013712baf6772cd939b8f20298d73a
+        digest=1d3b2217ca65c769a801bfdb7f4124e10fd5ba666988f08cf33b4ef96e4186a0
         feed="$(mktemp -d "$RUNNER_TEMP/honua-mobile-feed.XXXXXX")"
         test "$(gh api "repos/$repo/actions/runs/$run" --jq '.head_sha + ":" + .conclusion')" = "$revision:success"
         test "$(gh api "repos/$repo/actions/artifacts/$artifact" --jq '(.workflow_run.id | tostring) + ":" + .digest')" = "$run:sha256:$digest"
@@ -26,9 +26,9 @@ runs:
         (
           cd "$feed"
           shasum -a 256 -c <<'HASHES'
-        6e52a0f473aae727bc24fd36523dc46570406f86ea1d33407db4944114876534  Honua.Mobile.Maui.0.1.0-ci.45949637544.1.nupkg
-        cb94cbe240b6a8b92d552c98e7a1fc01f405f1e6404d464a906f067e6313ae72  Honua.Mobile.Offline.0.1.0-ci.45949637544.1.nupkg
-        6757da9c9ef0fe821f40de2488a6b6786e7277702ebd6a4a5ebf12b308566ce6  Honua.Mobile.Sdk.0.1.0-ci.45949637544.1.nupkg
+        daabb687088a022f975b004e2594b5a29d5950f253366113ad35e470606d3418  Honua.Mobile.Maui.0.1.0-operationqueue.2.nupkg
+        54820f443ec27d5352df99a6511d0c2f5e43e9a126249ceea3c6721fb487b877  Honua.Mobile.Offline.0.1.0-operationqueue.2.nupkg
+        f8bf3a86dcc78b4baa365f81f51fc617e854b3ba40d328442f104be12cd2b7f1  Honua.Mobile.Sdk.0.1.0-operationqueue.2.nupkg
         HASHES
         )
         python3 - "$feed" <<'PY'

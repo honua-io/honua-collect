@@ -172,4 +172,24 @@ public class GeometryCaptureTests
         Assert.Equal(SnapKind.None, result.Kind);
         Assert.Equal(0.01, session.Vertices[0].Latitude, 6);
     }
+
+    [Fact]
+    public void Undo_removes_the_snapped_vertex_and_keeps_the_previous_capture()
+    {
+        var session = new GeometryCaptureSession(CapturedGeometryType.Line)
+        {
+            SnapEnabled = true,
+            SnapToleranceMeters = 5,
+        };
+        var previous = new FieldGeoPoint(0.01, 0.005);
+        session.SetSnapTargets([new SnapTarget([new(0, 0), new(0, 0.01)])]);
+
+        session.AddVertex(previous);
+        var snap = session.AddVertex(new FieldGeoPoint(0.00002, 0.005));
+        Assert.Equal(SnapKind.Edge, snap.Kind);
+        Assert.Equal(snap.Point, session.Vertices[1]);
+
+        Assert.True(session.Undo());
+        Assert.Same(previous, Assert.Single(session.Vertices));
+    }
 }

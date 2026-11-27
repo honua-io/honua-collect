@@ -40,10 +40,27 @@ public sealed class MobileRecordStore : IRecordStore
     }
 
     /// <inheritdoc />
-    public Task SaveAsync(FieldRecordEntry entry, CancellationToken ct = default)
+    public async Task SaveAsync(FieldRecordEntry entry, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return _store.SaveDocumentAsync(Collection, ToDocument(entry), ct);
+        var photos = entry.OrdinaryPhotos;
+        var expectedPhotos = entry.PersistedOrdinaryPhotos;
+        var document = ToDocument(entry, photos);
+#if HONUA_ASSIGNED_WORK_PILOT
+        var previous = await _store.GetDocumentAsync(Collection, document.Id, ct).ConfigureAwait(false);
+#else
+        var previous = await _store.LoadDocumentAsync(Collection, document.Id, ct).ConfigureAwait(false);
+#endif
+        var previousEntry = previous is null ? null : ReadDocument(previous);
+        FieldRecordEntry.ValidateOrdinaryPhotos(expectedPhotos, previousEntry?.OrdinaryPhotos ?? []);
+        SqliteRecordStore.ValidateOrdinaryWrite(entry, previousEntry?.SyncState, previousEntry?.RemoteId is not null,
+            previousEntry?.PublishedSubmission is not null);
+        if (!await _store.CompareExchangeDocumentAsync(Collection, document, previous?.Json, ct).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("This record changed before it could be saved. Reopen it and try again.");
+        }
+
+        entry.AcceptPersistedOrdinaryPhotos(photos);
     }
 
     /// <inheritdoc />
@@ -57,7 +74,9 @@ public sealed class MobileRecordStore : IRecordStore
     public Task DeleteAsync(string recordId, CancellationToken ct = default) =>
         _store.DeleteDocumentAsync(Collection, recordId, ct);
 
-    private static OfflineDocument ToDocument(FieldRecordEntry entry)
+    private static OfflineDocument ToDocument(FieldRecordEntry entry) => ToDocument(entry, entry.OrdinaryPhotos);
+
+    private static OfflineDocument ToDocument(FieldRecordEntry entry, IReadOnlyList<OrdinaryFeaturePhoto> photos)
     {
         var record = entry.Record;
         var data = new MobileRecordData(
@@ -65,7 +84,7 @@ public sealed class MobileRecordStore : IRecordStore
             record.CreatedAtUtc, record.SubmittedAtUtc, record.CompletedAtUtc,
             JsonSerializer.SerializeToElement(record.Values, SqliteRecordStore.ValuesJsonOptions),
             entry.SyncState, entry.RemoteId, entry.LastError, entry.FailedAttempts, entry.LastSyncedUtc,
-            entry.Version, entry.PublishedSubmission, entry.PublishedDraft);
+            entry.Version, entry.PublishedSubmission, entry.PublishedDraft, photos.ToArray());
         return new OfflineDocument(record.RecordId, JsonSerializer.Serialize(data, MobileRecordJsonContext.Default.MobileRecordData));
     }
 
@@ -91,6 +110,7 @@ public sealed class MobileRecordStore : IRecordStore
 
         var entry = new FieldRecordEntry(record) { PublishedSubmission = data.Submission, PublishedDraft = data.Draft };
         SqliteRecordStore.Rehydrate(entry, data.SyncState, data.RemoteId, data.LastError, data.FailedAttempts, data.LastSyncedUtc);
+        entry.RestoreOrdinaryPhotos(data.OrdinaryPhotos);
         entry.SetVersion(data.Version);
         return entry;
     }
@@ -101,7 +121,7 @@ internal sealed record MobileRecordData(
     DateTimeOffset CreatedAtUtc, DateTimeOffset? SubmittedAtUtc, DateTimeOffset? CompletedAtUtc,
     JsonElement Values, RecordSyncState SyncState, string? RemoteId, string? LastError,
     int FailedAttempts, DateTimeOffset? LastSyncedUtc, int Version,
-    PublishedFormSubmission? Submission, PublishedFormDraft? Draft);
+    PublishedFormSubmission? Submission, PublishedFormDraft? Draft, OrdinaryFeaturePhoto[]? OrdinaryPhotos = null);
 
 [JsonSerializable(typeof(MobileRecordData))]
 internal sealed partial class MobileRecordJsonContext : JsonSerializerContext

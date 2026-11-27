@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Text.Json;
+using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
 
@@ -23,9 +24,9 @@ public class GeoServicesFeatureSyncTests
         }
     }
 
-    private static FieldRecord Record()
+    private static FieldRecord Record(string recordId = "r1")
     {
-        var r = new FieldRecord { RecordId = "r1", FormId = "f", Location = new FieldGeoPoint(21.30, -157.82) };
+        var r = new FieldRecord { RecordId = recordId, FormId = "f", Location = new FieldGeoPoint(21.30, -157.82) };
         r.Values["site_name"] = "E2E Test Site";
         r.Values["priority"] = "high";
         r.Values["sync_version"] = 1;
@@ -85,14 +86,22 @@ public class GeoServicesFeatureSyncTests
         var handler = new CapturingHandler(HttpStatusCode.OK, """{"updateResults":[{"objectId":42,"success":true}]}""");
         using var http = new HttpClient(handler);
 
-        var result = await new GeoServicesFeatureSync(http).UpdateAsync(42, Record(), new GeoServicesTarget("http://s", "svc", 9));
+        var record = Record();
+        record.Values["saved_number"] = JsonSerializer.SerializeToElement(7);
+        record.Values["saved_boolean"] = JsonSerializer.SerializeToElement(true);
+        record.Values["saved_null"] = JsonSerializer.SerializeToElement<object?>(null);
+        var result = await new GeoServicesFeatureSync(http).UpdateAsync(42, record, new GeoServicesTarget("http://s", "svc", 9));
 
         Assert.True(result.Success);
         Assert.Equal(42, result.ObjectId);
         Assert.Contains("updates=", handler.CapturedBody);
         using var doc = JsonDocument.Parse(System.Net.WebUtility.UrlDecode(
             handler.CapturedBody!.Split("updates=")[1].Split('&')[0]));
-        Assert.Equal(42, doc.RootElement[0].GetProperty("attributes").GetProperty("objectid").GetInt64());
+        var attributes = doc.RootElement[0].GetProperty("attributes");
+        Assert.Equal(42, attributes.GetProperty("objectid").GetInt64());
+        Assert.Equal(7, attributes.GetProperty("saved_number").GetInt32());
+        Assert.True(attributes.GetProperty("saved_boolean").GetBoolean());
+        Assert.False(attributes.TryGetProperty("saved_null", out _));
     }
 
     [Fact]
@@ -105,7 +114,22 @@ public class GeoServicesFeatureSyncTests
 
         Assert.True(result.Success);
         Assert.Equal(7, result.ObjectId);
-        Assert.Contains("deletes=%5B7%5D", handler.CapturedBody); // [7] url-encoded
+        Assert.Contains("deletes=7", handler.CapturedBody);
+    }
+
+    [Theory]
+    [InlineData("""{"updateResults":[]}""")]
+    [InlineData("""{"updateResults":[null]}""")]
+    [InlineData("""{"updateResults":[{"objectId":42,"success":true},{"objectId":43,"success":true}]}""")]
+    public async Task UpdateAsync_rejects_receipts_that_do_not_confirm_exactly_one_edit(string response)
+    {
+        using var http = new HttpClient(new CapturingHandler(HttpStatusCode.OK, response));
+        var sync = new GeoServicesFeatureSync(http, FeatureSyncRetryPolicy.None);
+
+        var result = await sync.UpdateAsync(42, Record(), new GeoServicesTarget("http://s", "svc", 9));
+
+        Assert.False(result.Success);
+        Assert.Contains("updateResults", result.Error);
     }
 
     [Fact]
@@ -754,7 +778,7 @@ public class GeoServicesFeatureSyncTests
             var unexpected = await new GeoServicesFeatureSync(http1)
                 .AddAttachmentAsync(1, file, "image/jpeg", new GeoServicesTarget("http://s", "svc", 9));
             Assert.False(unexpected.Success);
-            Assert.Contains("no addAttachmentResult", unexpected.Error);
+            Assert.Contains("addAttachmentResult", unexpected.Error);
 
             using var http2 = new HttpClient(new CapturingMultipartHandler(HttpStatusCode.OK, "garbage"));
             var invalid = await new GeoServicesFeatureSync(http2)
@@ -859,6 +883,212 @@ public class GeoServicesFeatureSyncTests
         var body = Uri.UnescapeDataString(handler.CapturedBody!);
         using var doc = JsonDocument.Parse(ExtractFormValue(body, "adds"));
         Assert.Equal(3, doc.RootElement.GetArrayLength());
+    }
+
+    private const string UnsupportedGlobalIdMode =
+        """{"error":{"code":400,"message":"Bad Request","details":["useGlobalIds is not supported"]}}""";
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task SubmitBatchAsync_reuses_identical_adds_after_explicit_unsupported_mode(HttpStatusCode status)
+    {
+        var handler = new SequencedHandler(
+            (status, UnsupportedGlobalIdMode),
+            (HttpStatusCode.OK, """{"addResults":[{"objectId":11,"success":true},{"objectId":12,"success":true}]}"""));
+        using var http = new HttpClient(handler);
+        FieldRecord[] records = [Record(), Record("r2")];
+
+        var results = await new GeoServicesFeatureSync(http, FastRetry).SubmitBatchAsync(records, T);
+
+        Assert.Equal(2, handler.Calls);
+        Assert.Equal(new long?[] { 11, 12 }, results.Select(result => result.ObjectId));
+        Assert.All(results, result => Assert.True(result.Success));
+        Assert.Contains("&useGlobalIds=true", handler.Bodies[0], StringComparison.Ordinal);
+        Assert.Equal(handler.Bodies[0].Replace("&useGlobalIds=true", string.Empty, StringComparison.Ordinal), handler.Bodies[1]);
+        var request = Uri.UnescapeDataString(handler.Bodies[0]);
+        Assert.Equal("false", ExtractFormValue(request, "rollbackOnFailure"));
+        using var adds = JsonDocument.Parse(ExtractFormValue(request, "adds"));
+        Assert.Equal(records.Select(GeoServicesFeatureSync.GlobalIdFor),
+            adds.RootElement.EnumerateArray().Select(feature => feature.GetProperty("attributes").GetProperty("globalid").GetString()));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadGateway, UnsupportedGlobalIdMode)]
+    [InlineData(HttpStatusCode.OK, """{"error":{"code":400,"message":"useGlobalIds is not supported"},"addResults":[{"objectId":11,"success":true}]}""")]
+    [InlineData(HttpStatusCode.BadRequest, """{"error":{"code":400,"message":"Invalid attributes"}}""")]
+    public async Task SubmitBatchAsync_does_not_retry_an_uncertain_or_unrelated_rejection(HttpStatusCode status, string body)
+    {
+        var handler = new SequencedHandler((status, body), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        await new GeoServicesFeatureSync(http, FastRetry).SubmitBatchAsync([Record(), Record("r2")], T);
+
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task SubmitBatchAsync_preserves_partial_success_without_retrying_per_edit_errors()
+    {
+        var handler = new SequencedHandler(
+            (HttpStatusCode.OK, """{"addResults":[{"objectId":11,"success":true},{"success":false,"error":{"code":400,"description":"useGlobalIds is not supported"}}]}"""),
+            (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var results = await new GeoServicesFeatureSync(http, FastRetry).SubmitBatchAsync([Record(), Record("r2")], T);
+
+        Assert.Equal(1, handler.Calls);
+        Assert.True(results[0].Success);
+        Assert.Equal(11, results[0].ObjectId);
+        Assert.False(results[1].Success);
+        Assert.Equal(400, results[1].ErrorCode);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task SubmitBatchAsync_preserves_acknowledged_ids_alongside_general_failure(HttpStatusCode status)
+    {
+        var handler = new SequencedHandler((status,
+            """
+            {"error":{"code":400,"message":"useGlobalIds is not supported"},
+             "addResults":[{"objectId":11,"success":true,"error":null},
+                           {"success":false,"error":{"code":123,"description":"validation failed"}}]}
+            """), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var results = await new GeoServicesFeatureSync(http, FastRetry).SubmitBatchAsync(
+            [Record(), Record("r2"), Record("r3")], T);
+
+        Assert.Equal(1, handler.Calls);
+        Assert.Collection(results,
+            result =>
+            {
+                Assert.True(result.Success);
+                Assert.Equal(11, result.ObjectId);
+            },
+            result =>
+            {
+                Assert.False(result.Success);
+                Assert.Equal(123, result.ErrorCode);
+                Assert.Equal("validation failed", result.Error);
+            },
+            result =>
+            {
+                Assert.False(result.Success);
+                Assert.Equal(400, result.ErrorCode);
+                Assert.Contains("useGlobalIds is not supported", result.Error);
+            });
+    }
+
+    [Fact]
+    public async Task SubmitBatchAsync_ignores_malformed_results_without_discarding_valid_siblings()
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK,
+            """
+            {"error":false,"addResults":[null,{"success":"true","objectId":10},{"success":true},
+            {"success":true,"objectId":"11"},{"success":true,"objectId":0},
+            {"success":true,"objectId":12,"error":{}},{"success":false,"error":{"description":4,"code":"400"}},
+            {"success":true,"objectId":13}]}
+            """);
+        using var http = new HttpClient(handler);
+        var records = Enumerable.Range(0, 8).Select(i => Record($"r{i}")).ToArray();
+
+        var results = await new GeoServicesFeatureSync(http).SubmitBatchAsync(records, T);
+
+        Assert.Equal(records.Length, results.Count);
+        Assert.All(results.Take(7), result =>
+        {
+            Assert.False(result.Success);
+            Assert.Null(result.ObjectId);
+        });
+        Assert.True(results[7].Success);
+        Assert.Equal(13, results[7].ObjectId);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("""{"addResults":{"objectId":11,"success":true}}""")]
+    [InlineData("""{"addResults":[{"objectId":11,"success":true},{"objectId":12,"success":true}]}""")]
+    public async Task SubmitBatchAsync_fails_closed_when_response_cannot_be_mapped_to_records(string body)
+    {
+        using var http = new HttpClient(new CapturingHandler(HttpStatusCode.OK, body));
+
+        var result = Assert.Single(await new GeoServicesFeatureSync(http).SubmitBatchAsync([Record()], T));
+
+        Assert.False(result.Success);
+        Assert.Null(result.ObjectId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Adds_stay_in_the_outbox_when_the_payload_cannot_be_encoded(bool batch)
+    {
+        var handler = new CapturingHandler(HttpStatusCode.OK, OkAdd);
+        using var http = new HttpClient(handler);
+        var sync = new GeoServicesFeatureSync(http, FastRetry);
+        var invalid = Record("invalid");
+        invalid.Location = new FieldGeoPoint(21.30, double.PositiveInfinity);
+
+        var records = batch ? new[] { Record(), invalid } : new[] { invalid };
+        var results = batch
+            ? await sync.SubmitBatchAsync(records, T)
+            : new[] { await sync.SubmitAsync(invalid, T) };
+
+        Assert.Null(handler.CapturedUri);
+        Assert.Equal(records.Length, results.Count);
+        for (var i = 0; i < records.Length; i++)
+        {
+            records[i].Status = RecordStatus.Submitted;
+            var entry = new FieldRecordEntry(records[i]);
+            entry.MarkPending();
+            entry.MarkAddNeedsVerification();
+
+            Assert.False(entry.ApplyOrdinaryAddResult(results[i]));
+            Assert.Equal(0, results[i].Attempts);
+            Assert.Equal(RecordSyncState.AddRejected, entry.SyncState);
+            Assert.True(entry.IsPendingUpload);
+            Assert.False(entry.RequiresServerVerification);
+        }
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.NameResolutionError)]
+    [InlineData(HttpRequestError.ConnectionError)]
+    public async Task Adds_hold_for_verification_after_transport_failure(HttpRequestError error)
+    {
+        using var http = new HttpClient(new ThrowingHandler(new HttpRequestException(error, "network failure")));
+        var sync = new GeoServicesFeatureSync(http, FastRetry);
+
+        var direct = await sync.SubmitAsync(Record(), T);
+        var batch = Assert.Single(await sync.SubmitBatchAsync([Record()], T));
+        foreach (var result in new[] { direct, batch })
+        {
+            var record = new FieldRecordEntry(Record());
+            record.Record.Status = RecordStatus.Submitted;
+            record.MarkPending();
+            record.MarkAddNeedsVerification();
+            Assert.False(record.ApplyOrdinaryAddResult(result));
+            Assert.True(record.RequiresServerVerification);
+            Assert.False(record.IsPendingUpload);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitBatchAsync_does_not_retry_transport_failure()
+    {
+        var handler = new FlakyHandler(new HttpRequestException("connection reset"), (HttpStatusCode.OK, OkAdd));
+        using var http = new HttpClient(handler);
+
+        var results = await new GeoServicesFeatureSync(http, FastRetry).SubmitBatchAsync([Record(), Record("r2")], T);
+
+        Assert.Equal(1, handler.Calls);
+        Assert.All(results, result =>
+        {
+            Assert.False(result.Success);
+            Assert.Contains("connection reset", result.Error);
+        });
     }
 
     [Fact]

@@ -14,9 +14,8 @@ namespace Honua.Field.Core.Migration;
 /// without re-authoring.
 /// </summary>
 /// <remarks>
-/// When the original XLSForm is unavailable (that path is
-/// <see cref="Field.Forms.Authoring.XlsFormImporter"/>), this importer reads the
-/// published feature layer. GeoServices REST field types
+/// This importer reads a published feature layer when the original workbook is
+/// unavailable. GeoServices REST field types
 /// (<c>esriFieldTypeString</c>, <c>…Integer</c>, <c>…Date</c>, …) map to
 /// <see cref="FormFieldType"/>; a field carrying a coded-value
 /// <c>domain</c> becomes a single-choice field whose <see cref="FieldChoice"/>s are

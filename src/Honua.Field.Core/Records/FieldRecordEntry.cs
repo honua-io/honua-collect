@@ -76,10 +76,78 @@ public sealed class FieldRecordEntry
     /// The mailbox this record currently belongs to, derived from its review
     /// status and transport state.
     /// </summary>
-    public RecordBox Box => RecordBoxClassifier.Classify(Record.Status, SyncState);
+    public RecordBox Box => HasPendingOrdinaryPhotos ? RecordBox.Outbox : FeatureBox;
+
+    private RecordBox FeatureBox => RecordBoxClassifier.Classify(Record.Status, SyncState);
+
+    /// <summary>Whether an acknowledged ordinary feature has photos awaiting confirmation.</summary>
+    public bool HasPendingOrdinaryPhotos => FeatureBox == RecordBox.Sent
+        && SyncState == RecordSyncState.Synced
+        && PublishedSubmission is null
+        && RemoteId is not null
+        && OrdinaryPhotos.Any(photo => photo.State != OrdinaryPhotoState.Synced);
 
     /// <summary>Whether the record is finished and waiting to upload (or retry).</summary>
-    public bool IsPendingUpload => Box == RecordBox.Outbox && SyncState != RecordSyncState.SubmissionRejected;
+    public bool IsPendingUpload => FeatureBox == RecordBox.Outbox
+        && SyncState != RecordSyncState.SubmissionRejected && !RequiresServerVerification;
+
+    public const string OrdinaryAddVerificationMessage =
+        "Check the server layer for this feature before creating another record. The upload may already have been applied.";
+
+    public bool IsOrdinaryAdd => PublishedSubmission is null && RemoteId is null && Record.Status != RecordStatus.Deleted;
+
+    public bool RequiresServerVerification => FeatureBox == RecordBox.Outbox && IsOrdinaryAdd
+        && SyncState is RecordSyncState.AddNeedsVerification or RecordSyncState.Uploading or RecordSyncState.Failed;
+
+    public void MarkAddNeedsVerification()
+    {
+        MarkUploading();
+        SyncState = RecordSyncState.AddNeedsVerification;
+        LastError = OrdinaryAddVerificationMessage;
+    }
+
+    public async Task PrepareOrdinaryAddAsync(Func<FieldRecordEntry, Task> persist)
+    {
+        var previousState = SyncState;
+        var previousError = LastError;
+        var previousAttempt = LastAttemptUtc;
+        MarkAddNeedsVerification();
+        try
+        {
+            await persist(this);
+        }
+        catch
+        {
+            SyncState = previousState;
+            LastError = previousError;
+            LastAttemptUtc = previousAttempt;
+            throw;
+        }
+    }
+
+    internal void RestoreOrdinaryAddState(RecordSyncState state, string? error, int failedAttempts)
+    {
+        SyncState = state;
+        LastError = error;
+        FailedAttempts = failedAttempts;
+    }
+
+    public bool ApplyOrdinaryAddResult(Sync.FeatureSyncResult result)
+    {
+        if (result.Success && result.ObjectId is > 0)
+        {
+            MarkSynced(result.ObjectId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        if (!result.Success && (result.DefinitiveEditRejection || result.AddNotDispatched))
+        {
+            MarkFailed(result.FailureDescription);
+            SyncState = RecordSyncState.AddRejected;
+        }
+
+        return false;
+    }
 
     /// <summary>Whether the captured editor can safely open for changes.</summary>
     public bool CanOpenPublishedEditor => PublishedDraft is not null
@@ -227,6 +295,89 @@ public sealed class FieldRecordEntry
     /// Outbox after a restart rather than silently re-uploading.
     /// </summary>
     internal void RestoreConflicted() => SyncState = RecordSyncState.Conflicted;
+
+    /// <summary>Photos and their independent upload checkpoints.</summary>
+    public IReadOnlyList<OrdinaryFeaturePhoto> OrdinaryPhotos { get; private set; } = [];
+
+    internal IReadOnlyList<OrdinaryFeaturePhoto> PersistedOrdinaryPhotos { get; private set; } = [];
+
+    /// <summary>Attaches newly captured evidence to this record.</summary>
+    public void AddOrdinaryPhoto(OrdinaryFeaturePhoto photo)
+    {
+        ArgumentNullException.ThrowIfNull(photo);
+        if (photo.Id == Guid.Empty || OrdinaryPhotos.Any(existing => existing.Id == photo.Id))
+        {
+            throw new ArgumentException("A photo must have a unique capture identifier.", nameof(photo));
+        }
+
+        if (photo.State != OrdinaryPhotoState.Pending || photo.ServerAttachmentId is not null)
+        {
+            throw new ArgumentException("Newly captured photos must be pending upload.", nameof(photo));
+        }
+
+        OrdinaryPhotos = Array.AsReadOnly(OrdinaryPhotos.Append(photo).ToArray());
+    }
+
+    /// <summary>Changes an attachment checkpoint while preserving its captured evidence and target.</summary>
+    public void UpdateOrdinaryPhoto(OrdinaryFeaturePhoto photo)
+    {
+        ArgumentNullException.ThrowIfNull(photo);
+        var existing = OrdinaryPhotos.SingleOrDefault(item => item.Id == photo.Id);
+        if (existing is null || (existing with { State = photo.State, ServerAttachmentId = photo.ServerAttachmentId }) != photo)
+        {
+            throw new ArgumentException("The checkpoint must match previously captured evidence.", nameof(photo));
+        }
+
+        bool validReceipt = photo.State switch
+        {
+            OrdinaryPhotoState.Pending or OrdinaryPhotoState.NeedsVerification => photo.ServerAttachmentId is null,
+            OrdinaryPhotoState.Synced => photo.ServerAttachmentId is > 0,
+            _ => false
+        };
+        if (!validReceipt || (existing.State == OrdinaryPhotoState.Synced && existing != photo))
+        {
+            throw new ArgumentException("The photo checkpoint or attachment receipt is invalid.", nameof(photo));
+        }
+
+        OrdinaryPhotos = Array.AsReadOnly(OrdinaryPhotos.Select(item => item.Id == photo.Id ? photo : item).ToArray());
+    }
+
+    internal async Task UpdateOrdinaryPhotoAsync(OrdinaryFeaturePhoto photo, Func<FieldRecordEntry, Task> persist)
+    {
+        var previousPhotos = OrdinaryPhotos;
+        var previousPersistedPhotos = PersistedOrdinaryPhotos;
+        UpdateOrdinaryPhoto(photo);
+        try
+        {
+            await persist(this).ConfigureAwait(false);
+        }
+        catch
+        {
+            OrdinaryPhotos = previousPhotos;
+            PersistedOrdinaryPhotos = previousPersistedPhotos;
+            throw;
+        }
+    }
+
+    internal void RestoreOrdinaryPhotos(OrdinaryFeaturePhoto[]? photos)
+    {
+        OrdinaryPhotos = Array.AsReadOnly(photos ?? []);
+        AcceptPersistedOrdinaryPhotos(OrdinaryPhotos);
+    }
+
+    internal void AcceptPersistedOrdinaryPhotos(IReadOnlyList<OrdinaryFeaturePhoto> photos)
+    {
+        PersistedOrdinaryPhotos = photos;
+    }
+
+    internal static void ValidateOrdinaryPhotos(IReadOnlyList<OrdinaryFeaturePhoto> expected,
+        IReadOnlyList<OrdinaryFeaturePhoto> stored)
+    {
+        if (!expected.SequenceEqual(stored))
+        {
+            throw new InvalidOperationException("Another operation changed this record's photos. Reload the record before retrying.");
+        }
+    }
 
     /// <summary>
     /// Applies a manual conflict resolution: copies the merged values produced by
