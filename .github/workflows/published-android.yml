@@ -102,6 +102,7 @@ jobs:
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
             -f net11.0-android -c Debug -t:SignAndroidPackage \
+            -p:RestoreConfigFile="$PWD/NuGet.config" \
             -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
             -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
           mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net11.0-android -type f -name '*-Signed.apk' -print0)
