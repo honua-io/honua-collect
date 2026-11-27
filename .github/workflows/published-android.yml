@@ -16,6 +16,7 @@ on:
   push:
     branches: [trunk]
     paths:
+      - '.github/actions/mobile-validation-feed/**'
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
       - scripts/e2e/**

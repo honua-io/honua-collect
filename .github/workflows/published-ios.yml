@@ -16,6 +16,7 @@ on:
   push:
     branches: [trunk]
     paths:
+      - '.github/actions/mobile-validation-feed/**'
       - .github/workflows/published-ios.yml
       - .github/workflows/run-published-ios-gate.sh
       - scripts/e2e/**
@@ -111,9 +112,13 @@ jobs:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           for checkout in field-previous .; do
+            pilot=()
+            if [[ "$checkout" == "." ]]; then
+              pilot=(-p:EnableAssignedWorkPilot=true)
+            fi
             (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
               -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
-              -p:RestoreConfigFile="$PWD/NuGet.config" \
+              -p:RestoreConfigFile="$PWD/NuGet.config" "${pilot[@]}" \
               --configuration Debug --disable-build-servers)
           done
       - name: Publish the candidate server for macOS
