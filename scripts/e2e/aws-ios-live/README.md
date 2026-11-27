@@ -40,12 +40,21 @@ as `fixture_url` to package the two pinned source revisions with the
 fixture service, layer and form IDs. The origin must contain no credentials.
 Seed `field_inspections` layer `68950` and publish version 1 of
 `field_runtime_inspection` using `scripts/e2e/publish-field-runtime-fixture.sh`.
-Give the test operator a short-lived fixture worker login scoped to that form,
-layer and their attachments. Enter it in Field's Account screen and confirm
-that the fixture issues its worker token through `/sharing/rest/generateToken`.
-Revoke the login and token after the sessions. Record the build run and
-artifact digests. Use the native picker with a known JPEG on the physical
-device and record the digest of the bytes Field actually stored before syncing.
+Enable the fixture's OIDC portal credential verifier with
+`Oidc__Enabled=true`, `Authentication__PortalCredentialVerifier__UseOidc=true`
+and `Authentication__PortalCredentialVerifier__FallBackToAdminVerifier=false`.
+Configure the isolated issuer, audience and worker role. Restrict the worker
+route and role to the form, layer and attachment endpoints. Keep credential
+request bodies out of ingress logs.
+
+Obtain a short-lived worker JWT through the fixture's identity provider for
+each scenario. Enter the worker username and paste the JWT in Field's Account
+secret field. In these pinned builds the secret field supplies the existing
+OIDC JWT to `POST /sharing/rest/generateToken` for exchange. Keep JWTs out of
+build inputs, screenshots and evidence. Revoke the worker access and tear down
+the fixture after the sessions. Record the build run and artifact digests.
+Use the native picker with a known JPEG on the physical device and record the
+digest of the bytes Field stored before syncing.
 
 To check device installation before setting up the workbook fixture, run
 `run-devicefarm-smoke.py` with the baseline `--app` and `--revision`,
