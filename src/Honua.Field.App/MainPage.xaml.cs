@@ -8,6 +8,7 @@ using Honua.Field.App.Views;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Field.Related;
 using Honua.Field.Core.Forms;
+using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Forms;
@@ -130,33 +131,33 @@ public partial class MainPage : ContentPage
         {
             record.Location ??= point;
         }
-        var entry = await _book.AddSubmittedAsync(record);
-        entry.MarkUploading();
-        await _book.SaveAsync(entry);
-        StatusLabel.Text = "Submitting to server…";
+        FieldRecordEntry? entry = null;
         try
         {
+            entry = await _book.AddSubmittedAsync(record);
+            entry.MarkAddNeedsVerification();
+            await _book.SaveAsync(entry);
+            StatusLabel.Text = "Submitting to server…";
+
             var sync = _syncFactory();
             var result = await sync.SubmitAsync(record, _settings.Target);
-            if (result.Success)
+            var synced = entry.ApplyOrdinaryAddResult(result);
+            await _book.SaveAsync(entry);
+            if (synced)
             {
-                entry.MarkSynced(result.ObjectId?.ToString());
-                await _book.SaveAsync(entry);
                 await UploadAttachmentsAsync(session, sync, result.ObjectId);
                 StatusLabel.Text = $"Synced to server — objectId {result.ObjectId}. See the Records tab.";
             }
             else
             {
-                entry.MarkFailed(result.Error ?? "Sync failed.");
-                await _book.SaveAsync(entry);
-                StatusLabel.Text = $"Sync failed: {result.Error} (kept in Outbox).";
+                StatusLabel.Text = entry.LastError ?? "See the record in the Outbox.";
             }
         }
         catch (Exception ex)
         {
-            entry.MarkFailed(ex.Message);
-            await _book.SaveAsync(entry);
-            StatusLabel.Text = $"Sync error: {ex.Message} (kept in Outbox).";
+            StatusLabel.Text = entry?.RequiresServerVerification == true
+                ? $"Check the record in the Outbox before retrying. {ex.Message}"
+                : $"Could not finish saving or uploading: {ex.Message}";
         }
     }
 

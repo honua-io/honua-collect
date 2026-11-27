@@ -55,6 +55,8 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
     /// A single one-line description of this result's failure (message plus code when
     /// present), suitable for surfacing in the sync center; empty when successful.
     /// </summary>
+    public bool DefinitiveEditRejection { get; init; }
+
     public string FailureDescription => Success
         ? string.Empty
         : ErrorCode is { } code
@@ -396,7 +398,13 @@ public sealed class GeoServicesFeatureSync
                 else if (success.ValueKind == JsonValueKind.False)
                 {
                     var outcome = ReadEditOutcome(item, unresolved.Error ?? "Edit was not applied.");
-                    results[i] = FeatureSyncResult.Fail(outcome.Detail!, outcome.Code ?? unresolved.ErrorCode);
+                    results[i] = FeatureSyncResult.Fail(outcome.Detail!, outcome.Code ?? unresolved.ErrorCode) with
+                    {
+                        DefinitiveEditRejection = !item.TryGetProperty("objectId", out var rejectedId)
+                            || rejectedId.ValueKind == JsonValueKind.Null
+                            || (rejectedId.ValueKind == JsonValueKind.Number
+                                && rejectedId.TryGetInt64(out var id) && id <= 0)
+                    };
                 }
             }
 
@@ -954,7 +962,8 @@ public sealed class GeoServicesFeatureSync
                 result = (await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds, cancellationToken).ConfigureAwait(false))
                     with { Attempts = attempt };
 
-                if (result.Success || isLast || !IsRetryable(result, idempotent))
+                if (result.Success || isLast || (!idempotent && !result.DefinitiveEditRejection)
+                    || !IsRetryable(result, idempotent))
                 {
                     return result;
                 }
@@ -1017,6 +1026,11 @@ public sealed class GeoServicesFeatureSync
             // same attributes and let the layer allocate its own object ID.
             return await AttemptAsync(target, editKey, editJson, resultKey, useGlobalIds: false, cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        if (editKey == "adds")
+        {
+            return ParseBatchResults(body, 1, response.StatusCode)[0];
         }
 
         if (!response.IsSuccessStatusCode)

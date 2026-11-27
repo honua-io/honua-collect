@@ -79,7 +79,40 @@ public sealed class FieldRecordEntry
     public RecordBox Box => RecordBoxClassifier.Classify(Record.Status, SyncState);
 
     /// <summary>Whether the record is finished and waiting to upload (or retry).</summary>
-    public bool IsPendingUpload => Box == RecordBox.Outbox && SyncState != RecordSyncState.SubmissionRejected;
+    public bool IsPendingUpload => Box == RecordBox.Outbox
+        && SyncState != RecordSyncState.SubmissionRejected && !RequiresServerVerification;
+
+    public const string OrdinaryAddVerificationMessage =
+        "Check the server layer for this feature before creating another record. The upload may already have been applied.";
+
+    public bool IsOrdinaryAdd => PublishedSubmission is null && RemoteId is null && Record.Status != RecordStatus.Deleted;
+
+    public bool RequiresServerVerification => Box == RecordBox.Outbox && IsOrdinaryAdd
+        && SyncState is RecordSyncState.AddNeedsVerification or RecordSyncState.Uploading or RecordSyncState.Failed;
+
+    public void MarkAddNeedsVerification()
+    {
+        MarkUploading();
+        SyncState = RecordSyncState.AddNeedsVerification;
+        LastError = OrdinaryAddVerificationMessage;
+    }
+
+    public bool ApplyOrdinaryAddResult(Sync.FeatureSyncResult result)
+    {
+        if (result.Success && result.ObjectId is > 0)
+        {
+            MarkSynced(result.ObjectId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return true;
+        }
+
+        if (!result.Success && result.DefinitiveEditRejection)
+        {
+            MarkFailed(result.FailureDescription);
+            SyncState = RecordSyncState.AddRejected;
+        }
+
+        return false;
+    }
 
     /// <summary>Whether the captured editor can safely open for changes.</summary>
     public bool CanOpenPublishedEditor => PublishedDraft is not null

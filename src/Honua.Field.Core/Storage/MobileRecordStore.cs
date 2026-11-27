@@ -48,6 +48,8 @@ public sealed class MobileRecordStore : IRecordStore
         var document = ToDocument(entry);
         var previous = await _store.LoadDocumentAsync(Collection, document.Id, ct).ConfigureAwait(false);
         var previousEntry = previous is null ? null : ReadDocument(previous);
+        SqliteRecordStore.ValidateOrdinaryWrite(entry, previousEntry?.SyncState, previousEntry?.RemoteId is not null,
+            previousEntry?.PublishedSubmission is not null);
         bool committed;
         if (entry.PublishedSubmission is { } submission)
         {

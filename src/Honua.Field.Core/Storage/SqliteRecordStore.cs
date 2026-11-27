@@ -67,7 +67,23 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         ArgumentNullException.ThrowIfNull(entry);
 
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = connection.BeginTransaction(deferred: false);
+        await using (var previous = connection.CreateCommand())
+        {
+            previous.Transaction = transaction;
+            previous.CommandText = $"""
+                SELECT sync_state, remote_id, published_submission_json
+                FROM {TableName} WHERE record_id = $id;
+                """;
+            previous.Parameters.AddWithValue("$id", entry.Record.RecordId);
+            await using var reader = await previous.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            var exists = await reader.ReadAsync(ct).ConfigureAwait(false);
+            ValidateOrdinaryWrite(entry, exists ? (RecordSyncState)reader.GetInt32(0) : null,
+                exists && !reader.IsDBNull(1), exists && !reader.IsDBNull(2));
+        }
+
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = $"""
             INSERT INTO {TableName}
                 (record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
@@ -127,6 +143,26 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             : DBNull.Value);
 
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    internal static void ValidateOrdinaryWrite(FieldRecordEntry entry, RecordSyncState? priorState,
+        bool priorHasRemoteId, bool priorPublished)
+    {
+        var eligibleToDispatch = !priorHasRemoteId && !priorPublished
+            && priorState is RecordSyncState.Pending or RecordSyncState.AddRejected;
+        var priorHeld = !priorHasRemoteId && !priorPublished
+            && priorState is RecordSyncState.AddNeedsVerification or RecordSyncState.Uploading or RecordSyncState.Failed;
+        var finishingDispatch = priorState == RecordSyncState.AddNeedsVerification && entry.PublishedSubmission is null
+            && (entry.SyncState == RecordSyncState.AddRejected
+                || (entry.SyncState == RecordSyncState.Synced && entry.RemoteId is not null));
+
+        if ((entry.SyncState == RecordSyncState.AddNeedsVerification && !eligibleToDispatch)
+            || (priorHeld && !finishingDispatch)
+            || (priorHasRemoteId && entry.IsOrdinaryAdd))
+        {
+            throw new InvalidOperationException("This record changed before it could be saved. Reopen it and try again.");
+        }
     }
 
     /// <inheritdoc />
@@ -259,6 +295,10 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 entry.MarkEditedAfterSync();
                 break;
 
+            case RecordSyncState.AddNeedsVerification:
+            case RecordSyncState.AddRejected:
+                entry.RestoreSyncState(syncState, remoteId, lastError, failedAttempts, null, lastSyncedUtc);
+                break;
             case RecordSyncState.SubmissionRejected:
             case RecordSyncState.Failed:
                 // Replay each recorded failure so FailedAttempts matches storage.

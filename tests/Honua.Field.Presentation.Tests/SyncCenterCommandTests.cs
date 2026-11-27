@@ -170,7 +170,7 @@ public class SyncCenterCommandTests
     }
 
     [Fact]
-    public async Task SyncAsync_batch_marks_an_unreported_tail_record_as_failed()
+    public async Task SyncAsync_batch_holds_an_unreported_tail_record_for_verification()
     {
         var entries = new[] { PendingEntry("r1"), PendingEntry("r2") };
         BatchRecordUploader batch = (_, _) =>
@@ -184,11 +184,11 @@ public class SyncCenterCommandTests
 
         Assert.Equal(1, synced);
         Assert.Equal(RecordSyncState.Synced, entries[0].SyncState);
-        Assert.Equal(RecordSyncState.Failed, entries[1].SyncState);
+        Assert.Equal(RecordSyncState.AddNeedsVerification, entries[1].SyncState);
     }
 
     [Fact]
-    public async Task SyncAsync_persists_acknowledged_batch_member_and_retries_only_unresolved_member()
+    public async Task SyncAsync_persists_acknowledged_batch_member_and_holds_unresolved_member()
     {
         var entries = new[] { PendingEntry("r1"), PendingEntry("r2") };
         var sent = new List<string[]>();
@@ -214,12 +214,11 @@ public class SyncCenterCommandTests
 
         Assert.Equal(1, await vm.SyncAsync());
         Assert.Contains(("r1", RecordSyncState.Synced, "17"), persisted);
-        Assert.Contains(("r2", RecordSyncState.Failed, null), persisted);
+        Assert.Contains(("r2", RecordSyncState.AddNeedsVerification, null), persisted);
 
-        Assert.Equal(1, await vm.SyncAsync());
-        Assert.Equal(["r1", "r2"], sent[0]);
-        Assert.Equal(["r2"], sent[1]);
-        Assert.Contains(("r2", RecordSyncState.Synced, "18"), persisted);
+        Assert.Equal(0, await vm.SyncAsync());
+        Assert.Equal(["r1", "r2"], Assert.Single(sent));
+        Assert.True(entries[1].RequiresServerVerification);
     }
 
     [Fact]
