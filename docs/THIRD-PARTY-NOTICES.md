@@ -11,10 +11,11 @@ The .NET package table is verified against `Directory.Packages.props` and `src/*
 |---|---|---|---|
 | BouncyCastle.Cryptography | 2.7.0 | MIT | https://www.bouncycastle.org/stable/nuget/csharp/website |
 | Geospatial.Grpc | 1.0.2 | Apache-2.0 | https://github.com/honua-io/geospatial-grpc |
-| Honua.Mobile.Maui | 0.1.0-operationqueue.2 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
-| Honua.Mobile.Offline | 0.1.0-operationqueue.2 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
-| Honua.Mobile.Sdk | 0.1.0-operationqueue.2 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
-| Honua.Sdk.Field | 5.1.1-fieldforms.3 | Apache-2.0 | https://github.com/honua-io/honua-sdk-dotnet |
+| Honua.Mobile.Maui | 0.1.0-fieldtasks.45963856191.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
+| Honua.Mobile.Offline | 0.1.0-fieldtasks.45963856191.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
+| Honua.Mobile.Offline.Tasks | 0.1.0-fieldtasks.45963856191.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
+| Honua.Mobile.Sdk | 0.1.0-fieldtasks.45963856191.1 | Apache-2.0 | https://github.com/honua-io/honua-mobile |
+| Honua.Sdk.Field | 5.1.1-fieldtasks.3 | Apache-2.0 | https://github.com/honua-io/honua-sdk-dotnet |
 | Microsoft.Data.Sqlite.Core | 11.0.0 | MIT | https://docs.microsoft.com/dotnet/standard/data/sqlite/ |
 | Microsoft.Extensions.Http | 11.0.0 | MIT | https://dot.net/ |
 | Microsoft.Extensions.Logging.Debug | 11.0.0 | MIT | https://dot.net/ |

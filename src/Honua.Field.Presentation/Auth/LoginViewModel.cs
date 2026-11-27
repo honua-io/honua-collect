@@ -94,6 +94,16 @@ public sealed class LoginViewModel : ObservableObject
     /// <summary>Attempts to sign in with the current credentials.</summary>
     public ICommand LoginCommand { get; }
 
+    /// <summary>Displays a session already restored by the session manager.</summary>
+    public void ResumeSession(AuthSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        Session = session;
+        IsAuthenticated = true;
+        ErrorMessage = null;
+        ErrorDetail = null;
+    }
+
     /// <summary>
     /// Surfaces a graceful "your session expired — sign in again" prompt after the
     /// lifecycle could not refresh a lapsed session. Clears the authenticated state

@@ -103,3 +103,27 @@ redacted screenshots or logs and any follow-up issue. Include the installable
 build's access location and retain the written journey with that build. A build
 artifact without a completed installation and journey record does not satisfy
 acceptance.
+
+## Assigned-work pilot
+
+Build with `-p:EnableAssignedWorkPilot=true` to compile the assigned-work lifecycle
+integration. Restore this build using a NuGet configuration with the versioned
+candidate packages from Mobile PR #456 (`0.1.0-fieldtasks.45963856191.1`) and SDK PR #596
+(`5.1.1-fieldtasks.3`), alongside the normal public dependencies. Default builds
+exclude the pilot and its package dependencies. The pilot adds no Today screen.
+The hosted Assigned work pilot job verifies the package archive digests recorded
+in `.github/actions/assigned-work-validation-feed/artifacts.json`. These
+validation artifacts expire and require replacement by approved packages before rollout.
+
+The pilot restores the saved authenticated session after encrypted storage opens.
+Use the canonical service ID from server metadata and the authenticated user ID
+that matches the server's task assignee handle. Assignment snapshots and pending commands are separated by server, service and user. Offline
+reads use the stored snapshot. Startup, resume, connectivity and identity changes
+trigger replay and a fresh paginated download when online. An account switch
+cancels the previous sync. Replays retain the original command IDs and expected
+versions, and persist receipts or terminal conflict evidence in the account's
+encrypted store.
+
+The host integration tests exercise the versioned packages and encrypted store
+with controlled HTTP responses. A pilot rollout also requires those dependencies
+on a trusted feed and verification with a deployed server and installed app.

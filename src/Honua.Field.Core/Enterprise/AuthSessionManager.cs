@@ -12,11 +12,8 @@ namespace Honua.Field.Core.Enterprise;
 /// when the refresh is refused (which forces a re-authentication).
 /// </summary>
 /// <remarks>
-/// Injected so the lifecycle is testable without a live server, and because the
-/// wire contract depends on server support: the current token endpoint
-/// (<c>generateToken</c>) issues no refresh token, so no refresher is wired in
-/// production yet. <see cref="AuthSessionManager"/> simply skips the refresh step
-/// when no refresher is supplied or the session holds no refresh token.
+/// The host supplies a refresher for sessions that carry a refresh token.
+/// Sessions issued without one require sign-in again after expiry.
 /// </remarks>
 /// <param name="expiring">The session that is at/near expiry.</param>
 /// <param name="cancellationToken">Cancellation token.</param>
@@ -50,6 +47,7 @@ public sealed class AuthSessionManager
     // each other into 401s (AUD-255). The first caller refreshes; the rest wait, then
     // reuse the freshly stored session instead of refreshing again.
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly SemaphoreSlim _sessionWrites = new(1, 1);
 
     /// <summary>Creates the lifecycle manager.</summary>
     /// <param name="store">The shared session store the transport reads from.</param>
@@ -88,23 +86,31 @@ public sealed class AuthSessionManager
     /// <returns>The resumed live session, or null when none is available.</returns>
     public async Task<AuthSession?> RestoreAsync(CancellationToken cancellationToken = default)
     {
-        var saved = await _persistence.LoadAsync(cancellationToken).ConfigureAwait(false);
-        if (saved is null)
+        await _sessionWrites.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            return null;
-        }
+            var saved = await _persistence.LoadAsync(cancellationToken).ConfigureAwait(false);
+            if (saved is null)
+            {
+                return null;
+            }
 
-        if (saved.IsExpired(Now))
+            if (saved.IsExpired(Now))
+            {
+                // Honor expiry on load: drop the stale token rather than resume it.
+                _logger.LogInformation("Discarded expired persisted session for user {UserId}.", saved.UserId);
+                await _persistence.ClearAsync(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            _store.Set(saved);
+            _logger.LogInformation("Restored persisted session for user {UserId}.", saved.UserId);
+            return saved;
+        }
+        finally
         {
-            // Honor expiry on load: drop the stale token rather than resume it.
-            _logger.LogInformation("Discarded expired persisted session for user {UserId}.", saved.UserId);
-            await _persistence.ClearAsync(cancellationToken).ConfigureAwait(false);
-            return null;
+            _sessionWrites.Release();
         }
-
-        _store.Set(saved);
-        _logger.LogInformation("Restored persisted session for user {UserId}.", saved.UserId);
-        return saved;
     }
 
     /// <summary>Establishes a session: makes it live and persists it to secure storage.</summary>
@@ -113,8 +119,7 @@ public sealed class AuthSessionManager
     public async Task SignInAsync(AuthSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        _store.Set(session);
-        await _persistence.SaveAsync(session, cancellationToken).ConfigureAwait(false);
+        await WriteSessionAsync(session, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Signed in user {UserId}.", session.UserId);
     }
 
@@ -123,9 +128,53 @@ public sealed class AuthSessionManager
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
         var previousUser = _store.Current?.UserId;
-        _store.Set(null);
-        await _persistence.ClearAsync(cancellationToken).ConfigureAwait(false);
+        await WriteSessionAsync(null, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Signed out user {UserId}.", previousUser ?? "(none)");
+    }
+
+#if HONUA_ASSIGNED_WORK_PILOT
+    internal async Task<AuthSession?> BindAssignedWorkAsync(
+        AuthSession expected, string server, string? actorId, CancellationToken cancellationToken)
+    {
+        var next = expected with
+        {
+            AssignedWorkActorId = actorId,
+            AssignedWorkServer = actorId is null ? null : server,
+        };
+        if (next == expected)
+        {
+            return ReferenceEquals(expected, _store.Current) ? expected : null;
+        }
+        return await WriteSessionAsync(next, cancellationToken, expected).ConfigureAwait(false) ? next : null;
+    }
+#endif
+
+    private async Task<bool> WriteSessionAsync(
+        AuthSession? next, CancellationToken cancellationToken, AuthSession? expected = null)
+    {
+        await _sessionWrites.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (expected is not null && !ReferenceEquals(expected, _store.Current))
+            {
+                return false;
+            }
+
+            _store.Set(next);
+            if (next is null)
+            {
+                await _persistence.ClearAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _persistence.SaveAsync(next, cancellationToken).ConfigureAwait(false);
+            }
+            return true;
+        }
+        finally
+        {
+            _sessionWrites.Release();
+        }
     }
 
     /// <summary>
@@ -164,7 +213,12 @@ public sealed class AuthSessionManager
 
         // Re-read: a concurrent caller may have refreshed the stored session while we
         // were deciding, so honor the freshest state.
-        current = _store.Current ?? current;
+        var latest = _store.Current;
+        if (latest is null || !string.Equals(current.UserId, latest.UserId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+        current = latest;
         var state = current.StateAt(Now, _refreshSkew);
         if (state is AuthSessionState.Active or AuthSessionState.Expiring)
         {
@@ -175,8 +229,10 @@ public sealed class AuthSessionManager
 
         // Expired and unrecoverable: surface a graceful re-sign-in.
         _logger.LogWarning("Auth session expired and could not be refreshed for user {UserId}; signing out.", current.UserId);
-        await SignOutAsync(cancellationToken).ConfigureAwait(false);
-        SessionExpired?.Invoke(this, EventArgs.Empty);
+        if (await WriteSessionAsync(null, cancellationToken, current).ConfigureAwait(false))
+        {
+            SessionExpired?.Invoke(this, EventArgs.Empty);
+        }
         return null;
     }
 
@@ -195,13 +251,16 @@ public sealed class AuthSessionManager
         {
             // Double-check: another caller may have refreshed while we held in the queue.
             var current = _store.Current;
-            if (current is not null && current.StateAt(Now, _refreshSkew) == AuthSessionState.Active)
+            if (current is null || !string.Equals(current.UserId, seen.UserId, StringComparison.Ordinal))
+            {
+                return null;
+            }
+            if (current.StateAt(Now, _refreshSkew) == AuthSessionState.Active)
             {
                 return current;
             }
 
-            var toRefresh = current ?? seen;
-            if (_refresher is null || !toRefresh.CanRefresh)
+            if (_refresher is null || !current.CanRefresh)
             {
                 return null;
             }
@@ -209,7 +268,7 @@ public sealed class AuthSessionManager
             AuthSession? refreshed;
             try
             {
-                refreshed = await _refresher(toRefresh, cancellationToken).ConfigureAwait(false);
+                refreshed = await _refresher(current, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -218,18 +277,19 @@ public sealed class AuthSessionManager
                 _logger.LogWarning(
                     ex,
                     "Session refresh threw {ExceptionType} for user {UserId}.",
-                    ex.GetType().Name, toRefresh.UserId);
+                    ex.GetType().Name, current.UserId);
                 refreshed = null;
             }
 
-            if (refreshed is not null && !refreshed.IsExpired(Now))
+            if (refreshed is not null && !refreshed.IsExpired(Now)
+                && string.Equals(refreshed.UserId, current.UserId, StringComparison.Ordinal)
+                && await WriteSessionAsync(refreshed, cancellationToken, current).ConfigureAwait(false))
             {
-                await SignInAsync(refreshed, cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Refreshed auth session for user {UserId}.", refreshed.UserId);
                 return refreshed;
             }
 
-            _logger.LogWarning("Session refresh returned no usable session for user {UserId}.", toRefresh.UserId);
+            _logger.LogWarning("Session refresh returned no usable session for user {UserId}.", current.UserId);
             return null;
         }
         finally
