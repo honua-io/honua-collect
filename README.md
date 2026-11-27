@@ -17,6 +17,10 @@ self-hosted [Honua server](https://github.com/honua-io/honua-server) — or an
 existing GeoServices REST feature service — with **no third-party license and no vendor cloud** in
 between.
 
+From the geometry screen, choose **Add GPS vertex** to average three fresh
+location fixes with reported accuracy of 25 m or better. Use it for a point
+or for each vertex of a line or polygon.
+
 ## Status
 
 🚧 **Early stage, active development — not yet a GA field app.** The honest

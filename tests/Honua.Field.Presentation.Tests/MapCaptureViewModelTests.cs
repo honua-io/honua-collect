@@ -93,6 +93,48 @@ public class MapCaptureViewModelTests
     }
 
     [Fact]
+    public void Device_averaging_rejects_stale_duplicate_and_inaccurate_fixes()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Point);
+        var now = DateTimeOffset.UnixEpoch.AddDays(1);
+        vm.BeginGpsAveraging();
+
+        Assert.False(vm.TryAddDeviceGpsSample(10, 20, 2, now.AddSeconds(-6), now));
+        Assert.False(vm.TryAddDeviceGpsSample(10, 20, 2, now.AddSeconds(1), now));
+        Assert.False(vm.TryAddDeviceGpsSample(10, 20, null, now, now));
+        Assert.False(vm.TryAddDeviceGpsSample(10, 20, 50, now, now));
+        Assert.False(vm.TryAddDeviceGpsSample(double.NaN, 20, 2, now, now));
+        Assert.True(vm.TryAddDeviceGpsSample(10, 20, 6, now, now));
+        Assert.False(vm.TryAddDeviceGpsSample(10, 20, 6, now, now));
+        Assert.True(vm.TryAddDeviceGpsSample(10.0001, 20.0001, 6, now.AddSeconds(1), now.AddSeconds(1)));
+        Assert.True(vm.TryAddDeviceGpsSample(10.0002, 20.0002, 6, now.AddSeconds(2), now.AddSeconds(2)));
+        Assert.False(vm.TryAddDeviceGpsSample(10.0003, 20.0003, 6, now.AddSeconds(3), now.AddSeconds(3)));
+
+        Assert.Equal(MapCaptureViewModel.RequiredDeviceSamples, vm.AveragingSampleCount);
+        vm.CommitAveragedVertex();
+        var vertex = Assert.Single(vm.Vertices);
+        Assert.Equal(10.0001, vertex.Latitude, 6);
+        Assert.Equal(20.0001, vertex.Longitude, 6);
+        Assert.Equal(6 / Math.Sqrt(3), vertex.AccuracyMeters!.Value, 6);
+    }
+
+    [Fact]
+    public void Device_callback_after_cancellation_cannot_change_geometry()
+    {
+        var vm = new MapCaptureViewModel(CapturedGeometryType.Line);
+        var now = DateTimeOffset.UnixEpoch.AddDays(1);
+        var existing = new FieldGeoPoint(1, 2);
+        vm.AddVertex(existing);
+        vm.BeginGpsAveraging();
+        Assert.True(vm.TryAddDeviceGpsSample(10, 20, 6, now, now));
+
+        vm.CancelGpsAveraging();
+
+        Assert.False(vm.TryAddDeviceGpsSample(11, 21, 6, now.AddSeconds(1), now.AddSeconds(1)));
+        Assert.Equal(existing, Assert.Single(vm.Vertices));
+    }
+
+    [Fact]
     public void Cancelling_an_averaging_run_commits_nothing()
     {
         var vm = new MapCaptureViewModel(CapturedGeometryType.Point);

@@ -32,6 +32,9 @@
                     <Button Grid.Column="3" Text="Offline area" Padding="8,4" Clicked="OnDownloadArea" />
                 </Grid>
                 <Label x:Name="StatusLabel" />
+                <Button x:Name="GpsButton" AutomationId="GeometryGps" Text="Add GPS vertex"
+                        Clicked="OnGpsCapture" />
+                <Label x:Name="GpsStatus" AutomationId="GeometryGpsStatus" IsVisible="False" />
                 <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
                     <Button Text="Undo" Clicked="OnUndo" />
                     <Button Grid.Column="1" Text="Clear" Clicked="OnClear" />
