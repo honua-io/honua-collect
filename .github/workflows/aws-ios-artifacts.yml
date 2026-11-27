@@ -2,6 +2,7 @@ name: AWS iOS simulator artifacts
 on:
   push:
     branches: [validation/aws-ios-live-artifacts]
+    paths: [.github/workflows/aws-ios-artifacts.yml]
 permissions:
   actions: read
   contents: read

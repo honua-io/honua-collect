@@ -136,7 +136,7 @@ test "$bundle_id" = "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$
 run_bounded 480 xcrun simctl install "$device" "$previous_app"
 export HONUA_E2E_IOS_UPGRADE_APP="$app"
 export HONUA_E2E_IOS_PREVIOUS_REVISION
-HONUA_E2E_IOS_PREVIOUS_REVISION=$(git -C "$workspace/field-previous" rev-parse HEAD)
+HONUA_E2E_IOS_PREVIOUS_REVISION=${HONUA_E2E_IOS_PREVIOUS_REVISION:-$(git -C "$workspace/field-previous" rev-parse HEAD)}
 echo "App install complete. Starting published form journey."
 
 if ! run_bounded 2100 bash "$workspace/scripts/e2e/run-published-ios.sh" \
