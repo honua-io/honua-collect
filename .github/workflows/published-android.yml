@@ -8,6 +8,8 @@ on:
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
       - scripts/e2e/**
+      - tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs
+      - tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
       - src/**
       - Directory.Build.*
       - Directory.Packages.props
@@ -20,6 +22,8 @@ on:
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
       - scripts/e2e/**
+      - tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs
+      - tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
       - src/**
       - Directory.Build.*
       - Directory.Packages.props
@@ -97,6 +101,12 @@ jobs:
           test "${#apks[@]}" -eq 1
           cp "${apks[0]}" "$RUNNER_TEMP/honua-field.apk"
 
+      - name: Build Field feature sync integration tests
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests
+
       - name: Build historical standalone .NET 11 Debug APK
         working-directory: field-previous
         env:
@@ -163,6 +173,7 @@ jobs:
             ${{ runner.temp }}/published-android-report/*/[0-9]-*.xml
             ${{ runner.temp }}/published-android-report/upgrade/*.xml
             ${{ runner.temp }}/published-android-report/adaptive/*
+            ${{ runner.temp }}/published-android-report/feature-sync/feature-sync.trx
             ${{ runner.temp }}/published-android-report/upgrade/failure-state.json
             ${{ runner.temp }}/published-android-report/upgrade/before.json
             ${{ runner.temp }}/published-android-report/upgrade/after.json

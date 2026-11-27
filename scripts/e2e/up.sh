@@ -59,17 +59,7 @@ wait_ready() { for _ in $(seq 1 40); do sleep 3; [ "$(curl -s -o /dev/null -w '%
 run_srv
 wait_ready
 
-db=(docker exec -i honua-e2e-pg psql -X -v ON_ERROR_STOP=1 -U honua_user -d honua_dev)
-"${db[@]}" < "$SEED_SQL"
-sed -n '/^CREATE OR REPLACE FUNCTION honua\.seed_metadata_v2_compat_snapshot()/,/^\$\$;/p' "$SNAPSHOT_SQL" | "${db[@]}"
-"${db[@]}" <<'SQL'
-UPDATE honua.services SET metadata = jsonb_set(metadata, '{accessPolicy,allowAnonymousWrite}', 'false')
-WHERE service_name = 'mobile_offline_demo';
-UPDATE honua.layers SET metadata = metadata || jsonb_build_object('accessPolicy',
-    COALESCE(metadata->'accessPolicy', '{}'::jsonb) || '{"allowAnonymous":true,"allowAnonymousWrite":false}'::jsonb)
-WHERE layer_id = 68910;
-SELECT honua.seed_metadata_v2_compat_snapshot();
-SQL
+"${SCRIPT_DIR}/seed-feature-sync.sh" "$SERVER_REPO" honua-e2e-pg honua_user honua_dev
 run_srv
 wait_ready
 
