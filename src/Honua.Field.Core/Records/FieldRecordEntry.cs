@@ -76,10 +76,19 @@ public sealed class FieldRecordEntry
     /// The mailbox this record currently belongs to, derived from its review
     /// status and transport state.
     /// </summary>
-    public RecordBox Box => RecordBoxClassifier.Classify(Record.Status, SyncState);
+    public RecordBox Box => HasPendingOrdinaryPhotos ? RecordBox.Outbox : FeatureBox;
+
+    private RecordBox FeatureBox => RecordBoxClassifier.Classify(Record.Status, SyncState);
+
+    /// <summary>Whether an acknowledged ordinary feature has photos awaiting confirmation.</summary>
+    public bool HasPendingOrdinaryPhotos => FeatureBox == RecordBox.Sent
+        && SyncState == RecordSyncState.Synced
+        && PublishedSubmission is null
+        && RemoteId is not null
+        && OrdinaryPhotos.Any(photo => photo.State != OrdinaryPhotoState.Synced);
 
     /// <summary>Whether the record is finished and waiting to upload (or retry).</summary>
-    public bool IsPendingUpload => Box == RecordBox.Outbox
+    public bool IsPendingUpload => FeatureBox == RecordBox.Outbox
         && SyncState != RecordSyncState.SubmissionRejected && !RequiresServerVerification;
 
     public const string OrdinaryAddVerificationMessage =
@@ -87,7 +96,7 @@ public sealed class FieldRecordEntry
 
     public bool IsOrdinaryAdd => PublishedSubmission is null && RemoteId is null && Record.Status != RecordStatus.Deleted;
 
-    public bool RequiresServerVerification => Box == RecordBox.Outbox && IsOrdinaryAdd
+    public bool RequiresServerVerification => FeatureBox == RecordBox.Outbox && IsOrdinaryAdd
         && SyncState is RecordSyncState.AddNeedsVerification or RecordSyncState.Uploading or RecordSyncState.Failed;
 
     public void MarkAddNeedsVerification()

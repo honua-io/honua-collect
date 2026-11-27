@@ -82,6 +82,8 @@ public sealed class SyncCenterViewModel : ObservableObject
     private readonly BatchRecordUploader? _batchUploader;
     private readonly int _batchSize;
     private readonly RecordStatePersister? _persist;
+    private readonly Func<FieldRecordEntry, Task<bool>>? _replayOrdinaryPhotos;
+    private readonly Func<FieldRecordEntry, bool>? _canDispatchOrdinaryRecord;
     private readonly Func<bool>? _canDispatchOrdinaryAdd;
     private readonly FeaturePuller? _puller;
     private readonly FormDefinition? _form;
@@ -123,6 +125,8 @@ public sealed class SyncCenterViewModel : ObservableObject
     /// <param name="logger">Optional structured logger.</param>
     /// <param name="replayPublished">Optional published-form replay handler.</param>
     /// <param name="canDispatchOrdinaryAdd">Whether the device can attempt an ordinary add now.</param>
+    /// <param name="replayOrdinaryPhotos">Optional replay handler for acknowledged ordinary features with pending photos.</param>
+    /// <param name="canDispatchOrdinaryRecord">Optional check that the current target is valid for an ordinary record.</param>
     public SyncCenterViewModel(
         IEnumerable<FieldRecordEntry> entries,
         RecordUploader uploader,
@@ -133,7 +137,9 @@ public sealed class SyncCenterViewModel : ObservableObject
         int batchSize = DefaultBatchSize,
         ILogger<SyncCenterViewModel>? logger = null,
         Func<FieldRecordEntry, CancellationToken, Task<bool>>? replayPublished = null,
-        Func<bool>? canDispatchOrdinaryAdd = null)
+        Func<bool>? canDispatchOrdinaryAdd = null,
+        Func<FieldRecordEntry, Task<bool>>? replayOrdinaryPhotos = null,
+        Func<FieldRecordEntry, bool>? canDispatchOrdinaryRecord = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
@@ -141,13 +147,15 @@ public sealed class SyncCenterViewModel : ObservableObject
         _batchUploader = batchUploader;
         _batchSize = batchSize;
         _persist = persist;
+        _replayOrdinaryPhotos = replayOrdinaryPhotos;
+        _canDispatchOrdinaryRecord = canDispatchOrdinaryRecord;
         _puller = puller;
         _form = form;
         _replayPublished = replayPublished;
         _canDispatchOrdinaryAdd = canDispatchOrdinaryAdd;
         _logger = logger ?? NullLogger<SyncCenterViewModel>.Instance;
         _entries = entries.ToList();
-        Pending = new ObservableCollection<FieldRecordEntry>(_entries.Where(e => e.IsPendingUpload));
+        Pending = new ObservableCollection<FieldRecordEntry>(_entries.Where(e => e.IsPendingUpload || e.HasPendingOrdinaryPhotos));
         Conflicts = new ObservableCollection<ConflictReviewViewModel>(_entries
             .Where(entry => entry.IsConflicted && entry.Conflict is not null)
             .Select(entry => new ConflictReviewViewModel(entry)));
@@ -360,7 +368,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         try
         {
             var pending = _entries.Where(e => e.IsPendingUpload).ToList();
-            pendingCount = pending.Count;
+            pendingCount = _entries.Count(e => e.IsPendingUpload || e.HasPendingOrdinaryPhotos);
             _logger.LogInformation("Starting sync pass for {PendingCount} pending record(s).", pendingCount);
 
             // Stay on the caller’s UI context when updating the bound outbox and command state.
@@ -377,6 +385,33 @@ public sealed class SyncCenterViewModel : ObservableObject
             else
             {
                 synced += await SyncPerRecordAsync(pending, cancellationToken);
+            }
+
+            foreach (var entry in _entries.Where(e => e.HasPendingOrdinaryPhotos).ToList())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var complete = false;
+                if (_replayOrdinaryPhotos is not null)
+                {
+                    try
+                    {
+                        complete = await _replayOrdinaryPhotos(entry) && !entry.HasPendingOrdinaryPhotos;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        _logger.LogWarning("Photo sync for record {RecordId} failed: {ExceptionType}.",
+                            entry.Record.RecordId, ex.GetType().Name);
+                    }
+                }
+
+                if (pending.Contains(entry))
+                {
+                    synced -= complete ? 0 : 1;
+                }
+                else if (complete)
+                {
+                    synced++;
+                }
             }
         }
         finally
@@ -419,6 +454,11 @@ public sealed class SyncCenterViewModel : ObservableObject
                         entry.Record.RecordId, ex.GetType().Name);
                 }
 
+                continue;
+            }
+
+            if (_canDispatchOrdinaryRecord?.Invoke(entry) == false)
+            {
                 continue;
             }
 
@@ -476,7 +516,7 @@ public sealed class SyncCenterViewModel : ObservableObject
             var chunk = new List<FieldRecordEntry>();
             foreach (var entry in adds.Skip(start).Take(_batchSize))
             {
-                if (await PrepareOrdinaryAddAsync(entry))
+                if (_canDispatchOrdinaryRecord?.Invoke(entry) != false && await PrepareOrdinaryAddAsync(entry))
                 {
                     chunk.Add(entry);
                 }
@@ -591,7 +631,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     {
         Summary = SyncSummary.From(_entries);
         Pending.Clear();
-        foreach (var entry in _entries.Where(e => e.IsPendingUpload))
+        foreach (var entry in _entries.Where(e => e.IsPendingUpload || e.HasPendingOrdinaryPhotos))
         {
             Pending.Add(entry);
         }
