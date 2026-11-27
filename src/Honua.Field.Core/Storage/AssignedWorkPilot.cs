@@ -13,6 +13,7 @@ namespace Honua.Field.Core.Storage;
 /// <summary>Connects the signed-in Field session to its encrypted assigned-work partition.</summary>
 public sealed class AssignedWorkPilot(
     IAuthSessionStore sessions,
+    AuthSessionManager sessionManager,
     Func<CancellationToken, Task<MobileRecordStore>> openRecords,
     Func<HttpClient> createClient,
     Uri server,
@@ -45,7 +46,7 @@ public sealed class AssignedWorkPilot(
     /// <summary>Replays pending commands, then refreshes assigned work when connected and signed in.</summary>
     public async Task SynchronizeAsync(bool online, CancellationToken ct = default)
     {
-        if (!online || sessions.Current is not { } session || session.IsExpired(DateTimeOffset.UtcNow))
+        if (!online || sessions.Current is not { } original)
         {
             return;
         }
@@ -53,7 +54,14 @@ public sealed class AssignedWorkPilot(
         await _syncGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (!ReferenceEquals(session, sessions.Current))
+            if (!ReferenceEquals(original, sessions.Current))
+            {
+                return;
+            }
+
+            var session = await sessionManager.EnsureValidAsync(ct).ConfigureAwait(false);
+            if (session is null || !ReferenceEquals(session, sessions.Current)
+                || !string.Equals(original.UserId, session.UserId, StringComparison.Ordinal))
             {
                 return;
             }

@@ -243,6 +243,7 @@ public static class MauiProgram
 			});
 		builder.Services.AddSingleton(sp => new AssignedWorkPilot(
 			sp.GetRequiredService<IAuthSessionStore>(),
+			sp.GetRequiredService<AuthSessionManager>(),
 			async ct => (MobileRecordStore)await sp.GetRequiredService<LazyRecordStore>().GetStoreAsync(ct).ConfigureAwait(false),
 			() => sp.GetRequiredService<IHttpClientFactory>().CreateClient(assignedWorkHttpClient),
 			settings.BaseUri,
