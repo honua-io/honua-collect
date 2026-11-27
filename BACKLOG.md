@@ -149,7 +149,7 @@ proven; these are device-sensor integrations.
 |---|---|---|---|
 | G1 | Point capture from map tap | 🧱✅ | field |
 | G2 | Line/polygon drawing UI (vertex edit, undo) | 🧱✅ | field |
-| G3 | GPS streaming/averaging for vertices | 🧱 | mobile |
+| G3 | GPS streaming/averaging for vertices | ✅ Device GPS point verified on an Android emulator with injected fixes. Physical receiver accuracy remains open. [Test procedure](docs/verification/e2e/README.md#published-xlsform-android-gate) | field + mobile |
 | G4 | Embedded 2D map rendering surface (OSM tiles, no API key) | 🧱✅ | field |
 | G5 | External high-accuracy GNSS receivers (Bluetooth) | ❌ | mobile |
 | G6 | On-device AR scene anchoring (physical device) | 🧩 | field |
