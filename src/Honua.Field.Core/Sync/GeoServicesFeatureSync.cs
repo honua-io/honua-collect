@@ -523,6 +523,52 @@ public sealed class GeoServicesFeatureSync
     private static readonly string[] AbsentFeaturePatterns =
         ["not found", "does not exist", "unknown object", "cannot find", "no feature"];
 
+    internal async Task<long?> FindMatchingAttachmentAsync(
+        long objectId,
+        Honua.Field.Core.Records.OrdinaryFeaturePhoto photo,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = new HonuaFeatureServerClient(_http, new HonuaFeatureServerClientOptions
+            {
+                RootAddress = new Uri(photo.Target.BaseUrl, UriKind.Absolute),
+            });
+            var source = new FeatureSource { ServiceId = photo.Target.ServiceId, LayerId = photo.Target.LayerId };
+            var attachments = await client.ListAttachmentsAsync(
+                new FeatureAttachmentListRequest { Source = source, ObjectId = objectId }, cancellationToken).ConfigureAwait(false);
+            var matches = attachments.Where(item => StringComparer.Ordinal.Equals(item.Name, photo.FileName)).ToArray();
+            if (matches.Length != 1)
+            {
+                return null;
+            }
+
+            if (matches[0].AttachmentId is not > 0)
+            {
+                return null;
+            }
+
+            var attachmentId = matches[0].AttachmentId.GetValueOrDefault();
+            var attachment = await client.DownloadAttachmentAsync(new FeatureAttachmentDownloadRequest
+            {
+                Source = source,
+                ObjectId = objectId,
+                AttachmentId = attachmentId,
+            }, cancellationToken).ConfigureAwait(false);
+            await using var stream = attachment.Content;
+            var hash = await System.Security.Cryptography.SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+            return StringComparer.OrdinalIgnoreCase.Equals(Convert.ToHexString(hash), photo.Sha256) ? attachmentId : null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is Honua.Sdk.Abstractions.HonuaException or HttpRequestException or JsonException or IOException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Uploads a media file to a feature's <c>addAttachment</c> endpoint as a
     /// <c>multipart/form-data</c> POST. Call this after <see cref="SubmitAsync"/>
@@ -566,7 +612,19 @@ public sealed class GeoServicesFeatureSync
             return result.Succeeded
                 ? new FeatureSyncResult(true, result.AttachmentId, null)
                 : new FeatureSyncResult(false, result.AttachmentId,
-                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code);
+                    result.Error?.Message ?? "Attachment was not added.", result.Error?.Code)
+                {
+                    DefinitiveEditRejection = (result.AttachmentId is null or <= 0)
+                        && IsDefinitiveAttachmentRejection(result.Error?.Code)
+                };
+        }
+        catch (HonuaFeatureServerException ex) when (IsDefinitiveAttachmentRejection((int)ex.StatusCode)
+            || ((int)ex.StatusCode is 200 or 400 && IsDefinitiveAttachmentRejection(ex.GeoServicesErrorCode)))
+        {
+            return new FeatureSyncResult(false, null, ex.Message, ex.GeoServicesErrorCode ?? (int)ex.StatusCode)
+            {
+                DefinitiveEditRejection = true
+            };
         }
         catch (HonuaFeatureServerException ex) when (ex.GeoServicesErrorCode is { } code)
         {
@@ -594,12 +652,14 @@ public sealed class GeoServicesFeatureSync
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // The caller's token was not cancelled, so this is the upload deadline
-            // firing (or an HttpClient request timeout) — a transport failure, not a
-            // user cancel. Surface it as a failed result so the upload is retried.
+            // The upload timed out and its outcome is unknown. The caller can
+            // verify whether the server stored it.
             return FeatureSyncResult.Fail(ex.Message);
         }
     }
+
+    private static bool IsDefinitiveAttachmentRejection(int? code) =>
+        code is 401 or 403 or 413 or 415 or 422 or 1006;
 
     /// <summary>
     /// Pulls existing features from the target layer's <c>query</c> endpoint and
@@ -1285,6 +1345,12 @@ public sealed class GeoServicesFeatureSync
                 break;
             case float or double or decimal:
                 writer.WriteNumber(key, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+                break;
+            case JsonElement { ValueKind: JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False } element:
+                writer.WritePropertyName(key);
+                element.WriteTo(writer);
+                break;
+            case JsonElement { ValueKind: JsonValueKind.Null }:
                 break;
             default:
                 writer.WriteString(key, value.ToString() ?? string.Empty);

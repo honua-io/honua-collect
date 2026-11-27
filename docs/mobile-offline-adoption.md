@@ -1,5 +1,20 @@
 # Shared offline runtime adoption
 
+## Offline basemap coverage
+
+In geometry capture, frame the work area before selecting **Download area** on a
+source whose provider authorizes prefetch. Set the source URL in
+`OsmTileUrl.Template` and the adjacent `AllowOfflinePrefetch` to `true` before
+building. Each alternate URL template uses its own cache. The plan covers the visible extent at the
+current zoom and up to two finer levels, within the tile cap. For the public
+OpenStreetMap source, **Check offline area** verifies the existing cache at the
+current zoom. Advance your map views normally to populate that cache.
+
+Readiness refers to the checked extent and zoom levels at the time of the
+check. Cancelled or incomplete downloads keep the usable tiles. Retry the
+same area to reuse those tiles, then verify the intended map view with
+connectivity disabled.
+
 Implementation tracking: [Field #173](https://github.com/honua-io/honua-field/issues/173)
 and [mobile #421](https://github.com/honua-io/honua-mobile/issues/421).
 This document defines the migration boundary and installation acceptance
@@ -85,6 +100,24 @@ exactly one remote record, the remote ID persists and the queue drains without
 attachment duplication. If checkpoint instrumentation is unavailable, record
 these cases as blocked rather than substituting an offline restart. Never alter the secure-storage key on a real
 phone holding the only copy of field data to simulate these failures.
+
+### Ordinary inspection photos
+
+The [installed Android photo gate](verification/e2e/README.md#ordinary-feature-photos-on-android)
+exercises offline submission and replay for one ordinary feature-layer inspection.
+It submits a photo offline, reopens the outbox after process death, then checks the feature and
+attachment on the seeded server after reconnecting. The report records their IDs,
+counts and the SHA-256 of the downloaded bytes. The live Core test
+`Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates`
+exercises the case where the server accepts the upload and its reply is lost.
+On the next sync, Field looks up the generated file name on the original
+feature and downloads the attachment to verify its SHA-256. An explicit
+rejection such as HTTP 403 leaves the photo ready to retry after access is
+restored. A timeout, an ambiguous reply or a process stop between recording
+the upload attempt and sending the request leaves the photo awaiting
+verification. If the server has no matching attachment, repeated syncs can
+leave the inspection in Outbox indefinitely. Keep the on-device record and
+private photo while checking the original feature on the server.
 
 ## Founder phone installation
 
