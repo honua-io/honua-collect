@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
@@ -66,7 +67,7 @@ public partial class SyncPage : ContentPage
             using var http = _clients.CreateClient(submission.Files.Count > 0
                 ? MauiProgram.UploadHttpClient
                 : MauiProgram.ServerHttpClient);
-            return await submission.UploadAsync(http, cancellationToken);
+            return await submission.ResolveMediaPaths(CaptureFiles.MediaDirectory).UploadAsync(http, cancellationToken);
         }
 
         var sync = _syncFactory();

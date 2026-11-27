@@ -280,7 +280,10 @@ cmp "$data/Library/media/$attachment" "$working_dir/attachment"
 touch "$working_dir/lose-receipt"
 rm -- "$working_dir/offline"
 run_flow retry-outbox
-test -f "$working_dir/withheld"
+if [[ ! -f "$working_dir/withheld" ]]; then
+    echo "The server did not accept the first submission through the lost-receipt proxy." >&2
+    exit 1
+fi
 "${simctl[@]}" terminate "$device" "$app"
 launch_and_run_flow verify-outbox-ios
 rm -- "$working_dir/lose-receipt"
