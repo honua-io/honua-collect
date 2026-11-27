@@ -37,7 +37,7 @@
             <DataTemplate x:Key="ChoiceEditor">
                 <VerticalStackLayout Spacing="2" IsVisible="{Binding IsVisible}">
                     <Label Text="{Binding Label}" />
-                    <Picker ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}"
+                    <Picker AutomationId="{Binding FieldId}" ItemsSource="{Binding Choices}" ItemDisplayBinding="{Binding Label}"
                             SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" />
                     <Label Text="{Binding ErrorText}" IsVisible="{Binding HasError}" TextColor="Red" FontSize="12" />
                 </VerticalStackLayout>

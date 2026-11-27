@@ -1,13 +1,16 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Security.Cryptography;
 using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.Core.Ai;
 using Honua.Field.Core.Field.Annotation;
 using Honua.Field.Core.Field.Capture;
 using Honua.Field.Core.Field.Related;
+using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
+using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Forms;
 using Honua.Sdk.Field.Records;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +52,67 @@ public partial class FormPage : ContentPage
         Shell.SetTabBarIsVisible(this, false);
 #endif
         BindingContext = viewModel;
+    }
+
+    /// <summary>Queues the finished field-site inspection and its captured photo files together.</summary>
+    internal void OnOrdinarySubmission(GeoServicesTarget target, FieldGeoPoint? assignmentLocation = null,
+        Func<FieldRecordEntry, Task>? onQueued = null)
+    {
+        var model = (FormPageViewModel)BindingContext;
+        var book = _book ?? throw new InvalidOperationException("Ordinary inspections require an Outbox.");
+        model.SubmitSucceeded += async (_, record) =>
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            IsEnabled = false;
+            var saved = false;
+            try
+            {
+                record.Location ??= model.Session.VisibleFields.Select(field => field.Value)
+                    .OfType<FieldGeoPoint>().FirstOrDefault() ?? assignmentLocation;
+                var photos = new List<OrdinaryFeaturePhoto>();
+                foreach (var media in model.Session.VisibleFields.SelectMany(field => field.Media))
+                {
+                    // Camera, gallery and annotation results already live in app-private storage.
+                    // Persist only the generated basename so an iOS sandbox relocation is harmless.
+                    var fileName = Path.GetFileName(media.LocalPath);
+                    if (Path.GetDirectoryName(media.LocalPath) != CaptureFiles.MediaDirectory
+                        || !Guid.TryParseExact(Path.GetFileNameWithoutExtension(fileName), "N", out var fileId))
+                    {
+                        throw new InvalidDataException("The captured photo is missing its private file identity.");
+                    }
+
+                    await using var bytes = File.OpenRead(media.LocalPath);
+                    var digest = Convert.ToHexString(await SHA256.HashDataAsync(bytes));
+                    photos.Add(new OrdinaryFeaturePhoto(fileId, fileName, media.ContentType ?? "image/jpeg",
+                        fileName, digest, target));
+                }
+
+                var entry = await book.AddSubmittedAsync(record, ordinaryPhotos: photos);
+                saved = true;
+                if (Navigation.NavigationStack.LastOrDefault() == this)
+                {
+                    await Navigation.PopAsync();
+                }
+                if (onQueued is not null)
+                {
+                    await onQueued(entry);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!saved)
+                {
+                    model.RestoreDraftAfterSaveFailure();
+                    IsEnabled = true;
+                }
+
+                await DisplayAlert("Inspection", ex.Message, "OK");
+            }
+        };
     }
 
     private async void OnCaptureLocation(object? sender, EventArgs e)

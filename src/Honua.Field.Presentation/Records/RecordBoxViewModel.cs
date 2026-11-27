@@ -28,6 +28,7 @@ public sealed class RecordRowViewModel(FieldRecordEntry entry) : ObservableObjec
         RecordBox.Drafts => "Draft",
         RecordBox.Sent => $"Sent — {Entry.RemoteId ?? "synced"}",
         RecordBox.Conflicts => "Conflict — needs review",
+        _ when Entry.HasPendingOrdinaryPhotos => "Feature sent. Photos still need sync.",
         _ when Entry.RequiresServerVerification => FieldRecordEntry.OrdinaryAddVerificationMessage,
         _ when Entry.SyncState == RecordSyncState.SubmissionRejected => Entry.CanOpenPublishedEditor
             ? $"Rejected. Open to correct. {Entry.LastError}"

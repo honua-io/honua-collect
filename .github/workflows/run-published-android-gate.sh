@@ -195,6 +195,7 @@ required = {
     "Batch_add_persists_each_feature_once_and_returns_matching_object_ids",
     "Ordinary_attachment_round_trips_metadata_and_photo_bytes",
     "Lost_add_acknowledgment_survives_reopen_without_creating_a_second_feature",
+    "Offline_photo_survives_reopen_and_lost_upload_acknowledgment_without_duplicates",
 }
 executed = {result.get("testName", "").rsplit(".", 1)[-1] for result in results}
 if missing := required - executed:
@@ -204,6 +205,12 @@ if any(result.get("outcome") != "Passed" for result in results):
 PYTEST
     then
         fail_gate "Live feature sync integration evidence is incomplete"
+    fi
+    if ! "$workspace/scripts/e2e/create-fixture-worker.sh" "http://127.0.0.1:$HONUA_E2E_HTTP_PORT" "$working_dir/admin-key" \
+            "mobile_offline_demo/Offline Field Sites" "$working_dir/ordinary-worker-key" ||
+        ! prepare_candidate_check 822x1782 320 ||
+        ! python3 "$workspace/scripts/e2e/run-ordinary-photo-android.py" "$serial" "$report_root/ordinary-photo" "$working_dir/ordinary-worker-key"; then
+        fail_gate "Installed Android offline feature photo replay failed"
     fi
 else
     fail_gate "Live feature sync integration fixture failed"
