@@ -13,6 +13,7 @@ journey. It is a test script, not evidence that the migration has shipped.
 | Feature queries, edits, attachment requests, sync contracts and the reconciliation algorithm | `honua-sdk-dotnet` owns the protocol clients, per-edit results, and sync engine. | Against Honua Server, distinguish an explicit rejection from acceptance followed by a lost response. Verify remote feature and attachment counts after retry. |
 | Encrypted GeoPackage storage and device lifecycle | `honua-mobile` implements the journal, checkpoints and local transactions, integrates with platform key storage, and schedules sync on connectivity changes. | Reopen after process death, reject a wrong key without replacing the database, and interrupt replay between server acceptance and durable local acknowledgement. |
 | Phone and tablet capture, record identity and operator decisions | Field owns the draft's pinned form, local UUID to remote object ID association, outbox presentation, conflict choices, and map editor interactions. | Exercise the installed app at phone and tablet sizes. Save offline, restart, reconnect, and verify one server record and one copy of each photo. Record the device type and server version with the result. |
+| Offline assigned work | The [SDK task client](https://github.com/honua-io/honua-sdk-dotnet/pull/596) sends scoped commands and reads typed receipts. The [Mobile adapter](https://github.com/honua-io/honua-mobile/pull/456) caches assignments and persists command IDs and expected versions. The [Field pilot](https://github.com/honua-io/honua-field/pull/203) connects the active worker's session to that adapter and presents their assignments. | With two workers, drop the first successful response, reopen the store, and check that retry produces one server receipt. Switch accounts while a refresh is in flight and verify the previous worker's pending command stays with that account. |
 
 ### Migration order
 
@@ -44,6 +45,12 @@ journey. It is a test script, not evidence that the migration has shipped.
    has only test callers in this repository. Mobile supplies device positions.
    Field chooses the candidate targets and tolerance for the active tool and owns undo.
    [Field #223](https://github.com/honua-io/honua-field/issues/223)
+
+Field also owns the decision to use the JavaScript map renderer for capture.
+Benchmark the offline editing flow on both phone and tablet before switching
+renderers, as tracked in [Field #168](https://github.com/honua-io/honua-field/issues/168).
+The reusable browser embed has a separate
+[transfer to the JavaScript SDK](https://github.com/honua-io/honua-mobile/issues/425).
 
 ## Adapter boundary
 
