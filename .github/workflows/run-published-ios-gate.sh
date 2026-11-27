@@ -210,7 +210,9 @@ echo "Installing previous Field build on $device ($(du -sh "$previous_app" | cut
 test "$bundle_id" = "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$previous_app/Info.plist")"
 run_bounded 480 xcrun simctl install "$device" "$previous_app"
 export HONUA_E2E_IOS_UPGRADE_APP="$app"
-: "${HONUA_E2E_IOS_PREVIOUS_REVISION:=$(git -C "$workspace/field-previous" rev-parse HEAD)}"
+if [[ -z ${HONUA_E2E_IOS_PREVIOUS_REVISION:-} ]]; then
+    HONUA_E2E_IOS_PREVIOUS_REVISION=$(git -C "$workspace/field-previous" rev-parse HEAD)
+fi
 export HONUA_E2E_IOS_PREVIOUS_REVISION
 echo "App install complete. Starting published form journey."
 
