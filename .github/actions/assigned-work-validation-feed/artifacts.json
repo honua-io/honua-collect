@@ -2,11 +2,11 @@
   {
     "source": "honua-task-sdk-validation",
     "repo": "honua-io/honua-sdk-dotnet",
-    "run": 45952807612,
-    "id": 15177498235,
-    "revision": "90ca73985560fca4b2abe486fb8841f7303bbc70",
-    "sha256": "65f77e12d6b8f1be62a359a97761a9f2cf2fd2ad28bc37e108f8d990d66635d3",
-    "version": "5.1.1-fieldtasks.2",
+    "run": 45962153231,
+    "id": 15182046058,
+    "revision": "aa9c90c9c6dc355e09a6e0215e51e698f9cfe7c8",
+    "sha256": "77f78e7219a60e5669172e2e2db1f37a24ee0bc40807ae38efc76b68135d5650",
+    "version": "5.1.1-fieldtasks.3",
     "packages": [
       "Honua.Sdk.Abstractions",
       "Honua.Sdk.Field"
@@ -15,11 +15,11 @@
   {
     "source": "honua-mobile-task-validation",
     "repo": "honua-io/honua-mobile",
-    "run": 45953036296,
-    "id": 15176833500,
-    "revision": "e381c1d98b3db9c0902c399b348c25e05ca7c024",
-    "sha256": "d9dd3fabf1818b9302a5ef3b337dce7fd5bc8e6d726448c7d115ca8d92a850de",
-    "version": "0.1.0-fieldtasks.45953036296.1",
+    "run": 45963856191,
+    "id": 15181667508,
+    "revision": "ac0d7da6b1b8cd89f5d2069f6eac8de0029517ca",
+    "sha256": "0182b9bb85e0e97e63cd9886773673b2cf8db2e2defe5e8f1217012bb2a6981e",
+    "version": "0.1.0-fieldtasks.45963856191.1",
     "packages": [
       "Honua.Mobile.Maui",
       "Honua.Mobile.Offline",

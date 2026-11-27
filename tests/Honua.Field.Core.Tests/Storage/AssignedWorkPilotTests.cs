@@ -86,7 +86,8 @@ public sealed class AssignedWorkPilotTests
             {
                 CommandId = commandId, ExpectedVersion = initial.Version, Action = "start"
             });
-            await Assert.ThrowsAsync<HttpRequestException>(() => pilot.SynchronizeAsync(online: true));
+            var lostReceipt = await Assert.ThrowsAsync<WorkTaskApiException>(() => pilot.SynchronizeAsync(online: true));
+            Assert.IsType<HttpRequestException>(lostReceipt.InnerException);
 
             var restarted = new AuthSessionStore("ignored-fallback");
             var restartManager = new AuthSessionManager(restarted, persistence);
@@ -111,13 +112,15 @@ public sealed class AssignedWorkPilotTests
 
             await restartManager.SignInAsync(Session("worker"));
             malformedReceipt = true;
-            await Assert.ThrowsAsync<JsonException>(() => pilot.SynchronizeAsync(online: true));
+            var invalidReceipt = await Assert.ThrowsAsync<WorkTaskApiException>(() => pilot.SynchronizeAsync(online: true));
+            Assert.IsType<JsonException>(invalidReceipt.InnerException);
             malformedReceipt = false;
             var awaitingValidReceipt = await pilot.ReadAsync("worker");
             Assert.Equal(AssignedCommandStatus.Pending, Assert.Single(awaitingValidReceipt.Commands).Status);
             Assert.Equal(task.Version, Assert.Single(awaitingValidReceipt.Tasks).Version);
             forceFailedRefresh = true;
-            await Assert.ThrowsAsync<HttpRequestException>(() => pilot.SynchronizeAsync(online: true));
+            var unavailable = await Assert.ThrowsAsync<WorkTaskApiException>(() => pilot.SynchronizeAsync(online: true));
+            Assert.Equal((int)HttpStatusCode.ServiceUnavailable, unavailable.HttpStatus);
             forceFailedRefresh = false;
             var accepted = await pilot.ReadAsync("worker");
             var receipt = Assert.Single(accepted.Commands);
