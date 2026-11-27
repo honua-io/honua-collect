@@ -24,6 +24,11 @@ if [ "$#" -ne 5 ]; then
     echo "Usage: $0 <new-output-directory> <app-artifact-directory> <server-git-checkout> <server-tar.gz> <server-sha256-file>" >&2
     exit 2
 fi
+runner=$(git -C "$field" show "$field_revision:scripts/e2e/run-published-ios.sh")
+if [[ "$runner" != *HONUA_E2E_IOS_UPGRADE_APP* || "$runner" != *installed-upgrade.json* ]]; then
+    echo "The selected Field revision must support upgrade installation and record its evidence." >&2
+    exit 2
+fi
 destination=$1
 mkdir -- "$destination"
 destination=$(cd "$destination" && pwd)
