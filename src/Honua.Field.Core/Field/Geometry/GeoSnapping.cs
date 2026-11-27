@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Honua.Sdk.Field.Records;
+using Honua.Sdk.Geometry;
+using NetTopologySuite.Geometries;
 
 namespace Honua.Field.Core.Field.Geometry;
 
@@ -42,6 +44,9 @@ public sealed record SnapTarget(IReadOnlyList<FieldGeoPoint> Vertices, bool Clos
 /// </summary>
 public static class GeoSnapping
 {
+    // Field inputs are WGS 84 longitude/latitude. The SDK sees an unregistered
+    // local Cartesian frame (SRID 0) in metres, centred on the captured point.
+    private static readonly GeometryFactory LocalGeometry = new();
     private const double MetersPerDegreeLat = 110_540.0;
     private const double MetersPerDegreeLonEquator = 111_320.0;
 
@@ -76,52 +81,56 @@ public static class GeoSnapping
         var lat0Rad = point.Latitude * Math.PI / 180.0;
         var lonScale = MetersPerDegreeLonEquator * Math.Cos(lat0Rad);
 
-        (double X, double Y) ToLocal(FieldGeoPoint p) =>
-            ((p.Longitude - point.Longitude) * lonScale, (p.Latitude - point.Latitude) * MetersPerDegreeLat);
+        double LocalLatitude(FieldGeoPoint vertex) => (vertex.Latitude - point.Latitude) * MetersPerDegreeLat;
 
-        FieldGeoPoint ToGeo(double x, double y) => new(
-            point.Latitude + y / MetersPerDegreeLat,
-            point.Longitude + x / lonScale);
-
-        // Nearest vertex.
-        var bestVertexDist = double.PositiveInfinity;
-        (double X, double Y) bestVertex = default;
-        foreach (var vertex in candidate)
+        var origin = LocalGeometry.CreatePoint(new Coordinate(0, 0));
+        var vertices = new Coordinate[candidate.Count];
+        for (var i = 0; i < vertices.Length; i++)
         {
-            var (vx, vy) = ToLocal(vertex);
-            var d = Math.Sqrt((vx * vx) + (vy * vy));
-            if (d < bestVertexDist)
-            {
-                bestVertexDist = d;
-                bestVertex = (vx, vy);
-            }
+            var vertex = candidate[i];
+            vertices[i] = new Coordinate(WrapLongitude(vertex.Longitude - point.Longitude) * lonScale, LocalLatitude(vertex));
         }
 
-        // Nearest point on any edge.
-        var bestEdgeDist = double.PositiveInfinity;
-        (double X, double Y) bestEdge = default;
-        var segmentCount = closed ? candidate.Count : candidate.Count - 1;
-        for (var i = 0; i < segmentCount; i++)
+        var nearestVertex = HonuaPlanarGeometryAnalyzer.FindNearestVertex(LocalGeometry.CreateMultiPointFromCoords(vertices), origin);
+
+        var segmentCount = closed && candidate.Count > 1 ? candidate.Count : candidate.Count - 1;
+        var segments = new LineString[segmentCount];
+        for (var i = 0; i < segments.Length; i++)
         {
-            var a = ToLocal(candidate[i]);
-            var b = ToLocal(candidate[(i + 1) % candidate.Count]);
-            var (px, py, dist) = ClosestOnSegment(a, b);
-            if (dist < bestEdgeDist)
-            {
-                bestEdgeDist = dist;
-                bestEdge = (px, py);
-            }
+            var start = candidate[i];
+            var end = candidate[(i + 1) % candidate.Count];
+            var delta = WrapLongitude(end.Longitude - start.Longitude);
+            // Unwrap each short segment as a unit to keep edges across the
+            // antimeridian from crossing the capture origin on the far side.
+            var midpoint = WrapLongitude(start.Longitude - point.Longitude) + delta / 2;
+            var localStart = WrapLongitude(midpoint) - delta / 2;
+            segments[i] = LocalGeometry.CreateLineString(
+            [
+                new Coordinate(localStart * lonScale, LocalLatitude(start)),
+                new Coordinate((localStart + delta) * lonScale, LocalLatitude(end))
+            ]);
         }
+
+        var nearestEdge = segments.Length == 0
+            ? null
+            : HonuaPlanarGeometryAnalyzer.FindNearestPoints(LocalGeometry.CreateMultiLineString(segments), origin);
+        var bestVertexDist = nearestVertex.Distance;
+        var bestEdgeDist = nearestEdge?.Distance ?? double.PositiveInfinity;
 
         // Prefer a vertex when it is no farther than the edge (ties to vertex).
         if (bestVertexDist <= toleranceMeters && bestVertexDist <= bestEdgeDist + 1e-6)
         {
-            return new SnapResult(SnapKind.Vertex, ToGeo(bestVertex.X, bestVertex.Y), bestVertexDist);
+            var vertex = candidate[nearestVertex.CoordinateIndex];
+            return new SnapResult(SnapKind.Vertex, new FieldGeoPoint(vertex.Latitude, vertex.Longitude), bestVertexDist);
         }
 
-        if (bestEdgeDist <= toleranceMeters)
+        if (nearestEdge is not null && bestEdgeDist <= toleranceMeters)
         {
-            return new SnapResult(SnapKind.Edge, ToGeo(bestEdge.X, bestEdge.Y), bestEdgeDist);
+            var edge = nearestEdge.FirstPoint;
+            var snapped = new FieldGeoPoint(
+                point.Latitude + edge.Y / MetersPerDegreeLat,
+                WrapLongitude(point.Longitude + edge.X / lonScale));
+            return new SnapResult(SnapKind.Edge, snapped, bestEdgeDist);
         }
 
         return new SnapResult(SnapKind.None, point, Math.Min(bestVertexDist, bestEdgeDist));
@@ -167,22 +176,5 @@ public static class GeoSnapping
         return best;
     }
 
-    private static (double X, double Y, double Distance) ClosestOnSegment((double X, double Y) a, (double X, double Y) b)
-    {
-        // Origin (0,0) is the captured point; find the closest point on a→b.
-        var abx = b.X - a.X;
-        var aby = b.Y - a.Y;
-        var lengthSq = (abx * abx) + (aby * aby);
-
-        double t = 0;
-        if (lengthSq > 0)
-        {
-            t = -((a.X * abx) + (a.Y * aby)) / lengthSq;
-            t = Math.Clamp(t, 0, 1);
-        }
-
-        var px = a.X + (t * abx);
-        var py = a.Y + (t * aby);
-        return (px, py, Math.Sqrt((px * px) + (py * py)));
-    }
+    private static double WrapLongitude(double longitude) => Math.IEEERemainder(longitude, 360);
 }
