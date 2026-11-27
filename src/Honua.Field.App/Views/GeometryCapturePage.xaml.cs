@@ -29,6 +29,7 @@ public partial class GeometryCapturePage : ContentPage
     private readonly SlippyMapDrawable _map;
     private MapCaptureViewModel _vm = new(CapturedGeometryType.Point);
 
+    private CancellationTokenSource? _areaDownload;
     private PointF _gestureStart;
     private PointF _lastDrag;
     private double _moved;
@@ -38,8 +39,10 @@ public partial class GeometryCapturePage : ContentPage
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         _tiles = new OsmTileLoader(
             Path.Combine(FileSystem.AppDataDirectory, "tiles"),
-            httpClientFactory.CreateClient(MauiProgram.TileHttpClient));
+            httpClientFactory.CreateClient(MauiProgram.TileHttpClient),
+            httpClientFactory.CreateClient(MauiProgram.OfflineTileHttpClient));
         InitializeComponent();
+        OfflineAreaButton.Text = OfflineAreaAction;
 
         _map = new SlippyMapDrawable(_tiles) { Vertices = _vm.Vertices };
         Canvas.Drawable = _map;
@@ -136,25 +139,77 @@ public partial class GeometryCapturePage : ContentPage
         Canvas.Invalidate();
     }
 
+    protected override void OnDisappearing()
+    {
+        _areaDownload?.Cancel();
+        base.OnDisappearing();
+    }
+
+    private static string OfflineAreaAction => OsmTileLoader.SupportsOfflineDownloads ? "Download area" : "Check offline area";
+
     private async void OnDownloadArea(object? sender, EventArgs e)
     {
-        // Take this area offline: prefetch the visible viewport across the current
-        // zoom + 2 levels into the persistent tile cache.
+        if (_areaDownload is not null)
+        {
+            _areaDownload.Cancel();
+            return;
+        }
+
         var w = Canvas.Width;
         var h = Canvas.Height;
-        var topLeft = WebMercator.FromScreen(0, 0, _map.Center, _map.Zoom, w, h);
-        var bottomRight = WebMercator.FromScreen(w, h, _map.Center, _map.Zoom, w, h);
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        var zoom = _map.Zoom;
+        var topLeft = WebMercator.FromScreen(0, 0, _map.Center, zoom, w, h);
+        var bottomRight = WebMercator.FromScreen(w, h, _map.Center, zoom, w, h);
         var bbox = GeoBoundingBox.FromCorners(topLeft, bottomRight);
+        using var cancellation = new CancellationTokenSource();
+        _areaDownload = cancellation;
+        OfflineAreaButton.Text = "Cancel";
+        OfflineAreaStatus.IsVisible = true;
+        var status = OsmTileLoader.SupportsOfflineDownloads ? "Downloading offline area…" : "Checking offline area…";
+        OfflineAreaStatus.Text = status;
+        var displayed = 0;
+        try
+        {
+            var maxZoom = OsmTileLoader.SupportsOfflineDownloads ? Math.Min(zoom + 2, MaxZoom) : zoom;
+            var plan = OfflineAreaPlanner.Plan(bbox, zoom, maxZoom);
+            var progress = new Progress<int>(cached =>
+            {
+                if (_areaDownload == cancellation && !cancellation.IsCancellationRequested && cached > displayed)
+                {
+                    displayed = cached;
+                    OfflineAreaStatus.Text = $"{status} {cached}/{plan.Count}";
+                }
+            });
 
-        var progress = new Progress<TilePrefetchProgress>(p =>
-            StatusLabel.Text = $"Downloading offline area… {p.Completed}/{p.Total}");
-
-        StatusLabel.Text = "Preparing offline area…";
-        var plan = await _tiles.PrefetchAreaAsync(bbox, _map.Zoom, _map.Zoom + 2, progress);
-        StatusLabel.Text = plan.ExceedsCap
-            ? $"Area too large ({plan.Count} tiles) — zoom in and retry."
-            : $"Offline area ready: {plan.Count} tiles cached.";
-        Canvas.Invalidate();
+            var result = await _tiles.PrefetchAreaAsync(plan, progress, cancellation.Token);
+            OfflineAreaStatus.Text = result switch
+            {
+                { Plan.ExceedsCap: true } => "Area too large. Zoom in and retry.",
+                { IsReady: true } => $"Offline area ready: {result.Cached} tiles cached (zoom {zoom}–{maxZoom}).",
+                _ when !OsmTileLoader.SupportsOfflineDownloads =>
+                    $"Offline area incomplete: {result.Cached}/{plan.Count} tiles cached. This basemap only caches viewed tiles.",
+                _ => $"Offline area incomplete: {result.Cached}/{plan.Count} tiles cached. Retry when connected.",
+            };
+            Canvas.Invalidate();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            OfflineAreaStatus.Text = "Offline area check cancelled. Cached tiles were kept.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
+        {
+            OfflineAreaStatus.Text = "Could not check the offline area. Retry when storage and connection are available.";
+        }
+        finally
+        {
+            _areaDownload = null;
+            OfflineAreaButton.Text = OfflineAreaAction;
+        }
     }
 
     private void OnUndo(object? sender, EventArgs e)

@@ -29,9 +29,10 @@
                             SemanticProperties.Description="Zoom out" />
                     <Button Grid.Column="2" Text="+" Padding="0" Clicked="OnZoomIn"
                             SemanticProperties.Description="Zoom in" />
-                    <Button Grid.Column="3" Text="Offline area" Padding="8,4" Clicked="OnDownloadArea" />
+                    <Button x:Name="OfflineAreaButton" Grid.Column="3" Text="Check offline area" Padding="8,4" Clicked="OnDownloadArea" />
                 </Grid>
                 <Label x:Name="StatusLabel" />
+                <Label x:Name="OfflineAreaStatus" IsVisible="False" />
                 <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
                     <Button Text="Undo" Clicked="OnUndo" />
                     <Button Grid.Column="1" Text="Clear" Clicked="OnClear" />
