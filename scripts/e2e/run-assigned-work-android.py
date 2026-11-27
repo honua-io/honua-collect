@@ -97,7 +97,8 @@ class Observer:
         self.lock = threading.Lock()
         self.exchange_count = 0
         self.exchange_denied = False
-        self.refreshes = 0
+        self.phase = 0
+        self.refreshes = [0, 0]
         self.bearer_digest = None
         self.verified_profile = False
         self.mismatch = False
@@ -116,6 +117,8 @@ class Observer:
                 self.forward()
 
             def forward(self):
+                with observer.lock:
+                    phase = observer.phase
                 path = urlsplit(self.path)
                 if path.path not in {
                     "/sharing/rest/generateToken", "/sharing/rest/community/self", "/api/v1/tasks",
@@ -138,7 +141,7 @@ class Observer:
                     with response:
                         encoded = response.read()
                         if response.status == 200:
-                            observer.observe(path, json.loads(encoded), headers.get("Authorization", ""), args)
+                            observer.observe(path, json.loads(encoded), headers.get("Authorization", ""), args, phase)
                         self.send_response(response.status)
                         self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
                         self.send_header("Content-Length", str(len(encoded)))
@@ -153,7 +156,7 @@ class Observer:
         self.server.socket = front.wrap_socket(self.server.socket, server_side=True)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
-    def observe(self, path, body, authorization, args):
+    def observe(self, path, body, authorization, args, phase):
         with self.lock:
             if path.path == "/sharing/rest/generateToken":
                 if isinstance(body.get("token"), str) and body["token"]:
@@ -168,13 +171,13 @@ class Observer:
             elif same_bearer and self.verified_profile and has_assignment(body, args):
                 query = parse_qs(path.query)
                 if query.get("serviceId") == [args.service] and query.get("assignee") == [args.assignee]:
-                    self.refreshes += 1
+                    self.refreshes[phase] += 1
                     return
                 self.mismatch = True
             else:
                 self.mismatch = True
 
-    def wait(self, minimum):
+    def wait(self, phase):
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
             with self.lock:
@@ -182,11 +185,11 @@ class Observer:
                     raise RuntimeError("Native fixture token exchange was denied")
                 if self.mismatch or self.exchange_count > 1:
                     raise RuntimeError("Native refresh used an unexpected worker or assignment")
-                if self.exchange_count == 1 and self.refreshes >= minimum:
-                    return self.refreshes
+                if self.exchange_count == 1 and self.refreshes[phase] >= 1:
+                    return self.refreshes[phase]
             time.sleep(0.25)
         raise RuntimeError(f"Native refresh timed out (exchanges={self.exchange_count}, "
-                           f"profile={self.verified_profile}, refreshes={self.refreshes}, expected={minimum})")
+                           f"profile={self.verified_profile}, refreshes={self.refreshes}, phase={phase})")
 
 
 def run(args):
@@ -219,12 +222,23 @@ def run(args):
         android.tap("Account")
         enter(android, args.input_apk, username, password)
         android.tap("Sign in", kind="Button")
-        observer.wait(1)
+        def signed_in(root):
+            for node in root.iter("node"):
+                if (node.get("package") == PACKAGE
+                        and node.get("text", "").startswith("Signed in as ")):
+                    return True
+            return None
+
+        android.screen(signed_in, "the native Account signed-in label")
+        first = observer.wait(0)
         android.shell("am", "force-stop", PACKAGE)
         with observer.lock:
-            first = observer.refreshes
+            observer.phase = 1
         android.launch()
-        resumed = observer.wait(first + 1) - first
+        android.tap("More", kind="FrameLayout")
+        android.tap("Account")
+        android.screen(signed_in, "the restored Account signed-in label")
+        resumed = observer.wait(1)
         readback(args, username, password)
         with args.apk.open("rb") as apk:
             digest = hashlib.file_digest(apk, "sha256").hexdigest()
@@ -235,6 +249,8 @@ def run(args):
             "apkSha256": digest,
             "initialAuthenticatedRefreshes": first,
             "relaunchAuthenticatedRefreshes": resumed,
+            "coldRelaunch": True,
+            "accountSignedInLabelChecks": 2,
             "workerAssignmentReadbacks": 2,
             "taskId": args.task,
         }, indent=2) + "\n")
