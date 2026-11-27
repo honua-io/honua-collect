@@ -1,11 +1,17 @@
-# On-device verification — Honua Field (Android)
+# Honua Field device verification
 
-The Honua Field MAUI app was built, signed, installed, and **run end-to-end on
-an Android emulator** (Google APIs x86_64, **API 35**, KVM-accelerated). These
-screenshots are the captured evidence that the assembled, user-facing app
-functions — not just the unit-tested logic layer.
+For the current .NET 11 app, the [end-to-end verification guide](e2e/README.md)
+lists the Android emulator, iPhone and iPad simulator, and AWS Device Farm runs.
+It includes the commands and results for offline form submission, app upgrades,
+photo replay, GPS capture, and phone and tablet geometry editing.
 
-## How it was run
+## Earlier Android form screenshots
+
+The four screenshots below were captured with the .NET 10 Field app on a
+KVM-accelerated Android API 35 emulator (Google APIs x86_64). To build the
+current app, follow the [Field quick start](../../README.md#quick-start).
+
+### How the screenshot build was run
 
 ```bash
 # Toolchain bootstrapped into $HOME (no root): Temurin JDK 17 + Android SDK

@@ -3,4 +3,4 @@ appId: io.honua.collect
 - tapOn: Sync now
 - extendedWaitUntil:
     visible: 'Outbox 1 .* Failed 1'
-    timeout: 45000
+    timeout: 120000

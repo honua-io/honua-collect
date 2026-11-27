@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
@@ -24,6 +25,7 @@ public partial class SyncPage : ContentPage
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
     private readonly IInboxPullProgressStore _pullProgressStore;
     private readonly ILogger<SyncCenterViewModel>? _logger;
+    private bool _syncRequested;
 
     public SyncPage(
         AppSettings settings,
@@ -46,13 +48,74 @@ public partial class SyncPage : ContentPage
     {
         base.OnAppearing();
         await _book.InitializeAsync();
+        await ForegroundSyncGate.Instance.WaitAsync();
+        try
+        {
+            if (!_syncRequested)
+            {
+                BindViewModel();
+            }
+        }
+        finally
+        {
+            ForegroundSyncGate.Instance.Release();
+        }
+    }
+
+    private SyncCenterViewModel BindViewModel()
+    {
         // 4-arg form enables bidirectional sync: the puller queries the server and
         // the active form lets the merge classify new-vs-conflicting records. The
         // persister durably saves each entry's post-upload state so a restart does
         // not re-upload (and duplicate) an already-synced record.
-        BindingContext = new SyncCenterViewModel(
+        var vm = new SyncCenterViewModel(
             _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync,
-            logger: _logger, replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct));
+            logger: _logger, replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct),
+            canDispatchOrdinaryAdd: HasNetworkAccess,
+            replayOrdinaryPhotos: ReplayOrdinaryPhotosAsync,
+            canDispatchOrdinaryRecord: entry => entry.OrdinaryPhotos.All(photo => photo.Target == _settings.Target));
+        BindingContext = vm;
+        var command = new Command(
+            async () => await RunSyncAsync(),
+            () => !_syncRequested && vm.SyncCommand.CanExecute(null));
+        vm.SyncCommand.CanExecuteChanged += (_, _) => command.ChangeCanExecute();
+        SyncButton.Command = command;
+        return vm;
+    }
+
+    private static bool HasNetworkAccess() => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
+        != Microsoft.Maui.Networking.NetworkAccess.None;
+
+    private Task<bool> ReplayOrdinaryPhotosAsync(Core.Records.FieldRecordEntry entry)
+        => HasNetworkAccess()
+            ? OrdinaryPhotoReplay.ReplayAsync(entry, _syncFactory(), _settings.Target, CaptureFiles.MediaDirectory, _book.SaveAsync)
+            : Task.FromResult(false);
+
+    private async Task RunSyncAsync()
+    {
+        if (_syncRequested)
+        {
+            return;
+        }
+
+        _syncRequested = true;
+        (SyncButton.Command as Command)?.ChangeCanExecute();
+        await ForegroundSyncGate.Instance.WaitAsync();
+        try
+        {
+            // The record book may have changed while another screen uploaded.
+            var vm = BindViewModel();
+            if (vm.SyncCommand.CanExecute(null))
+            {
+                await vm.SyncAsync();
+            }
+        }
+        finally
+        {
+            _syncRequested = false;
+            (SyncButton.Command as Command)?.ChangeCanExecute();
+            ForegroundSyncGate.Instance.Release();
+        }
     }
 
     private async Task<FeatureSyncResult> UploadAsync(Core.Records.FieldRecordEntry entry, CancellationToken cancellationToken)
@@ -67,8 +130,7 @@ public partial class SyncPage : ContentPage
         //  - a re-edited, already-synced record (PendingUpdate carrying its RemoteId)
         //    -> applyEdits UPDATE against the existing object id (an add would
         //    duplicate the server feature).
-        //  - a brand-new record -> applyEdits ADD (carrying its stable client
-        //    GlobalID so a retried/lost-response add cannot duplicate).
+        //  - a brand-new record -> applyEdits ADD under the durable verification hold.
         // The result flows straight to the sync center, which surfaces the server's
         // error message/code verbatim.
         if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted)
