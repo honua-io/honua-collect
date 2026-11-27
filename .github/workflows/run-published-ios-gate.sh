@@ -77,24 +77,8 @@ export Authentication__PortalToken__Enabled=true Authentication__PortalToken__Re
 export Authentication__PortalCredentialVerifier__FallBackToAdminVerifier=true
 export FileStorage__Provider=Local FileStorage__LocalStorage__BasePath="$state/attachments"
 export Geocoding__Enabled=false
-cd "$RUNNER_TEMP/published-server"
-export DOTNET_HOST_TRACE=1 DOTNET_HOST_TRACEFILE="$state/server-host.trace"
-# Keep the fixture running across the restart helper's exit, without requiring nohup.
-(
-    trap '' HUP
-    exec ./Honua.Server
-) </dev/null > "$state/server.log" 2>&1 &
-server_pid=$!
-echo "$server_pid" > "$pid_file"
-for ((attempt = 0; attempt < 90; ++attempt)); do
-    if curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null; then
-        exit 0
-    fi
-    if ! kill -0 "$server_pid" 2>/dev/null; then
-        server_status=0
-        wait "$server_pid" || server_status=$?
-        echo "::error::The fixture server exited before becoming ready (status $server_status)" >&2
-        python3 - "$state" <<'PYTHON'
+report_startup_diagnostics() {
+    python3 - "$state" <<'PYTHON'
 from pathlib import Path
 import re
 import sys
@@ -130,11 +114,33 @@ for filename, host_trace in (("server.log", False), ("server-host.trace", True))
             if shown == 16:
                 break
 PYTHON
+}
+cd "$RUNNER_TEMP/published-server"
+export DOTNET_HOST_TRACE=1 DOTNET_HOST_TRACEFILE="$state/server-host.trace"
+# Keep the fixture running across the restart helper's exit, without requiring nohup.
+(
+    trap '' HUP
+    exec ./Honua.Server
+) </dev/null > "$state/server.log" 2>&1 &
+server_pid=$!
+echo "$server_pid" > "$pid_file"
+for ((attempt = 0; attempt < 90; ++attempt)); do
+    if curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null; then
+        exit 0
+    fi
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        server_status=0
+        wait "$server_pid" || server_status=$?
+        echo "::error::The fixture server exited before becoming ready (status $server_status)" >&2
+        report_startup_diagnostics
         exit 1
     fi
     sleep 2
 done
 echo "::error::Timed out waiting for the fixture server" >&2
+ps -o pid,ppid,state,comm -p "$server_pid" >&2 || true
+curl --silent --max-time 2 --output /dev/null --write-out 'Fixture readiness HTTP %{http_code}\n' "$base_url/healthz/ready" >&2 || true
+report_startup_diagnostics
 exit 1
 RESTART
 chmod 700 "$HONUA_E2E_RESTART_SERVER_COMMAND"
