@@ -157,7 +157,8 @@ build. Users sign in on the Account tab against that server's token endpoint. Th
 
 ### Forms
 
-For a published XLSForm, set `server.formId` to its Honua Server form ID. The
+Import the XLSForm workbook against a service layer and publish it on Honua Server.
+Set `server.formId` to the published form ID. The
 default is `field_site`. Sign in, then tap **Download Latest Form** on the Capture
 screen and check the version shown. Tap **Start New Inspection** to collect a
 record. Enable offline use when publishing the form so workers can open it after

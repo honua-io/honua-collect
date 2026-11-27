@@ -30,12 +30,13 @@ journey. It is a test script, not evidence that the migration has shipped.
    [SDK GlobalID support](https://github.com/honua-io/honua-sdk-dotnet/pull/601),
    [Field #209](https://github.com/honua-io/honua-field/issues/209) and
    [Field #214](https://github.com/honua-io/honua-field/issues/214)
-3. **Consolidate XLSForm semantics.** Compare the [row importer](../src/Honua.Field.Core/Field/Forms/Authoring/XlsFormImporter.cs)
-   and [published-expression adapter](../src/Honua.Field.Core/Forms/PublishedXlsFormExpressions.cs)
-   with the SDK converter and evaluator using the same workbook, answers and
-   expected diagnostics. Move portable expression support upstream before
-   removing the Field fallback. Field keeps widget selection and draft display.
-   [SDK `selected()` support](https://github.com/honua-io/honua-sdk-dotnet/pull/603) and
+3. **Adopt shared expression evaluation.** XLSForm authoring uses the
+   [SDK workbook converter](https://github.com/honua-io/honua-sdk-dotnet/blob/trunk/src/Honua.Sdk.Field/Forms/Authoring/XlsFormConverter.cs).
+   Compare Field's [published-expression adapter](../src/Honua.Field.Core/Forms/PublishedXlsFormExpressions.cs)
+   with the SDK evaluator on the same answers, including restored drafts and
+   repeat rows. Switch callers once the pinned SDK handles each rule. Field
+   keeps widget selection and draft display.
+   [SDK expression support](https://github.com/honua-io/honua-sdk-dotnet/pull/603) and
    [Field #169](https://github.com/honua-io/honua-field/issues/169)
 4. **Reuse geometry primitives.** When snapping is enabled, the capture session
    calls [GeoSnapping](../src/Honua.Field.Core/Field/Geometry/GeoSnapping.cs).
