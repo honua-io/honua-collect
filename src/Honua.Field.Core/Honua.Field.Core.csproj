@@ -8,6 +8,10 @@
     <RootNamespace>Honua.Field.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Honua.Field.Core.Tests" />
+  </ItemGroup>
+
   <!--
     Collect owns the field-collection PRODUCT surface. The field-collection
     adapters formerly in the Honua.Mobile.Field package have been ported into

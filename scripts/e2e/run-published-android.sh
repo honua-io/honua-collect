@@ -69,7 +69,7 @@ run_flow() {
         flow_number=$((flow_number + 1))
         report=(--format junit --output "$HONUA_E2E_REPORT_DIR/$flow_number-$flow.xml")
     fi
-    "${maestro[@]}" test "${report[@]}" -e "INSPECTION_NAME=$name" \
+    "${maestro[@]}" test "${report[@]}" -e "INSPECTION_NAME=$name" -e LEGACY_CAPTURE=false \
         -e "CORRECTED_NAME=${HONUA_E2E_CORRECTED_NAME:-}" -e "FORM_VERSION=$version" "$script_dir/maestro/$flow.yaml"
 }
 

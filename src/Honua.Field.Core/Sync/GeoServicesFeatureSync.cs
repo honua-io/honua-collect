@@ -158,21 +158,6 @@ public sealed class GeoServicesFeatureSync
     /// </summary>
     private static readonly Guid IdempotencyNamespace = new("9f1d2c3b-4a5e-46f7-8a9b-0c1d2e3f4a5b");
 
-    /// <summary>
-    /// Minimum upload throughput (bytes/second) assumed when sizing the
-    /// attachment-upload deadline. A slow field uplink is the worst case this must
-    /// tolerate; 8 KB/s (~64 kbit/s) is well below even a poor cellular link, so a
-    /// file that is making any forward progress at all will finish inside the
-    /// derived deadline rather than tripping a flat wall-clock timeout.
-    /// </summary>
-    private const long MinUploadBytesPerSecond = 8 * 1024;
-
-    /// <summary>
-    /// Floor for the attachment-upload deadline, so tiny files still get a sane
-    /// allowance for connection setup, TLS, and server processing.
-    /// </summary>
-    private static readonly TimeSpan MinUploadTimeout = TimeSpan.FromSeconds(60);
-
     private readonly HttpClient _http;
     private readonly HttpClient _uploadHttp;
     private readonly FeatureSyncRetryPolicy _retry;
@@ -504,17 +489,7 @@ public sealed class GeoServicesFeatureSync
                 string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
         content.Add(filePart, "attachment", Path.GetFileName(filePath));
 
-        // Bound the upload with a deadline sized to the file, NOT a flat per-request
-        // timeout. _uploadHttp is configured with an effectively-infinite
-        // HttpClient.Timeout precisely so this size-derived budget governs instead:
-        // a multi-hundred-MB attachment over a slow field uplink cannot complete in
-        // the 30s the small query/edit requests use, so reusing that cap here would
-        // abort every large upload regardless of progress. The deadline is generous
-        // (min-throughput floor) so an upload that is making forward progress
-        // finishes, while a truly stalled one still fails instead of hanging forever.
-        var uploadBudget = ComputeUploadTimeout(fileStream.Length);
-        using var uploadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        uploadCts.CancelAfter(uploadBudget);
+        using var uploadCts = UploadDeadline.Start(fileStream.Length, cancellationToken);
 
         // Convert transport faults into a failed result like SubmitBatchAsync/
         // QueryAsync/PostEditsAsync do, rather than letting them escape: an uncaught
@@ -545,27 +520,6 @@ public sealed class GeoServicesFeatureSync
         }
 
         return ParseAttachmentResult(body);
-    }
-
-    /// <summary>
-    /// Derives an attachment-upload deadline from the file size: the time it would
-    /// take to send the body at <see cref="MinUploadBytesPerSecond"/>, floored at
-    /// <see cref="MinUploadTimeout"/>. This replaces a flat wall-clock timeout so
-    /// large media on a slow link is judged on whether it is making progress, not
-    /// on a fixed cap it can never beat.
-    /// </summary>
-    /// <param name="fileLengthBytes">Size of the file being uploaded, in bytes.</param>
-    /// <returns>The per-request deadline for the upload.</returns>
-    private static TimeSpan ComputeUploadTimeout(long fileLengthBytes)
-    {
-        if (fileLengthBytes <= 0)
-        {
-            return MinUploadTimeout;
-        }
-
-        var seconds = (double)fileLengthBytes / MinUploadBytesPerSecond;
-        var derived = TimeSpan.FromSeconds(seconds);
-        return derived > MinUploadTimeout ? derived : MinUploadTimeout;
     }
 
     /// <summary>

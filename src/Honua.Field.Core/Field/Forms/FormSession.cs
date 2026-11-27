@@ -58,7 +58,8 @@ public sealed class FormSession : ICaptureHost
         IReadOnlyDictionary<string, RecordLinkBehavior>? linkBehaviors = null,
         IEnumerable<FormFieldValidationRule>? validationRules = null,
         PublishedXlsFormExpressions? expressions = null,
-        FormSession? parent = null)
+        FormSession? parent = null,
+        IReadOnlyDictionary<string, object?>? defaults = null)
     {
         // When a localization service is supplied (BACKLOG F2), the runtime binds to
         // the form localized to the active language. Field ids, types, validation,
@@ -113,7 +114,7 @@ public sealed class FormSession : ICaptureHost
         foreach (var section in form.Sections.Where(s => s.Repeatable))
         {
             var bounds = repeatBounds is not null && repeatBounds.TryGetValue(section.SectionId, out var b) ? b : null;
-            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds, expressions, this);
+            _groups[section.SectionId] = new RepeatGroup(form, section, RepeatGroup.ReadRows(record, section.SectionId), bounds, expressions, this, defaults);
         }
     }
 
@@ -316,8 +317,9 @@ public sealed class FormSession : ICaptureHost
         FieldRecord record,
         IReadOnlyDictionary<string, RepeatBounds>? repeatBounds,
         PublishedXlsFormExpressions? expressions,
-        FormSession? parent = null)
-        => new(form, record, repeatBounds, expressions: expressions, parent: parent);
+        FormSession? parent = null,
+        IReadOnlyDictionary<string, object?>? defaults = null)
+        => new(form, record, repeatBounds, expressions: expressions, parent: parent, defaults: defaults);
 
     internal static FormSession CreatePublished(
         FormDefinition form,
@@ -329,7 +331,7 @@ public sealed class FormSession : ICaptureHost
         ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
         var record = new FieldRecord { RecordId = recordId, FormId = form.FormId };
         ApplyResolvedDefaults(form, record, defaults);
-        return OpenPublished(form, record, repeatBounds, expressions);
+        return OpenPublished(form, record, repeatBounds, expressions, defaults: defaults);
     }
 
     /// <summary>Gets the live state for a field.</summary>
@@ -437,7 +439,7 @@ public sealed class FormSession : ICaptureHost
         return true;
     }
 
-    /// <summary>Adds a new, empty row to a repeatable section.</summary>
+    /// <summary>Adds a new row to a repeatable section with any configured published defaults.</summary>
     /// <param name="sectionId">Repeatable section id.</param>
     /// <returns>The new row.</returns>
     public RepeatInstance AddRepeatInstance(string sectionId) => GetRepeat(sectionId).AddInstance();
@@ -753,7 +755,7 @@ public sealed class FormSession : ICaptureHost
     /// fields are never defaulted (the former is recomputed, the latter is
     /// host-local), and unknown field ids are ignored.
     /// </summary>
-    private static void ApplyResolvedDefaults(
+    internal static void ApplyResolvedDefaults(
         FormDefinition form,
         FieldRecord target,
         IReadOnlyDictionary<string, object?> defaults)
@@ -767,7 +769,7 @@ public sealed class FormSession : ICaptureHost
 
             if (defaults.TryGetValue(field.FieldId, out var value) && value is not null)
             {
-                target.Values[field.FieldId] = value;
+                target.Values[field.FieldId] = value is Array array ? array.Clone() : value;
             }
         }
     }

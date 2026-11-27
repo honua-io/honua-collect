@@ -16,6 +16,8 @@ container=${HONUA_E2E_PG_CONTAINER:-honua-field-xlsform-pg}
 database=${HONUA_E2E_PG_DATABASE:-honua}
 user=${HONUA_E2E_PG_USER:-postgres}
 form=field_runtime_inspection
+repeat_note_default='Offline visit one'
+fixture_ready='.package.offlinePolicy.enabled == true and ([.package.fields[] | select(.fieldId == "note") | .defaultValue] == [$note])'
 
 working_dir=$(mktemp -d)
 trap 'rm -r -- "$working_dir"' EXIT
@@ -57,7 +59,7 @@ if ! curl --fail --silent -H @"$working_dir/admin-header" "$base/api/v1/forms/$f
         jq -c . "$working_dir/draft" >&2
         exit 1
     fi
-elif ! jq -e '.package.offlinePolicy.enabled == true' "$working_dir/published" >/dev/null; then
+elif ! jq -e --arg note "$repeat_note_default" "$fixture_ready" "$working_dir/published" >/dev/null; then
     version=$(jq -er '.version' "$working_dir/published")
     curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -X POST \
         "$base/api/v1/admin/forms/$form/versions/$version/reopen" > "$working_dir/draft"
@@ -65,7 +67,10 @@ fi
 if [[ -s $working_dir/draft ]]; then
     version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/draft")
     printf 'If-Match: %s\n' "$(jq -er '.etag' "$working_dir/draft")" > "$working_dir/etag-header"
-    jq -e '.package.offlinePolicy.enabled = true | .package' "$working_dir/draft" > "$working_dir/package"
+    # The workbook importer currently leaves literal defaults to the published package API.
+    jq -e --arg note "$repeat_note_default" '.package | .offlinePolicy.enabled = true
+        | (.fields[] | select(.fieldId == "note") | .defaultValue) = $note' \
+        "$working_dir/draft" > "$working_dir/package"
     if ! curl --fail-with-body --silent --show-error -H @"$working_dir/admin-header" -H @"$working_dir/etag-header" \
         -H 'Content-Type: application/json' -X PUT --data-binary @"$working_dir/package" \
         "$base/api/v1/admin/forms/$form/versions/$version" > "$working_dir/updated"; then
@@ -78,7 +83,8 @@ if [[ -s $working_dir/draft ]]; then
         exit 1
     fi
 fi
-version=$(jq -er 'select(.package.offlinePolicy.enabled == true) | .version | select(type == "number" and . > 0)' "$working_dir/published")
+jq -e --arg note "$repeat_note_default" "$fixture_ready" "$working_dir/published" >/dev/null
+version=$(jq -er '.version | select(type == "number" and . > 0)' "$working_dir/published")
 echo "Published $form version $version at $base."
 
 # Only the disposable fixture worker key goes to the device.

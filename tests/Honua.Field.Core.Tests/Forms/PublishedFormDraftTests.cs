@@ -27,7 +27,7 @@ public sealed class PublishedFormDraftTests
               {"fieldId": "date", "type": "date"},
               {"fieldId": "total", "type": "number"},
               {"fieldId": "photo", "type": "attachment"},
-              {"fieldId": "note", "type": "text"},
+              {"fieldId": "note", "type": "text", "defaultValue": "walk-through"},
               {"fieldId": "rowPhoto", "type": "attachment"}
             ],
             "sections": [
@@ -77,9 +77,12 @@ public sealed class PublishedFormDraftTests
             ]);
             photo = photoOverlay.ApplyTo(photoMetadata.ApplyTo(photo));
             session.AddMedia(photo);
-            session.AddRepeatInstance("visits").SetValue("note", "first");
+            var first = session.AddRepeatInstance("visits");
+            Assert.Equal("walk-through", first.GetValue("note"));
+            first.SetValue("note", "first");
             var second = session.AddRepeatInstance("visits");
-            second.SetValue("note", "second");
+            Assert.Equal("walk-through", second.GetValue("note"));
+            second.SetValue("note", null);
             second.AddMedia(photo with { AttachmentId = "evidence-2", FieldId = "rowPhoto" });
 
             var book = new RecordBook(new SqliteRecordStore(database, "draft-test-key"));
@@ -90,6 +93,13 @@ public sealed class PublishedFormDraftTests
             selected[0] = "unsaved";
             session.SetValue("total", 99m);
             Assert.Equal(20.25m, Assert.Single(book.All).Record.Values["total"]);
+            var warmDraft = Assert.IsType<PublishedFormDraft>(Assert.Single(book.All).PublishedDraft);
+            var (_, warmSession) = warmDraft.Open("inspection", "stable-id", Server);
+            var warmGroup = warmSession.GetRepeat("visits");
+            Assert.Collection(warmGroup.Instances,
+                row => Assert.Equal("first", row.GetValue("note")),
+                row => Assert.Null(row.GetValue("note")));
+            Assert.Equal("walk-through", warmGroup.AddInstance().GetValue("note"));
             if (hasNewerCachedVersion)
             {
                 await File.WriteAllTextAsync(packageFile, """
@@ -138,10 +148,13 @@ public sealed class PublishedFormDraftTests
                 row => Assert.Equal("first", row.GetValue("note")),
                 row =>
                 {
-                    Assert.Equal("second", row.GetValue("note"));
+                    Assert.Null(row.GetValue("note"));
                     Assert.Equal("evidence-2", Assert.Single(row.GetField("rowPhoto").Media).AttachmentId);
                 });
 
+            var added = group.AddInstance();
+            Assert.Equal("walk-through", added.GetValue("note"));
+            Assert.True(group.RemoveInstance(added.InstanceId));
             Assert.True(reopened.Validate().IsValid);
             reopened.Record.Status = RecordStatus.Submitted;
             var snapshot = PublishedFormDraft.Capture(reopenedPackage, reopened, Server);
@@ -166,7 +179,7 @@ public sealed class PublishedFormDraftTests
             Assert.Equal(location, correction.GetValue("where"));
             Assert.Equal(new[] { "open", "closed" }, Assert.IsType<string[]>(correction.GetValue("status")));
             Assert.Equal(photo.AttachmentId, Assert.Single(correction.GetField("photo").Media).AttachmentId);
-            Assert.Equal("second", correction.GetRepeat("visits").Instances[1].GetValue("note"));
+            Assert.Null(correction.GetRepeat("visits").Instances[1].GetValue("note"));
 
             var correctionDraft = PublishedFormDraft.Capture(correctionPackage, correction, Server) with { ReplacesRejectedSubmission = true };
             await reopenedBook.SaveDraftAsync(correction.Record, correctionDraft);

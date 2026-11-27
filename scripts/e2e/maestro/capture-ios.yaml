@@ -48,18 +48,19 @@ appId: io.honua.collect
 - scrollUntilVisible:
     element:
       id: 'note'
-- tapOn:
+- assertVisible:
     id: 'note'
+    text: Offline visit one
     index: 0
-- inputText: Offline visit one
-- pressKey: Enter
 - scrollUntilVisible:
     element:
       id: 'note'
       index: 1
 - tapOn:
     id: 'note'
+    text: Offline visit one
     index: 1
+- eraseText
 - inputText: Offline visit two
 - pressKey: Enter
 - scrollUntilVisible:

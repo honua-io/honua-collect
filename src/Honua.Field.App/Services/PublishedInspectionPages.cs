@@ -83,7 +83,9 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
             // If a response was lost, replay the identical request under the same idempotency key.
             pending ??= PublishedFormSubmission.Capture(package, session, settings.BaseUri, idempotencyKey: attemptKey);
             model.EditingEnabled = false;
-            using var http = clients.CreateClient(MauiProgram.ServerHttpClient);
+            using var http = clients.CreateClient(pending.Files.Count > 0
+                ? MauiProgram.UploadHttpClient
+                : MauiProgram.ServerHttpClient);
             var receipt = await pending.UploadAsync(http);
             if (!receipt.Success)
             {

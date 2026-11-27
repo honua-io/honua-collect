@@ -595,6 +595,65 @@ public class FormPackageClientTests
         Assert.Equal(10, changed.RootElement.GetProperty("values").GetProperty("quantity").GetDecimal());
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Published_evidence_upload_preserves_caller_cancellation_and_marks_an_interrupted_receipt_retryable(
+        bool callerCancels)
+    {
+        var evidence = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(evidence, [7, 8, 9]);
+            var server = new Uri("https://field.example/");
+            var snapshot = new PublishedFormSubmission("inspection", "{}",
+                [new SubmissionFile("file0", evidence, "image/png", "evidence.png"),
+                 new SubmissionFile("file1", evidence, "image/png", "evidence-2.png")], server.AbsoluteUri);
+            using var cancellation = new CancellationTokenSource();
+            using var http = new HttpClient(new InterruptedUploadHandler(callerCancels ? cancellation : null))
+            {
+                BaseAddress = server,
+                Timeout = Timeout.InfiniteTimeSpan,
+            };
+
+            if (callerCancels)
+            {
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => snapshot.UploadAsync(http, cancellation.Token));
+            }
+            else
+            {
+                var result = await snapshot.UploadAsync(http, cancellation.Token);
+                Assert.False(result.Success);
+                Assert.False(result.CanCorrectSubmission);
+                Assert.Contains("receipt", result.Error);
+            }
+        }
+        finally
+        {
+            File.Delete(evidence);
+        }
+    }
+
+    private sealed class InterruptedUploadHandler(CancellationTokenSource? caller) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var multipart = Assert.IsType<MultipartFormDataContent>(request.Content);
+            Assert.Equal(3, multipart.Count());
+            var contentLength = multipart.Headers.ContentLength;
+            var bytes = await multipart.ReadAsByteArrayAsync(cancellationToken);
+            Assert.Equal<long?>(bytes.LongLength, contentLength);
+            Assert.True(contentLength > 8); // Two three-byte files, a two-byte envelope, and multipart framing.
+            caller?.Cancel();
+            if (caller is not null)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            throw new OperationCanceledException(new CancellationToken(canceled: true));
+        }
+    }
+
     private sealed class MultipartHandler(string envelope, bool includeReceipt) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

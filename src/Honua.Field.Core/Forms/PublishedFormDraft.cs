@@ -70,9 +70,10 @@ public sealed record PublishedFormDraft(string FormId, string RecordId, string S
         RestoreFields(session, state.Fields);
         foreach (var group in state.Repeats)
         {
+            var repeat = session.GetRepeat(group.Key);
             foreach (var row in group.Value)
             {
-                RestoreFields(session.AddRepeatInstance(group.Key), row);
+                RestoreFields(repeat.AddRestoredInstance(), row);
             }
         }
 

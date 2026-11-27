@@ -37,18 +37,39 @@ appId: io.honua.collect
 - scrollUntilVisible:
     element:
       id: '(.*:id/)?note'
-- tapOn:
-    id: '(.*:id/)?note'
-    index: 0
-- inputText: Offline visit one
-- hideKeyboard
+- runFlow:
+    when:
+      true: ${LEGACY_CAPTURE == 'true'}
+    commands:
+      - tapOn:
+          id: '(.*:id/)?note'
+          index: 0
+      - inputText: Offline visit one
+      - hideKeyboard
+- runFlow:
+    when:
+      true: ${LEGACY_CAPTURE != 'true'}
+    commands:
+      - assertVisible:
+          id: '(.*:id/)?note'
+          text: Offline visit one
+          index: 0
 - scrollUntilVisible:
     element:
       id: '(.*:id/)?note'
       index: 1
+- runFlow:
+    when:
+      true: ${LEGACY_CAPTURE != 'true'}
+    commands:
+      - assertVisible:
+          id: '(.*:id/)?note'
+          text: Offline visit one
+          index: 1
 - tapOn:
     id: '(.*:id/)?note'
     index: 1
+- eraseText
 - inputText: Offline visit two
 - hideKeyboard
 - scrollUntilVisible:

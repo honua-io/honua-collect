@@ -86,7 +86,7 @@ public sealed class PublishedFormPackage
 
     internal string EnvelopeJson { get; }
 
-    internal FormSession OpenRecord(FieldRecord record) => FormSession.OpenPublished(Definition, record, _repeatBounds, _expressions);
+    internal FormSession OpenRecord(FieldRecord record) => FormSession.OpenPublished(Definition, record, _repeatBounds, _expressions, defaults: _defaults);
 
     /// <summary>The form definition for the capture runtime.</summary>
     public FormDefinition Definition { get; }

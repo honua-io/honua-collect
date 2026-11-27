@@ -214,7 +214,8 @@ def seed(args, device):
 
     for flow, name in (("capture", QUEUE_NAME), ("resume-draft", QUEUE_NAME), ("capture", DRAFT_NAME)):
         stop(device)
-        run_flow(args, "before-queued" if name == QUEUE_NAME else "before-saved", flow, INSPECTION_NAME=name)
+        run_flow(args, "before-queued" if name == QUEUE_NAME else "before-saved", flow,
+                 INSPECTION_NAME=name, LEGACY_CAPTURE="true")
     evidence = snapshot(args, device, "before")
     check(evidence["formVersion"] == form["version"], "Cached form version differs from downloaded version")
     write_report(args, "before", {"identity": identity, "storage": evidence})

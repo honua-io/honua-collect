@@ -18,7 +18,7 @@ namespace Honua.Field.App.Views;
 /// </summary>
 public partial class SyncPage : ContentPage
 {
-    private readonly HttpClient _forms;
+    private readonly IHttpClientFactory _clients;
     private readonly AppSettings _settings;
     private readonly RecordBook _book;
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
@@ -34,7 +34,7 @@ public partial class SyncPage : ContentPage
         ILogger<SyncCenterViewModel>? logger = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _forms = clients.CreateClient(MauiProgram.ServerHttpClient);
+        _clients = clients ?? throw new ArgumentNullException(nameof(clients));
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
         _pullProgressStore = pullProgressStore ?? throw new ArgumentNullException(nameof(pullProgressStore));
@@ -63,7 +63,10 @@ public partial class SyncPage : ContentPage
                 return FeatureSyncResult.Fail("This published form submission only supports creation.");
             }
 
-            return await submission.UploadAsync(_forms, cancellationToken);
+            using var http = _clients.CreateClient(submission.Files.Count > 0
+                ? MauiProgram.UploadHttpClient
+                : MauiProgram.ServerHttpClient);
+            return await submission.UploadAsync(http, cancellationToken);
         }
 
         var sync = _syncFactory();

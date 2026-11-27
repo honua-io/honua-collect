@@ -110,7 +110,24 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
             }
         }
 
-        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        // Multipart content has a known length because the evidence streams are seekable.
+        // Include the envelope and all evidence in the budget for this single request.
+        using var deadline = request.Content is MultipartFormDataContent multipart
+            ? UploadDeadline.Start(multipart.Headers.ContentLength!.Value, cancellationToken)
+            : null;
+        var requestToken = deadline?.Token ?? cancellationToken;
+        HttpResponseMessage response;
+        try
+        {
+            // The default completion option also buffers the receipt within the deadline.
+            response = await http.SendAsync(request, requestToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return FeatureSyncResult.Fail("The form submission timed out before the server receipt was confirmed.");
+        }
+
+        using var received = response;
         if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.BadRequest)
         {
             return FeatureSyncResult.Fail($"Form submission returned HTTP {(int)response.StatusCode}.", (int)response.StatusCode);

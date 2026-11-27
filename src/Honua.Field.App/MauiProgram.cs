@@ -30,9 +30,8 @@ public static class MauiProgram
 	/// Named HTTP client for large attachment/media uploads to the server. Same
 	/// base address, auth handler, and certificate pinning as <see cref="ServerHttpClient"/>,
 	/// but with an effectively-infinite <see cref="HttpClient.Timeout"/>: the upload
-	/// is bounded by a per-request, file-size-derived deadline inside
-	/// GeoServicesFeatureSync instead, so a multi-hundred-MB attachment on a slow
-	/// field uplink isn't aborted by the short total timeout the small query/edit
+	/// is bounded by a per-request deadline sized to the upload body. A large attachment
+	/// on a slow field uplink isn't aborted by the short total timeout the small query/edit
 	/// requests use.
 	/// </summary>
 	public const string UploadHttpClient = "honua-upload";
@@ -189,8 +188,7 @@ public static class MauiProgram
 		// can be tens to hundreds of MB; HttpClient.Timeout is a total per-request
 		// deadline that covers the streamed body, so the 30s ServerRequestTimeout
 		// would abort any large upload on a slow field link regardless of progress.
-		// GeoServicesFeatureSync.AddAttachmentAsync applies its own size-derived
-		// per-request deadline instead, so this client is left effectively unbounded.
+		// Each media transport applies a size-derived per-request deadline.
 		builder.Services.AddHttpClient(UploadHttpClient, client =>
 			{
 				client.BaseAddress = settings.BaseUri;

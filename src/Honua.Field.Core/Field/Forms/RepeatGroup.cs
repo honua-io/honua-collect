@@ -37,6 +37,7 @@ public sealed class RepeatGroup
     private readonly List<RepeatInstance> _instances = [];
     private readonly PublishedXlsFormExpressions? _expressions;
     private readonly FormSession? _parent;
+    private readonly IReadOnlyDictionary<string, object?>? _defaults;
     private int _nextOrdinal;
 
     internal RepeatGroup(
@@ -45,12 +46,14 @@ public sealed class RepeatGroup
         IEnumerable<IReadOnlyDictionary<string, object?>> seededRows,
         RepeatBounds? bounds = null,
         PublishedXlsFormExpressions? expressions = null,
-        FormSession? parent = null)
+        FormSession? parent = null,
+        IReadOnlyDictionary<string, object?>? defaults = null)
     {
         _section = section;
         Bounds = bounds;
         _expressions = expressions;
         _parent = parent;
+        _defaults = defaults;
 
         // A single-section, non-repeatable form that each row is captured against.
         _instanceForm = new FormDefinition
@@ -81,9 +84,11 @@ public sealed class RepeatGroup
     /// <summary>Number of captured rows.</summary>
     public int Count => _instances.Count;
 
-    /// <summary>Adds a new, empty row and returns it.</summary>
+    /// <summary>Adds a new row with any configured published defaults and returns it.</summary>
     /// <returns>The new row.</returns>
-    public RepeatInstance AddInstance() => Add(seed: null);
+    public RepeatInstance AddInstance() => Add(seed: null, _defaults);
+
+    internal RepeatInstance AddRestoredInstance() => Add(seed: null);
 
     /// <summary>Removes a row by its instance id.</summary>
     /// <param name="instanceId">Row identifier.</param>
@@ -94,7 +99,9 @@ public sealed class RepeatGroup
         return _instances.RemoveAll(i => string.Equals(i.InstanceId, instanceId, StringComparison.Ordinal)) > 0;
     }
 
-    private RepeatInstance Add(IReadOnlyDictionary<string, object?>? seed)
+    private RepeatInstance Add(
+        IReadOnlyDictionary<string, object?>? seed,
+        IReadOnlyDictionary<string, object?>? defaults = null)
     {
         var instanceId = $"{SectionId}#{_nextOrdinal++}";
         var record = new FieldRecord { RecordId = instanceId, FormId = _instanceForm.FormId };
@@ -105,6 +112,11 @@ public sealed class RepeatGroup
             {
                 record.Values[pair.Key] = pair.Value;
             }
+        }
+
+        if (defaults is not null)
+        {
+            FormSession.ApplyResolvedDefaults(_instanceForm, record, defaults);
         }
 
         var instance = new RepeatInstance(instanceId, FormSession.OpenPublished(_instanceForm, record, repeatBounds: null, _expressions, _parent));
