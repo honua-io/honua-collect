@@ -1,30 +1,30 @@
 [
   {
-    "source": "honua-task-sdk-validation",
     "repo": "honua-io/honua-sdk-dotnet",
-    "run": 45962153231,
-    "id": 15182046058,
-    "revision": "aa9c90c9c6dc355e09a6e0215e51e698f9cfe7c8",
-    "sha256": "77f78e7219a60e5669172e2e2db1f37a24ee0bc40807ae38efc76b68135d5650",
-    "version": "5.1.1-fieldtasks.3",
-    "packages": [
-      "Honua.Sdk.Abstractions",
-      "Honua.Sdk.Field"
-    ]
+    "run": 45973639431,
+    "revision": "b8427e9213a214e532daad9fa0052ba3fcc313f3",
+    "id": 15186337359,
+    "sha256": "9bd9025ade1c487a7c654f7c063da2225c2ece8beb9e9859a4447cff4c576a59",
+    "source": "sdk-validation",
+    "version": "5.1.1-fieldcombined.1",
+    "packages": {
+      "Honua.Sdk.Abstractions": "596e0f8ff642708e9b510b8cc2ef5bda81c925d105a97a20050f3384566bc3ba",
+      "Honua.Sdk.Field": "c8ad120f9a3850caa3e2bfec0858a9ef6cc6a0a2f473f47cb6315864153f4f42"
+    }
   },
   {
-    "source": "honua-mobile-task-validation",
     "repo": "honua-io/honua-mobile",
-    "run": 45963856191,
-    "id": 15181667508,
-    "revision": "ac0d7da6b1b8cd89f5d2069f6eac8de0029517ca",
-    "sha256": "0182b9bb85e0e97e63cd9886773673b2cf8db2e2defe5e8f1217012bb2a6981e",
-    "version": "0.1.0-fieldtasks.45963856191.1",
-    "packages": [
-      "Honua.Mobile.Maui",
-      "Honua.Mobile.Offline",
-      "Honua.Mobile.Offline.Tasks",
-      "Honua.Mobile.Sdk"
-    ]
+    "run": 45975064870,
+    "revision": "7803a04c83a63dd590e9e6e1215117c3cd0aa5cb",
+    "id": 15186528465,
+    "sha256": "36e1faf1bcab791d80ad6e3e67c7e770397d31459517165faa3d68b54fb668eb",
+    "source": "mobile-validation",
+    "version": "0.1.0-fieldcombined.45975064870.1",
+    "packages": {
+      "Honua.Mobile.Maui": "e54fd0af4b513c5d2a84178558ec2401c68a3c781c446237ac1e95da25fe108d",
+      "Honua.Mobile.Offline": "b89afcab5a168bfbc07a95fa7fe774f176b2981f7df1d0a30de0792cce250132",
+      "Honua.Mobile.Offline.Tasks": "7702afdef8669f83202c5b34451816bc58e1bb29e8e356e6288255cc8240bb87",
+      "Honua.Mobile.Sdk": "07e1c53f9de331fa423052ee1e59c85116ac418c440947593502307c8bddb244"
+    }
   }
 ]

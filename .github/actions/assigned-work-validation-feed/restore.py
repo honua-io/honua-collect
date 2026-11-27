@@ -3,7 +3,7 @@ import hashlib
 from io import BytesIO
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 from tempfile import mkdtemp
 import xml.etree.ElementTree as ET
@@ -30,14 +30,20 @@ for candidate in json.loads((here / "artifacts.json").read_text()):
     if metadata["workflow_run"]["id"] != candidate["run"] or metadata["digest"] != f"sha256:{candidate['sha256']}":
         raise SystemExit(f"Unexpected validation artifact metadata for {candidate['source']}")
 
-    feed = Path(mkdtemp(dir=os.environ["RUNNER_TEMP"], prefix="honua-task-feed."))
+    feed = Path(mkdtemp(dir=os.environ["RUNNER_TEMP"], prefix="honua-validation-feed."))
     archive = api(f"{artifact}/zip")
     if hashlib.sha256(archive).hexdigest() != candidate["sha256"]:
         raise SystemExit(f"Archive checksum mismatch for {candidate['source']}")
     with ZipFile(BytesIO(archive)) as packages:
-        for package_id in candidate["packages"]:
+        for package_id, digest in candidate["packages"].items():
             filename = f"{package_id}.{candidate['version']}.nupkg"
-            (feed / filename).write_bytes(packages.read(filename))
+            matches = [name for name in packages.namelist() if PurePosixPath(name).name == filename]
+            if len(matches) != 1:
+                raise SystemExit(f"Expected exactly one copy of {filename}")
+            payload = packages.read(matches[0])
+            if hashlib.sha256(payload).hexdigest() != digest:
+                raise SystemExit(f"Package checksum mismatch for {filename}")
+            (feed / filename).write_bytes(payload)
 
     ET.SubElement(sources, "add", key=candidate["source"], value=str(feed))
     mapping = ET.SubElement(source_mapping, "packageSource", key=candidate["source"])
