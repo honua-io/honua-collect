@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Text.Json;
+using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Records;
 
@@ -998,18 +999,25 @@ public class GeoServicesFeatureSyncTests
     }
 
     [Theory]
-    [InlineData(HttpRequestError.NameResolutionError, true)]
-    [InlineData(HttpRequestError.ConnectionError, false)]
-    public async Task Adds_distinguish_DNS_failure_from_an_uncertain_connection_failure(
-        HttpRequestError error, bool requestNotSent)
+    [InlineData(HttpRequestError.NameResolutionError)]
+    [InlineData(HttpRequestError.ConnectionError)]
+    public async Task Adds_hold_for_verification_after_transport_failure(HttpRequestError error)
     {
         using var http = new HttpClient(new ThrowingHandler(new HttpRequestException(error, "network failure")));
         var sync = new GeoServicesFeatureSync(http, FastRetry);
 
         var direct = await sync.SubmitAsync(Record(), T);
         var batch = Assert.Single(await sync.SubmitBatchAsync([Record()], T));
-        Assert.Equal(requestNotSent, direct.RequestNotSent);
-        Assert.Equal(requestNotSent, batch.RequestNotSent);
+        foreach (var result in new[] { direct, batch })
+        {
+            var record = new FieldRecordEntry(Record());
+            record.Record.Status = RecordStatus.Submitted;
+            record.MarkPending();
+            record.MarkAddNeedsVerification();
+            Assert.False(record.ApplyOrdinaryAddResult(result));
+            Assert.True(record.RequiresServerVerification);
+            Assert.False(record.IsPendingUpload);
+        }
     }
 
     [Fact]

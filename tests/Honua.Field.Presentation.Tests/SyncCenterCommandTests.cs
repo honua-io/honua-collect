@@ -216,7 +216,8 @@ public class SyncCenterCommandTests
 
         Assert.Equal(1, await vm.SyncAsync());
         Assert.Contains(("r1", RecordSyncState.Synced, "17"), persisted);
-        Assert.Contains(("r2", RecordSyncState.AddNeedsVerification, null), persisted);
+        Assert.Equal(("r2", RecordSyncState.AddNeedsVerification, null),
+            Assert.Single(persisted, change => change.RecordId == "r2"));
 
         Assert.Equal(0, await vm.SyncAsync());
         Assert.Equal(["r1", "r2"], Assert.Single(sent));

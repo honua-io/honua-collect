@@ -124,7 +124,7 @@ public sealed class FieldRecordEntry
             return true;
         }
 
-        if (!result.Success && (result.DefinitiveEditRejection || result.RequestNotSent))
+        if (!result.Success && result.DefinitiveEditRejection)
         {
             MarkFailed(result.FailureDescription);
             SyncState = RecordSyncState.AddRejected;

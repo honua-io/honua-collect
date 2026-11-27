@@ -455,7 +455,10 @@ public sealed class SyncCenterViewModel : ObservableObject
                 }
             }
 
-            await PersistAsync(entry);
+            if (!entry.RequiresServerVerification)
+            {
+                await PersistAsync(entry);
+            }
         }
 
         return synced;
@@ -509,7 +512,10 @@ public sealed class SyncCenterViewModel : ObservableObject
                     synced++;
                 }
 
-                await PersistAsync(chunk[i]);
+                if (!chunk[i].RequiresServerVerification)
+                {
+                    await PersistAsync(chunk[i]);
+                }
             }
         }
 

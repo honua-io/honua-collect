@@ -78,6 +78,6 @@ public class RecordBoxViewModelTests
 
         Assert.Equal("Draft", draft.StatusText);
         Assert.StartsWith("Sent", sent.StatusText);
-        Assert.Contains("Failed", failed.StatusText);
+        Assert.Equal(FieldRecordEntry.OrdinaryAddVerificationMessage, failed.StatusText);
     }
 }

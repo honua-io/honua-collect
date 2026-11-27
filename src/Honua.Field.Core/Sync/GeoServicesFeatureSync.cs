@@ -54,9 +54,6 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
     /// <summary>The server explicitly rejected this edit without assigning an object ID.</summary>
     public bool DefinitiveEditRejection { get; init; }
 
-    /// <summary>The add did not reach the server, so retrying it is safe.</summary>
-    public bool RequestNotSent { get; init; }
-
     /// <summary>
     /// A single one-line description of this result's failure (message plus code when
     /// present), suitable for surfacing in the sync center; empty when successful.
@@ -206,7 +203,7 @@ public sealed class GeoServicesFeatureSync
     /// may have committed before the connection dropped) it is impossible to tell
     /// whether the add already committed, so this method does <strong>not</strong>
     /// auto-retry an add in that ambiguous window — it surfaces the failure for the
-    /// caller to reconcile (re-queue once) instead of silently duplicating. Adds are
+    /// caller to verify the outcome on the server before retrying. Adds are
     /// still retried on a server-acknowledged transient per-edit failure
     /// (HTTP 200 with <c>success:false</c> under <c>rollbackOnFailure</c>), which is
     /// provably non-committed.
@@ -307,7 +304,7 @@ public sealed class GeoServicesFeatureSync
         }
         catch (HttpRequestException ex)
         {
-            return FailEach(records.Count, ex.Message, requestNotSent: ex.HttpRequestError == HttpRequestError.NameResolutionError);
+            return FailEach(records.Count, ex.Message);
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -348,10 +345,10 @@ public sealed class GeoServicesFeatureSync
         return ParseBatchResults(body, count, response.StatusCode);
     }
 
-    private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null, bool requestNotSent = false)
+    private static IReadOnlyList<FeatureSyncResult> FailEach(int count, string error, int? code = null)
     {
         var results = new FeatureSyncResult[count];
-        Array.Fill(results, FeatureSyncResult.Fail(error, code) with { RequestNotSent = requestNotSent });
+        Array.Fill(results, FeatureSyncResult.Fail(error, code));
         return results;
     }
 
@@ -359,7 +356,7 @@ public sealed class GeoServicesFeatureSync
     {
         var httpError = (int)status is >= 200 and < 300 ? null : (int?)status;
         var unresolved = httpError is null
-            ? FeatureSyncResult.Fail("The server returned no valid result for this record.")
+            ? FeatureSyncResult.Fail("The server returned no addResults entry that confirms the outcome for this record.")
             : FeatureSyncResult.Fail($"HTTP {httpError}: {body}", httpError);
 
         try
@@ -974,10 +971,7 @@ public sealed class GeoServicesFeatureSync
             }
             catch (HttpRequestException ex)
             {
-                result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt)
-                {
-                    RequestNotSent = !idempotent && ex.HttpRequestError == HttpRequestError.NameResolutionError
-                };
+                result = new FeatureSyncResult(false, null, ex.Message, Attempts: attempt);
                 // A transport failure left no server response, so a non-idempotent
                 // add is ambiguous (it may have committed) — never auto-retry it.
                 if (!idempotent || isLast)

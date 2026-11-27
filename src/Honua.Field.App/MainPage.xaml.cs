@@ -147,7 +147,11 @@ public partial class MainPage : ContentPage
             var sync = _syncFactory();
             var result = await sync.SubmitAsync(record, _settings.Target);
             var synced = entry.ApplyOrdinaryAddResult(result);
-            await _book.SaveAsync(entry);
+            if (!entry.RequiresServerVerification)
+            {
+                await _book.SaveAsync(entry);
+            }
+
             if (synced)
             {
                 await UploadAttachmentsAsync(session, sync, result.ObjectId);

@@ -263,6 +263,44 @@ public sealed class MobileRecordStoreTests
         Assert.Null(restored.Conflict);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Ordinary_add_hold_blocks_stale_writer_until_definite_rejection(bool useMobileStore)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        var first = await OpenAsync();
+        var second = await OpenAsync();
+        var record = CreateRecord("ordinary-add");
+        record.Status = RecordStatus.Submitted;
+        await new RecordBook(first).AddSubmittedAsync(record);
+        var claimant = Assert.Single(await first.LoadAllAsync());
+        var stale = Assert.Single(await second.LoadAllAsync());
+
+        await claimant.PrepareOrdinaryAddAsync(entry => first.SaveAsync(entry));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            stale.PrepareOrdinaryAddAsync(entry => second.SaveAsync(entry)));
+        Assert.True(stale.IsPendingUpload);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => second.SaveAsync(stale));
+
+        var reopened = await OpenAsync();
+        var held = Assert.Single(await reopened.LoadAllAsync());
+        Assert.True(held.RequiresServerVerification);
+        Assert.False(held.IsPendingUpload);
+
+        claimant.ApplyOrdinaryAddResult(FeatureSyncResult.Fail("value rejected") with { DefinitiveEditRejection = true });
+        await first.SaveAsync(claimant);
+        var rejected = Assert.Single(await reopened.LoadAllAsync());
+        Assert.Equal(RecordSyncState.AddRejected, rejected.SyncState);
+        Assert.True(rejected.IsPendingUpload);
+        await rejected.PrepareOrdinaryAddAsync(entry => reopened.SaveAsync(entry));
+        Assert.True(Assert.Single(await second.LoadAllAsync()).RequiresServerVerification);
+
+        async Task<IRecordStore> OpenAsync() => useMobileStore
+            ? await directory.ReopenAsync()
+            : await SqliteRecordStore.OpenEncryptedAsync(directory.Database, "device-test-key");
+    }
+
     private sealed class TemporaryRecordDirectory : IDisposable
     {
         private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory();
