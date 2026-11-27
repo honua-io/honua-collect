@@ -21,7 +21,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 {
     private const string TableName = "collect_records";
 
-    private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
+    internal static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
 
     /// <summary>
     /// Creates a store over the given connection string or database file path.
@@ -220,7 +220,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
     /// its internal bookkeeping (error, retry count, timestamps) is consistent with
     /// the stored transport state, rather than fabricated by direct assignment.
     /// </summary>
-    private static void Rehydrate(
+    internal static void Rehydrate(
         FieldRecordEntry entry,
         RecordSyncState syncState,
         string? remoteId,

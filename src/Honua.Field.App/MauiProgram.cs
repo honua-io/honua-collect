@@ -251,7 +251,7 @@ public static class MauiProgram
 		// book builds the store lazily so the encryption key is fetched from secure
 		// storage off the UI thread (no startup blocking).
 		builder.Services.AddSingleton(_ => new LazyRecordStore(async () =>
-			await SqliteRecordStore.OpenEncryptedAsync(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false)).ConfigureAwait(false)));
+			await MobileRecordStore.OpenEncryptedAsync(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false)).ConfigureAwait(false)));
 		builder.Services.AddSingleton<IRecordStore>(sp => sp.GetRequiredService<LazyRecordStore>());
 		builder.Services.AddSingleton(sp => new RecordBook(sp.GetRequiredService<IRecordStore>()));
 		builder.Services.AddSingleton<IRelatedRecordStore>(_ => new LazyRelatedRecordStore(async _ =>

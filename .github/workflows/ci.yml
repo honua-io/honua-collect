@@ -17,12 +17,16 @@ jobs:
     # .gitleaks.toml; any new/different secret fails here.
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       packages: read
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # full history so gitleaks can scan every commit
+      - uses: ./.github/actions/mobile-validation-feed
+        with:
+          token: ${{ github.token }}
 
       - name: Secret scan (gitleaks, full history)
         run: |
@@ -92,10 +96,14 @@ jobs:
     env:
       MSBuildEnableWorkloadResolver: 'false'
     permissions:
+      actions: read
       contents: read
       packages: read
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/mobile-validation-feed
+        with:
+          token: ${{ github.token }}
 
       - name: Verify upgrade identity
         run: python3 scripts/check-upgrade-identity.py
@@ -167,10 +175,14 @@ jobs:
     env:
       MSBuildEnableWorkloadResolver: 'false'
     permissions:
+      actions: read
       contents: read
       packages: read
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/mobile-validation-feed
+        with:
+          token: ${{ github.token }}
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
@@ -196,10 +208,14 @@ jobs:
     # as well as catching App compilation failures (not just libraries/tests).
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       packages: read
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/mobile-validation-feed
+        with:
+          token: ${{ github.token }}
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
