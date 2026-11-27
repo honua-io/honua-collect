@@ -52,7 +52,7 @@ Field reads and writes GeoServices REST feature services, including services hos
 | Point / line / polygon geometry capture | ✅ (logic) / 🟡 (map surface) | [`GeometryCaptureSession`](../src/Honua.Field.Core/Field/Geometry/GeometryCaptureSession.cs); 2D map widget is app-layer ([#35](https://github.com/honua-io/honua-field/issues/35)) |
 | RFC 7946 GeoJSON geometry output | ✅ | `GeometryCaptureSession` |
 | GPS averaging for higher-accuracy vertices | ✅ | [`GpsAverager`](../src/Honua.Field.Core/Field/Geometry/GpsAverager.cs) |
-| Live device GPS binding (real fixes) | ✅ | The MAUI geometry screen averages three fresh fixes with reported accuracy of 25 m or better. An installed Android emulator produced the expected GeoJSON point from an injected location. [Device check](./verification/e2e/README.md#android-geometry-gps) |
+| Live device GPS binding (real fixes) | ✅ | The MAUI geometry screen averages three fresh fixes with reported accuracy of 25 m or better. An installed Android emulator produced the expected GeoJSON point from an injected location. [Device check](./verification/e2e/README.md#published-xlsform-android-gate) |
 | High-accuracy external GNSS / RTK | 🔭 | planned ([#36](https://github.com/honua-io/honua-field/issues/36)) |
 | Photo / signature capture | ✅ (policy) / 🟡 (camera surface) | [`MediaCaptureField`](../src/Honua.Field.Core/Field/Capture/MediaCaptureField.cs) enforces count/type/size; camera binding is app-layer |
 | Photo annotation/markup (non-destructive) | ✅ | [`PhotoAnnotationOverlay`](../src/Honua.Field.Core/Field/Annotation/PhotoAnnotationOverlay.cs) — original image never mutated |

@@ -27,7 +27,7 @@ The installed upgrade and receipt replay use a phone window (411 × 891 dp). Rej
 
 The geometry check draws a three-vertex polygon on a 360 × 720 dp phone window. It rotates the phone, resizes to an 800 × 1280 dp tablet window, rotates the tablet and returns to the original phone window. At each size it checks that the editing controls are visible and the exported GeoJSON has exactly the original coordinates. It also checks Undo and the home form column width. The `adaptive` artifact folder contains screenshots and the bounds of each control.
 
-The GPS geometry check uses a fresh local store on the installed candidate. It grants Android location permission, injects fresh location fixes through the emulator console, waits for the three-fix average, and verifies that Done returns a Point within 0.0001° of the injected coordinates. The `gps-geometry` artifact folder contains the screenshot and returned GeoJSON. This exercises the Android location and capture flow with mock fixes. Unit tests exercise stale and inaccurate fixes. In a local run with the signed candidate APK, the emulator supplied longitude −122.4194 and latitude 37.7749. Field returned `[-122.41939833333333, 37.7749]`. Physical receiver accuracy is tracked separately. [Field GPS change and verification](https://github.com/honua-io/honua-field/pull/211)
+The GPS geometry check uses a fresh local store on the installed candidate. It grants Android location permission, injects fresh location fixes through the emulator console, waits for the three-fix average, and verifies that Done returns a Point within 0.0001° of the injected coordinates. The `gps-geometry` artifact folder contains the screenshot and returned GeoJSON. This exercises the Android location and capture flow with mock fixes. Unit tests exercise stale and inaccurate fixes. In a local run with the signed candidate APK, the emulator supplied longitude −122.4194 and latitude 37.7749. Field returned `[-122.41939833333333, 37.7749]`. Physical receiver accuracy is tracked separately. [Hosted Android run](https://github.com/honua-io/honua-field/actions/runs/46036690515) · [GPS screenshot and coordinates](https://github.com/honua-io/honua-field/actions/runs/46036690515/artifacts/15218964014)
 
 Run the same check after installing the signed candidate APK on an unlocked disposable emulator:
 
@@ -45,10 +45,12 @@ The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45
 
 The ordinary inspection scenario captures a photo in airplane mode, submits the feature to the outbox and restarts Field. Before reconnecting, the gate checks that the server has no matching feature. It then syncs, compares the downloaded attachment byte for byte against the private copy on the phone, and restarts again to verify that the feature and attachment IDs stay the same. The counts, IDs and SHA-256 are recorded in `ordinary-photo/server-readback.json`.
 
-For a local run, install the candidate Debug APK on a disposable emulator with a freshly cleared Field sandbox. Start the seeded `mobile_offline_demo` server and use a fixture key that can add, query and read attachments on layer `68910`. The default host port is `5189`. Set `HONUA_E2E_HTTP_PORT` if your fixture uses another port. The harness toggles airplane mode and uses `adb reverse` to reconnect the app to the fixture.
+For a local run, install the candidate Debug APK on a disposable emulator with a freshly cleared Field sandbox. Start the seeded `mobile_offline_demo` server and provision a worker key with read and write access to layer `68910` as shown below. Only this key goes to the device. The default host port is `5189`. Set `HONUA_E2E_HTTP_PORT` if your fixture uses another port. The harness toggles airplane mode and uses `adb reverse` to reconnect the app to the fixture.
 
 ```bash
-python3 scripts/e2e/run-ordinary-photo-android.py emulator-5554 /tmp/field-photo-results /path/to/fixture-key
+scripts/e2e/create-fixture-worker.sh http://127.0.0.1:5189 /path/to/fixture-admin-key \
+  "mobile_offline_demo/Offline Field Sites" /path/to/worker-key
+python3 scripts/e2e/run-ordinary-photo-android.py emulator-5554 /tmp/field-photo-results /path/to/worker-key
 ```
 
 The live .NET scenario also drops the upload acknowledgement after the server stores the photo, reopens the encrypted store and checks for a duplicate feature or attachment. See the [scenario list](#comprehensive-scenario-coverage).

@@ -84,11 +84,8 @@ echo "Published $form version $version at $base."
 # Only the disposable fixture worker key goes to the device.
 if [[ -n ${HONUA_E2E_WORKER_KEY_FILE:-} ]]; then
     if [[ ! -s $HONUA_E2E_WORKER_KEY_FILE ]]; then
-        curl --fail --silent --show-error -H @"$working_dir/admin-header" -H 'Content-Type: application/json' \
-            --data-binary '{"name":"Field fixture worker","permissions":["read:field_inspections/Field Inspections","write:field_inspections/Field Inspections"]}' \
-            "$base/api/v1/admin/api-keys" > "$working_dir/worker-response"
-        jq -er '.data.key | select(type == "string" and length > 0)' "$working_dir/worker-response" > "$working_dir/worker-key"
-        install -m 600 "$working_dir/worker-key" "$HONUA_E2E_WORKER_KEY_FILE"
+        "$(dirname "$0")/create-fixture-worker.sh" "$base" "$admin_key_file" \
+            "field_inspections/Field Inspections" "$HONUA_E2E_WORKER_KEY_FILE"
     fi
     printf 'X-API-Key: %s\n' "$(cat "$HONUA_E2E_WORKER_KEY_FILE")" > "$working_dir/worker-header"
     curl --fail --silent --show-error -H @"$working_dir/worker-header" "$base/api/v1/forms/$form/versions/$version" >/dev/null
