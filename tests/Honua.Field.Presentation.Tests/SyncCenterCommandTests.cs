@@ -37,7 +37,7 @@ public class SyncCenterCommandTests
         entry.MarkPending();
         var requests = new List<PublishedFormSubmission>();
         var vm = new SyncCenterViewModel([entry], (_, _) => throw new InvalidOperationException("Legacy uploader used."),
-            puller: null,
+            puller: null, form: null,
             replayPublished: (pending, _) =>
             {
                 requests.Add(pending.PublishedSubmission!);
