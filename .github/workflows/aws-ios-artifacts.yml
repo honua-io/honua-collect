@@ -10,6 +10,9 @@ on:
         type: choice
         options: [iossimulator-arm64, ios-arm64]
         default: iossimulator-arm64
+      fixture_url:
+        description: Optional HTTPS origin for the physical workbook fixture (no credentials)
+        type: string
       previous_revision:
         description: Full revision for the installed baseline
         type: string
@@ -31,6 +34,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       FIELD_RUNTIME: ${{ inputs.runtime || (github.ref_name == 'validation/aws-physical-iphone-upgrade' && 'ios-arm64') || 'iossimulator-arm64' }}
+      FIELD_FIXTURE_URL: ${{ inputs.fixture_url }}
       FIELD_PREVIOUS: ${{ inputs.previous_revision || '6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46' }}
       FIELD_CANDIDATE: ${{ inputs.candidate_revision || 'c6551c28995ed4f15cd9db92ec5df95938ae0da4' }}
     steps:
@@ -59,6 +63,10 @@ jobs:
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
+          if [[ -n "$FIELD_FIXTURE_URL" ]]; then
+            test "$FIELD_RUNTIME" = ios-arm64
+            [[ "$FIELD_FIXTURE_URL" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?/?$ ]]
+          fi
           previous_build=0
           for checkout in field-previous .; do
             pilot=()
@@ -68,6 +76,13 @@ jobs:
             fi
             if [[ "$checkout" == "." ]]; then
               pilot=(-p:EnableAssignedWorkPilot=true)
+            fi
+            if [[ -n "$FIELD_FIXTURE_URL" ]]; then
+              settings="$checkout/src/Honua.Field.App/Resources/Raw/appsettings.json"
+              jq --arg url "$FIELD_FIXTURE_URL" \
+                '.server |= (.baseUrl = $url | .serviceId = "field_inspections" | .layerId = 68950 | .formId = "field_runtime_inspection")' \
+                "$settings" > "$settings.fixture"
+              mv "$settings.fixture" "$settings"
             fi
             (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
               -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier="$FIELD_RUNTIME" \

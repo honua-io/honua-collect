@@ -27,9 +27,19 @@ lab and requires no change to Field's distribution identity.
 Use an available physical iPhone in the `Honua-Field` Device Farm project in
 `us-west-2`. Record the model, OS and session ARN. The physical iPhone needs
 network access to a disposable HTTPS Honua Server fixture at the pinned
-revision, including the workbook publication and readback endpoints. The
-simulator fixture's loopback URL and `simctl` media injection apply only to
-the simulator. Use the native picker with a known JPEG on the physical device
+revision. Keep administrative workbook publication and evidence readback on
+the fixture operator's private connection. Public Device Farm devices need
+a credential-scoped route to the worker API. Device Farm's
+[VPC integration for private devices](https://docs.aws.amazon.com/devicefarm/latest/developerguide/vpc-eni.html)
+requires a private device and configured VPC access.
+
+The historical apps embed an Android emulator endpoint, and their iOS debug
+override accepts only development loopback addresses. Dispatch
+`AWS iOS artifacts` with `runtime=ios-arm64` and the fixture's HTTPS origin
+as `fixture_url` to package the two pinned source revisions with the
+fixture service, layer and form IDs. The origin must contain no credentials.
+Record the build run and artifact digests. The simulator's loopback override
+and `simctl` media injection apply only to the simulator. Use the native picker with a known JPEG on the physical device
 and record the digest of the bytes Field actually stored before syncing.
 
 To check device installation before setting up the workbook fixture, run
