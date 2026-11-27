@@ -26,6 +26,7 @@ journey. It is a test script, not evidence that the migration has shipped.
    with typed SDK operations. Preserve the distinction between a rejected add
    and one with an unknown outcome. Field decides how the worker verifies an
    uncertain upload before sending again.
+   [SDK GlobalID support](https://github.com/honua-io/honua-sdk-dotnet/pull/601),
    [Field #209](https://github.com/honua-io/honua-field/issues/209) and
    [Field #214](https://github.com/honua-io/honua-field/issues/214)
 3. **Consolidate XLSForm semantics.** Compare the [row importer](../src/Honua.Field.Core/Field/Forms/Authoring/XlsFormImporter.cs)
@@ -33,11 +34,16 @@ journey. It is a test script, not evidence that the migration has shipped.
    with the SDK converter and evaluator using the same workbook, answers and
    expected diagnostics. Move portable expression support upstream before
    removing the Field fallback. Field keeps widget selection and draft display.
+   [SDK `selected()` support](https://github.com/honua-io/honua-sdk-dotnet/pull/603) and
    [Field #169](https://github.com/honua-io/honua-field/issues/169)
-4. **Reuse geometry primitives.** Compare Field’s [planar geometry operations](../src/Honua.Field.Core/Field/Geometry/PlanarTopology.cs)
-   with the SDK geometry package using the same coordinate system, distances and
-   ties. Mobile supplies device positions. Field chooses the snap target and
-   tolerance for the active tool and owns undo.
+4. **Reuse geometry primitives.** When snapping is enabled, the capture session
+   calls [GeoSnapping](../src/Honua.Field.Core/Field/Geometry/GeoSnapping.cs).
+   Compare its vertex and edge results with `Honua.Sdk.Geometry` using explicit
+   coordinate systems, metre tolerances and equidistant targets. The separate
+   [PlanarTopology](../src/Honua.Field.Core/Field/Geometry/PlanarTopology.cs)
+   has only test callers in this repository. Mobile supplies device positions.
+   Field chooses the candidate targets and tolerance for the active tool and owns undo.
+   [Field #223](https://github.com/honua-io/honua-field/issues/223)
 
 ## Adapter boundary
 
