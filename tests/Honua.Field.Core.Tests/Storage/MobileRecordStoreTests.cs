@@ -179,6 +179,64 @@ public sealed class MobileRecordStoreTests
         }
     }
 
+    [Fact]
+    public async Task Published_replay_sizes_the_lease_from_relocated_media_without_changing_the_frozen_operation()
+    {
+        using var directory = new TemporaryRecordDirectory();
+        var oldMedia = Path.Combine(directory.Path, "Application", Guid.NewGuid().ToString("D"), "Library", "media");
+        var currentMedia = Path.Combine(directory.Path, "Application", Guid.NewGuid().ToString("D"), "Library", "media");
+        Directory.CreateDirectory(currentMedia);
+        var fileName = Guid.NewGuid().ToString("N") + ".jpg";
+        var oldPath = Path.Combine(oldMedia, fileName);
+        var currentPath = Path.Combine(currentMedia, fileName);
+        await using (var file = File.Create(currentPath))
+        {
+            file.SetLength(4 * 1024 * 1024);
+        }
+
+        var submission = new PublishedFormSubmission("inspection", """{"idempotencyKey":"relocated","formVersion":3}""",
+            [new SubmissionFile("photo", oldPath, "image/jpeg", fileName)], "https://field.example/")
+            { ReplayPrincipal = "test-principal" };
+        var record = CreateRecord("record");
+        record.Status = RecordStatus.Submitted;
+        var store = await directory.ReopenAsync();
+        await new RecordBook(store).AddSubmittedAsync(record, submission);
+        var pending = Assert.Single(await store.LoadAllAsync());
+
+        PublishedFormSubmission? sent = null;
+        DateTimeOffset? leaseUntil = null;
+        var claimStarted = DateTimeOffset.UtcNow;
+        Assert.False(await store.ReplayPublishedAsync(pending, async (replay, token) =>
+        {
+            sent = replay;
+            var settings = new SqliteConnectionStringBuilder
+                { DataSource = directory.Database, Password = "device-test-key", Pooling = false };
+            await using var connection = new SqliteConnection(settings.ToString());
+            await connection.OpenAsync(token);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT lease_until_utc FROM honua_local_operations WHERE document_id = 'record';";
+            if (await command.ExecuteScalarAsync(token) is string until)
+            {
+                leaseUntil = DateTimeOffset.Parse(until, System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            return FeatureSyncResult.Fail("Lost response", 503);
+        }, mediaDirectory: currentMedia));
+
+        Assert.NotNull(sent);
+        Assert.Equal(currentPath, Assert.Single(sent.Files).LocalPath);
+        Assert.Equal(submission.RequestJson, sent.RequestJson);
+        Assert.Equal(submission.ReplayPrincipal, sent.ReplayPrincipal);
+        Assert.Equal(submission.ServerBaseUrl, sent.ServerBaseUrl);
+        // Four MiB at 8 KiB/s takes 512 seconds, plus the deadline and lease margins.
+        Assert.True(leaseUntil >= claimStarted.AddSeconds(632));
+        var durable = Assert.Single(await (await directory.ReopenAsync()).LoadAllAsync());
+        Assert.Equal(RecordSyncState.Failed, durable.SyncState);
+        Assert.NotNull(durable.PublishedSubmission);
+        Assert.Equal(oldPath, Assert.Single(durable.PublishedSubmission.Files).LocalPath);
+        Assert.Equal(submission.RequestJson, durable.PublishedSubmission.RequestJson);
+    }
+
     private sealed class TemporaryRecordDirectory : IDisposable
     {
         private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory();

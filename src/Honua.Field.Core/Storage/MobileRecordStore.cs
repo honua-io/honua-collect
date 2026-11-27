@@ -86,7 +86,8 @@ public sealed class MobileRecordStore : IRecordStore
 
     /// <summary>Claims and replays one durable published-form request through the shared Mobile outbox.</summary>
     public async Task<bool> ReplayPublishedAsync(FieldRecordEntry entry,
-        Func<PublishedFormSubmission, CancellationToken, Task<FeatureSyncResult>> upload, CancellationToken ct = default)
+        Func<PublishedFormSubmission, CancellationToken, Task<FeatureSyncResult>> upload, CancellationToken ct = default,
+        string? mediaDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentNullException.ThrowIfNull(upload);
@@ -117,7 +118,8 @@ public sealed class MobileRecordStore : IRecordStore
 
         // Keep the request deadline below the lease so a second process can recover an
         // interrupted upload without contending with a live request.
-        var uploadTimeout = GetReplayTimeout(submission);
+        var replay = mediaDirectory is null ? submission : submission.ResolveMediaPaths(mediaDirectory);
+        var uploadTimeout = GetReplayTimeout(replay);
         var claim = await _store.ClaimOperationAsync(Collection, document.Id, operationId, uploadTimeout + TimeSpan.FromMinutes(1), ct)
             .ConfigureAwait(false);
         if (claim is null)
@@ -130,9 +132,12 @@ public sealed class MobileRecordStore : IRecordStore
         deadline.CancelAfter(uploadTimeout);
         try
         {
-            var frozen = JsonSerializer.Deserialize(claim.PayloadJson, MobileRecordJsonContext.Default.PublishedFormSubmission)
-                ?? throw new JsonException("Stored form submission cannot be null.");
-            result = await upload(frozen, deadline.Token).ConfigureAwait(false);
+            if (!string.Equals(claim.PayloadJson, payload, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Stored form submission does not match the claimed operation.");
+            }
+
+            result = await upload(replay, deadline.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

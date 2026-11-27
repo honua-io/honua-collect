@@ -24,13 +24,12 @@ public sealed class PublishedOutboxReplay(LazyRecordStore recordStore, IHttpClie
             using var http = clients.CreateClient(submission.Files.Count > 0
                 ? MauiProgram.UploadHttpClient
                 : MauiProgram.ServerHttpClient);
-            var resolved = submission.ResolveMediaPaths(CaptureFiles.MediaDirectory);
-            if (resolved.ReplayPrincipal is null && reviewedLegacyPrincipal is not null)
+            if (submission.ReplayPrincipal is null && reviewedLegacyPrincipal is not null)
             {
-                resolved = resolved with { ReplayPrincipal = reviewedLegacyPrincipal };
+                submission = submission with { ReplayPrincipal = reviewedLegacyPrincipal };
             }
 
-            return await resolved.UploadForReplayAsync(http, token);
-        }, cancellationToken);
+            return await submission.UploadForReplayAsync(http, token);
+        }, cancellationToken, CaptureFiles.MediaDirectory);
     }
 }
