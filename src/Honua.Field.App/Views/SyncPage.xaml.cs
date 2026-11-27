@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
