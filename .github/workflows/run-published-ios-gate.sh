@@ -78,7 +78,11 @@ export Authentication__PortalCredentialVerifier__FallBackToAdminVerifier=true
 export FileStorage__Provider=Local FileStorage__LocalStorage__BasePath="$state/attachments"
 export Geocoding__Enabled=false
 cd "$RUNNER_TEMP/published-server"
-nohup ./Honua.Server </dev/null >> "$state/server.log" 2>&1 &
+# Keep the fixture running across the restart helper's exit, without requiring nohup.
+(
+    trap '' HUP
+    exec ./Honua.Server
+) </dev/null >> "$state/server.log" 2>&1 &
 echo "$!" > "$pid_file"
 for ((attempt = 0; attempt < 90; ++attempt)); do
     if curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null; then
@@ -90,6 +94,8 @@ for ((attempt = 0; attempt < 90; ++attempt)); do
         echo "::error::The fixture server exited before becoming ready (status $server_status)" >&2
         # Keep startup secrets private. Report exception types without messages or values.
         LC_ALL=C grep -Eo '^[[:space:]]*(Unhandled exception\. |---> )?[[:alnum:]_.]+Exception:' \
+            "$state/server.log" | sort -u >&2 || true
+        LC_ALL=C grep -Eo 'command not found|No such file or directory|Permission denied|Bad CPU type in executable|Library not loaded|Symbol not found|Failed to load[^[:alnum:]]|libhostfxr[.]dylib|libhostpolicy[.]dylib|libcoreclr[.]dylib|Microsoft[.]NETCore[.]App' \
             "$state/server.log" | sort -u >&2 || true
         exit 1
     fi
