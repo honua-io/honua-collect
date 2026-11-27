@@ -1,8 +1,5 @@
 name: AWS iOS artifacts
 on:
-  push:
-    branches: [validation/aws-ios-live-artifacts, validation/aws-physical-iphone-upgrade]
-    paths: [.github/workflows/aws-ios-artifacts.yml]
   workflow_dispatch:
     inputs:
       runtime:
@@ -33,7 +30,7 @@ jobs:
     timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
-      FIELD_RUNTIME: ${{ inputs.runtime || (github.ref_name == 'validation/aws-physical-iphone-upgrade' && 'ios-arm64') || 'iossimulator-arm64' }}
+      FIELD_RUNTIME: ${{ inputs.runtime }}
       FIELD_FIXTURE_URL: ${{ inputs.fixture_url }}
       FIELD_PREVIOUS: ${{ inputs.previous_revision || '6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46' }}
       FIELD_CANDIDATE: ${{ inputs.candidate_revision || 'c6551c28995ed4f15cd9db92ec5df95938ae0da4' }}
@@ -45,7 +42,14 @@ jobs:
         with:
           ref: ${{ env.FIELD_CANDIDATE }}
           persist-credentials: false
+      - name: Detect candidate validation feed
+        id: validation-feed
+        run: |
+          if [[ -f .github/actions/mobile-validation-feed/action.yml ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: ./.github/actions/mobile-validation-feed
+        if: steps.validation-feed.outputs.available == 'true'
         with:
           token: ${{ github.token }}
       - name: Check out the previous Field build
