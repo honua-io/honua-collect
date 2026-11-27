@@ -2,6 +2,15 @@ name: Assigned work pilot
 
 on:
   pull_request:
+    paths:
+      - '.github/workflows/assigned-work-pilot.yml'
+      - '.github/actions/assigned-work-validation-feed/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'Directory.*'
+      - 'NuGet.config'
+      - 'global.json'
+  workflow_dispatch:
 
 permissions:
   actions: read
@@ -10,13 +19,10 @@ permissions:
 
 jobs:
   assigned-work:
-    if: github.head_ref == 'feat/field-assigned-work-pilot'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      MSBuildEnableWorkloadResolver: 'false'
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
@@ -27,6 +33,7 @@ jobs:
           token: ${{ github.token }}
       - name: Build and test against the opt-in package graph
         env:
+          MSBuildEnableWorkloadResolver: 'false'
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ github.token }}
         run: |
           set -euo pipefail
@@ -35,3 +42,24 @@ jobs:
             dotnet restore "$project" -p:EnableAssignedWorkPilot=true
             dotnet test "$project" -p:EnableAssignedWorkPilot=true --no-restore
           done
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build installable Android pilot
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ github.token }}
+        run: |
+          set -euo pipefail
+          project="src/Honua.Field.App/Honua.Field.App.csproj"
+          dotnet workload install maui-android
+          dotnet build "$project" -f net11.0-android -p:EnableAssignedWorkPilot=true \
+            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
+          dotnet build "$project" -f net11.0-android -p:EnableAssignedWorkPilot=true \
+            -c Release -t:SignAndroidPackage -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false
+      - name: Upload pilot APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: honua-field-assigned-work-android
+          path: src/Honua.Field.App/bin/Release/net11.0-android/**/*-Signed.apk
+          if-no-files-found: error
