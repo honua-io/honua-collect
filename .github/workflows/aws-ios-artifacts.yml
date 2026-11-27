@@ -1,0 +1,150 @@
+name: AWS iOS artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      runtime:
+        description: Target for the two app builds
+        type: choice
+        options: [iossimulator-arm64, ios-arm64]
+        default: iossimulator-arm64
+      fixture_url:
+        description: Optional HTTPS origin for the physical workbook fixture (no credentials)
+        type: string
+      previous_revision:
+        description: Full revision for the installed baseline
+        type: string
+        required: true
+        default: 6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46
+      candidate_revision:
+        description: Full revision for the upgrade candidate
+        type: string
+        required: true
+        default: c6551c28995ed4f15cd9db92ec5df95938ae0da4
+permissions:
+  actions: read
+  contents: read
+  packages: read
+jobs:
+  apps:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      FIELD_RUNTIME: ${{ inputs.runtime }}
+      FIELD_FIXTURE_URL: ${{ inputs.fixture_url }}
+      FIELD_PREVIOUS: ${{ inputs.previous_revision || '6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46' }}
+      FIELD_CANDIDATE: ${{ inputs.candidate_revision || 'c6551c28995ed4f15cd9db92ec5df95938ae0da4' }}
+    steps:
+      - name: Check immutable source inputs
+        run: |
+          [[ "$FIELD_PREVIOUS" =~ ^[0-9a-f]{40}$ && "$FIELD_CANDIDATE" =~ ^[0-9a-f]{40}$ && "$FIELD_PREVIOUS" != "$FIELD_CANDIDATE" ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.FIELD_CANDIDATE }}
+          persist-credentials: false
+      - name: Detect candidate validation feed
+        id: validation-feed
+        run: |
+          if [[ -f .github/actions/mobile-validation-feed/action.yml ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: ./.github/actions/mobile-validation-feed
+        if: steps.validation-feed.outputs.available == 'true'
+        with:
+          token: ${{ github.token }}
+      - name: Check out the previous Field build
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.FIELD_PREVIOUS }}
+          path: field-previous
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Install MAUI iOS workload
+        run: dotnet workload install maui-ios
+      - name: Build both Field iOS apps
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ -n "$FIELD_FIXTURE_URL" ]]; then
+            test "$FIELD_RUNTIME" = ios-arm64
+            [[ "$FIELD_FIXTURE_URL" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?/?$ ]]
+          fi
+          previous_build=0
+          for checkout in field-previous .; do
+            pilot=()
+            signing=()
+            if [[ "$FIELD_RUNTIME" == ios-arm64 ]]; then
+              signing=(-p:EnableCodeSigning=false -p:CodesignRequireProvisioningProfile=false)
+            fi
+            if [[ "$checkout" == "." ]]; then
+              pilot=(-p:EnableAssignedWorkPilot=true)
+            fi
+            if [[ -n "$FIELD_FIXTURE_URL" ]]; then
+              settings="$checkout/src/Honua.Field.App/Resources/Raw/appsettings.json"
+              jq --arg url "$FIELD_FIXTURE_URL" \
+                '.server |= (.baseUrl = $url | .serviceId = "field_inspections" | .layerId = 68950 | .formId = "field_runtime_inspection")' \
+                "$settings" > "$settings.fixture"
+              mv "$settings.fixture" "$settings"
+              (cd "$checkout" && git apply -) <<'PATCH'
+          --- a/src/Honua.Field.App/Views/FormPage.xaml.cs
+          +++ b/src/Honua.Field.App/Views/FormPage.xaml.cs
+          @@ -300,6 +300,12 @@
+                           annotationOverlay: overlay),
+                       finalPath,
+                       compressed);
+          +
+          +        using var attachment = File.OpenRead(finalPath);
+          +        var digest = System.Security.Cryptography.SHA256.HashData(attachment);
+          +        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+          +        var digestPath = Path.Combine(documents, "honua-captured-attachment.sha256");
+          +        File.WriteAllText(digestPath, Convert.ToHexString(digest).ToLowerInvariant());
+               }
+
+               private async Task CaptureVideoAsync(FieldViewModel field)
+          PATCH
+            fi
+            (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+              -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier="$FIELD_RUNTIME" \
+              -p:RestoreConfigFile="$PWD/NuGet.config" "${pilot[@]}" "${signing[@]}" \
+              --configuration Debug --disable-build-servers)
+            app=$(find "$checkout/src/Honua.Field.App/bin/Debug/net11.0-ios/$FIELD_RUNTIME" -maxdepth 1 -name '*.app' -type d)
+            test -d "$app"
+            revision=$FIELD_PREVIOUS
+            if [[ "$checkout" == "." ]]; then
+              revision=$FIELD_CANDIDATE
+            fi
+            test "$(git -C "$checkout" rev-parse HEAD)" = "$revision"
+            extension=zip
+            if [[ "$FIELD_RUNTIME" == ios-arm64 ]]; then
+              plist="$app/Info.plist"
+              read_plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist"; }
+              test "$(read_plist CFBundleSupportedPlatforms:0)" = iPhoneOS
+              test "$(read_plist CFBundleIdentifier)" = io.honua.collect
+              xcrun vtool -show-build "$app/$(read_plist CFBundleExecutable)" | grep -E 'platform[[:space:]]+IOS$'
+              if [[ -n "$FIELD_FIXTURE_URL" ]]; then
+                plutil -insert UIFileSharingEnabled -bool YES "$plist"
+              fi
+              build=$(read_plist CFBundleVersion)
+              [[ "$build" =~ ^[1-9][0-9]*$ && "$build" -gt "$previous_build" ]]
+              previous_build=$build
+              extension=ipa
+              staging=$(mktemp -d "$RUNNER_TEMP/field-device.XXXXXX")
+              ditto "$app" "$staging/Payload/${app##*/}"
+              ditto -c -k --keepParent "$staging/Payload" "$RUNNER_TEMP/$revision.ipa"
+            else
+              ditto -c -k --keepParent "$app" "$RUNNER_TEMP/$revision.zip"
+            fi
+            (cd "$RUNNER_TEMP" && shasum -a 256 "$revision.$extension" > "$revision.$extension.sha256")
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ env.FIELD_RUNTIME == 'ios-arm64' && 'aws-ios-device-apps' || 'aws-ios-simulator-apps' }}
+          path: |
+            ${{ runner.temp }}/[a-f0-9]*.zip
+            ${{ runner.temp }}/[a-f0-9]*.zip.sha256
+            ${{ runner.temp }}/[a-f0-9]*.ipa
+            ${{ runner.temp }}/[a-f0-9]*.ipa.sha256
+          if-no-files-found: error
+          retention-days: 7
