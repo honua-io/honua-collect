@@ -25,13 +25,20 @@ appId: io.honua.collect
 - tapOn: Add photo
 - tapOn: Choose from gallery
 - waitForAnimationToEnd
-# The system picker can omit its title from the accessibility tree. The
-# freshly seeded photo is the first thumbnail, ahead of the simulator samples.
-- tapOn:
-    point: 12%,26%
-- extendedWaitUntil:
-    visible: Skip
-    timeout: 20000
+# The system picker can omit its title from the accessibility tree and ignore
+# taps while opening. Select the first (seeded) thumbnail until Field shows
+# its caption prompt. The server readback verifies the selected photo bytes.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            notVisible: Skip
+          commands:
+            - tapOn:
+                point: 16%,24%
+                retryTapIfNoChange: false
+      - assertVisible: Skip
 - tapOn: Skip
 - assertVisible: 1 attached
 - scrollUntilVisible:
