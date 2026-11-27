@@ -24,10 +24,9 @@ appId: io.honua.collect
     element: Add photo
 - tapOn: Add photo
 - tapOn: Choose from gallery
-- extendedWaitUntil:
-    visible: '(Photos|Photo Library)'
-    timeout: 20000
-# The clean simulator Photos library contains only the seeded inspection image.
+- waitForAnimationToEnd
+# The system picker can omit its title from the accessibility tree. The
+# freshly seeded photo is the first thumbnail, ahead of the simulator samples.
 - tapOn:
     point: 12%,26%
 - extendedWaitUntil:
