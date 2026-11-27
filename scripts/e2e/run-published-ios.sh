@@ -286,7 +286,10 @@ if [[ $upgrade_state == outbox && -n ${HONUA_E2E_IOS_UPGRADE_APP:-} ]]; then
 else
     run_flow retry-outbox
 fi
-test -f "$working_dir/withheld"
+if [[ ! -f "$working_dir/withheld" ]]; then
+    echo "The server did not accept the first submission through the lost-receipt proxy." >&2
+    exit 1
+fi
 "${simctl[@]}" terminate "$device" "$app"
 launch_and_run_flow verify-outbox-ios
 rm -- "$working_dir/lose-receipt"
