@@ -150,7 +150,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         bool priorHasRemoteId, bool priorPublished)
     {
         var eligibleToDispatch = !priorHasRemoteId && !priorPublished
-            && priorState is RecordSyncState.Pending or RecordSyncState.AddRejected;
+            && priorState is RecordSyncState.Local or RecordSyncState.Pending or RecordSyncState.AddRejected;
         var priorHeld = !priorHasRemoteId && !priorPublished
             && priorState is RecordSyncState.AddNeedsVerification or RecordSyncState.Uploading or RecordSyncState.Failed;
         var finishingDispatch = priorState == RecordSyncState.AddNeedsVerification && entry.PublishedSubmission is null

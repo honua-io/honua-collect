@@ -266,6 +266,25 @@ public sealed class MobileRecordStoreTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public async Task Finished_local_record_remains_eligible_for_its_first_ordinary_add(bool useMobileStore)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        IRecordStore store = useMobileStore
+            ? await directory.ReopenAsync()
+            : await SqliteRecordStore.OpenEncryptedAsync(directory.Database, "device-test-key");
+        var record = CreateRecord("never-sent");
+        record.Status = RecordStatus.Submitted;
+        await store.SaveAsync(new FieldRecordEntry(record, RecordSyncState.Local));
+
+        var entry = Assert.Single(await store.LoadAllAsync());
+        Assert.True(entry.IsPendingUpload);
+        await entry.PrepareOrdinaryAddAsync(held => store.SaveAsync(held));
+        Assert.True(Assert.Single(await store.LoadAllAsync()).RequiresServerVerification);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public async Task Ordinary_add_hold_blocks_stale_writer_until_definite_rejection(bool useMobileStore)
     {
         using var directory = new TemporaryRecordDirectory();

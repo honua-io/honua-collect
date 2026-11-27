@@ -543,7 +543,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         return false;
     }
 
-
     private async Task<bool> PrepareOrdinaryAddAsync(FieldRecordEntry entry)
     {
         if (!entry.IsPendingUpload || _canDispatchOrdinaryAdd?.Invoke() == false)
@@ -554,7 +553,6 @@ public sealed class SyncCenterViewModel : ObservableObject
         try
         {
             await entry.PrepareOrdinaryAddAsync(e => _persist?.Invoke(e) ?? Task.CompletedTask);
-
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

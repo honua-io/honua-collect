@@ -278,7 +278,7 @@ public sealed class GeoServicesFeatureSync
     /// <remarks>
     /// Like <see cref="SubmitAsync"/>, a batch of <c>adds</c> is <em>not idempotent</em>;
     /// a transport failure with no server response is ambiguous, so the batch is not
-    /// auto-retried here — the failed records stay queued for the caller to re-submit.
+    /// auto-retried here. The Outbox holds unacknowledged adds for server verification.
     /// <c>rollbackOnFailure</c> is intentionally <em>not</em> set for the batch so one
     /// bad record does not reject the whole batch; each record's outcome is reported
     /// independently in its result.
