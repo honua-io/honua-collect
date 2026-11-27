@@ -111,30 +111,18 @@ request shape and response parsing.
 
 ## Comprehensive scenario coverage
 
-`FeatureSyncE2ETests` (opt-in, gated on `HONUA_E2E_SERVER`) now covers, against a
-live server:
+The [live GeoServices tests](../../../tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs) run against seeded layer `68910` when `HONUA_E2E_SERVER` is set.
 
-- **add** — geometry + attribute round-trip and read-back;
-- **update** — attribute change reflected server-side;
-- **delete** — feature removed;
-- **missing feature** — an update returns the server rejection and a repeated delete succeeds idempotently;
-- **submit without credentials** — fails gracefully and writes nothing;
-- **concurrent adds (×12)** — all persist with distinct object ids (no id
-  collision or lost write);
-- **concurrent updates to the same feature (×10)** — transient write contention
-  is retried with backoff, so **every** submission succeeds (no spurious
-  failures) and exactly one consistent row remains;
-- **independent captures with identical answers** — distinct record IDs produce two feature rows.
-- **lost attachment acknowledgement** — the server stores the photo before the client loses the response. Field reopens its encrypted store and verifies the uploaded photo without creating a second feature or attachment.
+| Operation | What the live test checks |
+| --- | --- |
+| Add, update and delete | Geometry and typed attributes survive an add and readback. Updates change the saved attributes and deletes remove the feature. |
+| Missing feature or credentials | Updating a missing feature returns a rejection, deleting it again succeeds, and submitting without credentials leaves the server unchanged. |
+| Batch and concurrent edits | Each batch result identifies its feature. Twelve concurrent adds get distinct IDs, and ten updates to one feature complete after retries. Two independent captures with identical answers produce distinct rows. |
+| Lost feature acknowledgement | After the server commits an add and the reply is lost, reopening the store and recovering the receipt leaves one feature. |
+| Photo upload | Listing and downloading the attachment returns the expected metadata and original photo bytes. |
+| Lost photo acknowledgement | After the server stores the photo and the reply is lost, Field reopens the encrypted store and verifies the attachment. The test counts features and attachments to detect duplicates. |
 
-Findings the suite surfaced (and the fix): concurrent same-row updates fail
-transiently under contention — the server reuses error code 1000 for both that
-and "feature not found", so `GeoServicesFeatureSync` now retries with backoff,
-classifying permanence by message; contended submissions all succeed. Separately,
-integer attributes in the shared `features` JSONB column round-trip as strings
-(asserted tolerantly; a server-side storage-mapping item).
-
-All nine tests passed on Field `889b8d1` against the repository’s seeded layer 68910, Honua Server `83127df`, PostgreSQL 18.6 and PostGIS 3.6.4. This live suite exercises Field’s GeoServices client directly. The Maestro workflow above covers the installed Android app and published XLSForm path.
+The server can return error code 1000 for both transient write contention and a missing feature. Field uses the error message to decide whether to retry. The tests also account for integer attributes returned as strings from server JSONB storage.
 
 Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.
 
