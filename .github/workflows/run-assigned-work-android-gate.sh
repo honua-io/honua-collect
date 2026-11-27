@@ -87,14 +87,16 @@ kill "$server_pid"
 wait "$server_pid" || true
 server_pid=
 start_server
-printf "%s\n" publishing-form-and-task >> "$RUNNER_TEMP/assigned-work-stage.txt"
+printf "%s\n" importing-assigned-work-form >> "$RUNNER_TEMP/assigned-work-stage.txt"
 printf 'X-API-Key: %s\n' "$(cat "$state/admin")" > "$state/admin-header"
-python3 scripts/e2e/fixtures/write-field-runtime-workbook.py "$state/inspection.xlsx"
+python3 scripts/e2e/fixtures/write-field-runtime-workbook.py --assigned-work "$state/inspection.xlsx"
 api=(curl --fail --silent --show-error --cacert "$state/tls.crt" -H @"$state/admin-header")
 base=https://127.0.0.1:5191/api/v1/admin/forms
 "${api[@]}" -F "file=@$state/inspection.xlsx" "$base/import?serviceId=field_inspections&layerId=68950" > "$state/draft.json"
 version=$(jq -er '.version | select(type == "number" and . > 0)' "$state/draft.json")
+printf "%s\n" publishing-assigned-work-form >> "$RUNNER_TEMP/assigned-work-stage.txt"
 "${api[@]}" -X POST "$base/field_runtime_inspection/versions/$version/publish" > /dev/null
+printf "%s\n" seeding-assigned-work-task >> "$RUNNER_TEMP/assigned-work-stage.txt"
 python3 scripts/e2e/fixtures/seed-assigned-work.py "$state" > "$state/task.json"
 
 printf "%s\n" provisioning-device >> "$RUNNER_TEMP/assigned-work-stage.txt"
