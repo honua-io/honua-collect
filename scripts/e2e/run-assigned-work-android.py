@@ -12,7 +12,7 @@ on the emulator. The report records counts, the expected task ID and the install
 
 Example:
     scripts/e2e/run-assigned-work-android.py --serial 127.0.0.1:5573 \
-        --apk /path/to/hosted.apk --tls-key /private/fixture.key \
+        --apk /path/to/hosted.apk --input-apk /path/to/fixture-input.apk --tls-key /private/fixture.key \
         --url https://127.0.0.1:5191 --ca /path/to/ca.crt --tls-cert /path/to/fixture.crt \
         --service svc-field-inspections-feature --task <seeded-task-uuid> --assignee <canonical-actor> \
         --credentials /private/worker.json --report /path/to/report.json
@@ -23,7 +23,6 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
-import re
 import runpy
 import ssl
 import subprocess
@@ -75,24 +74,29 @@ def readback(args, username, password):
         raise RuntimeError("Fixture worker did not read exactly the expected assignment")
 
 
-def enter(android, label, text):
-    android.tap(label, kind="EditText")
-    # Supply through stdin so the token does not appear in host process args.
-    if not re.fullmatch(r"[a-zA-Z0-9_.@-]+", text):
-        raise RuntimeError("Fixture credentials must use plain username/JWT characters")
-    commands = "".join(f"input text '{text[offset:offset + 80]}'\n" for offset in range(0, len(text), 80))
-    result = subprocess.run(
-        [*android.command, "shell", "-T"], input=commands,
-        text=True, capture_output=True, timeout=30, check=True,
-    )
-    if result.stdout or result.stderr:
-        raise RuntimeError("Android credential entry returned unexpected output")
+def enter(android, input_apk, username, password):
+    package = "io.honua.fixtureinput"
+    if android.shell("pm", "list", "packages", package):
+        raise RuntimeError("Use an emulator without the credential entry helper installed")
+    android.adb("install", "--no-streaming", str(input_apk))
+    try:
+        command = f'run-as {package} sh -c "mkdir -p files && cat > files/fixture"'
+        subprocess.run(
+            [*android.command, "shell", "-T", command],
+            input=f"{username}\n{password}\n", text=True, capture_output=True, timeout=30, check=True,
+        )
+        result = android.shell("am", "instrument", "-w", f"{package}/.FixtureInput")
+        if "root=io.honua.collect" not in result or "inputCount=2" not in result:
+            raise RuntimeError("Credential helper did not fill both Field inputs")
+    finally:
+        android.adb("uninstall", package)
 
 
 class Observer:
     def __init__(self, args):
         self.lock = threading.Lock()
         self.exchange_count = 0
+        self.exchange_denied = False
         self.refreshes = 0
         self.bearer_digest = None
         self.verified_profile = False
@@ -155,6 +159,8 @@ class Observer:
                 if isinstance(body.get("token"), str) and body["token"]:
                     self.exchange_count += 1
                     self.bearer_digest = hashlib.sha256(("Bearer " + body["token"]).encode()).digest()
+                else:
+                    self.exchange_denied = True
                 return
             same_bearer = self.bearer_digest == hashlib.sha256(authorization.encode()).digest()
             if path.path == "/sharing/rest/community/self":
@@ -172,12 +178,15 @@ class Observer:
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
             with self.lock:
+                if self.exchange_denied:
+                    raise RuntimeError("Native fixture token exchange was denied")
                 if self.mismatch or self.exchange_count > 1:
                     raise RuntimeError("Native refresh used an unexpected worker or assignment")
                 if self.exchange_count == 1 and self.refreshes >= minimum:
                     return self.refreshes
             time.sleep(0.25)
-        raise RuntimeError("Timed out waiting for the expected native authenticated refresh")
+        raise RuntimeError(f"Native refresh timed out (exchanges={self.exchange_count}, "
+                           f"profile={self.verified_profile}, refreshes={self.refreshes}, expected={minimum})")
 
 
 def run(args):
@@ -198,6 +207,8 @@ def run(args):
     device_port = f"tcp:{url.port}"
     reverse = [line.split() for line in android.adb("reverse", "--list").decode().splitlines()]
     previous = next((mapping[2] for mapping in reverse if len(mapping) == 3 and mapping[1] == device_port), None)
+    if previous:
+        raise RuntimeError("The disposable emulator already has a fixture port mapping")
     observer.thread.start()
     try:
         android.adb("reverse", device_port, f"tcp:{observer.server.server_port}")
@@ -206,9 +217,7 @@ def run(args):
         android.launch()
         android.tap("More", kind="FrameLayout")
         android.tap("Account")
-        enter(android, "Username", username)
-        enter(android, "API key / token", password)
-        android.shell("input", "keyevent", "4")
+        enter(android, args.input_apk, username, password)
         android.tap("Sign in", kind="Button")
         observer.wait(1)
         android.shell("am", "force-stop", PACKAGE)
@@ -232,10 +241,7 @@ def run(args):
     finally:
         try:
             android.shell("rm", "-f", android.xml_path)
-            if previous:
-                android.adb("reverse", device_port, previous)
-            else:
-                android.adb("reverse", "--remove", device_port)
+            android.adb("reverse", "--remove", device_port)
         finally:
             observer.server.shutdown()
             observer.server.server_close()
@@ -246,7 +252,7 @@ def main():
     parser.add_argument("--adb", default="adb")
     for option in ("serial", "url", "service", "task", "assignee"):
         parser.add_argument("--" + option, required=True)
-    for option in ("apk", "ca", "tls-cert", "tls-key", "credentials", "report"):
+    for option in ("apk", "input-apk", "ca", "tls-cert", "tls-key", "credentials", "report"):
         parser.add_argument("--" + option, type=Path, required=True)
     try:
         run(parser.parse_args())

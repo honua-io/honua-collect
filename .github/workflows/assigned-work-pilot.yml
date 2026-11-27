@@ -7,7 +7,10 @@ on:
       - '.github/actions/assigned-work-validation-feed/**'
       - 'src/**'
       - 'tests/**'
+      - '.github/workflows/run-assigned-work-android-gate.sh'
       - 'scripts/e2e/run-assigned-work-android.py'
+      - 'scripts/e2e/assigned-work-input/**'
+      - 'scripts/e2e/fixtures/**'
       - 'Directory.*'
       - 'NuGet.config'
       - 'global.json'
@@ -21,7 +24,7 @@ permissions:
 jobs:
   assigned-work:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -69,9 +72,66 @@ jobs:
             | .formId = "field_runtime_inspection")' "$original" > "$settings"
           dotnet build "$project" -f net11.0-android -p:EnableAssignedWorkPilot=true \
             -c Release -t:SignAndroidPackage -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false
+          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Release/net11.0-android -type f -name '*-Signed.apk' -print0)
+          test "${#apks[@]}" -eq 1
+          mkdir -p "$RUNNER_TEMP/assigned-work-apk"
+          cp "${apks[0]}" "$RUNNER_TEMP/assigned-work-apk/io.honua.collect-Signed.apk"
       - name: Upload pilot APK
+        id: pilot-apk
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: honua-field-assigned-work-android
-          path: src/Honua.Field.App/bin/Release/net11.0-android/**/*-Signed.apk
+          path: ${{ runner.temp }}/assigned-work-apk/io.honua.collect-Signed.apk
+          if-no-files-found: error
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: honua-io/honua-server
+          ref: 91fbdee76924225b22ae432249999d8d4e98ae9e
+          path: server-candidate
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/server-dotnet
+        with:
+          global-json-file: server-candidate/global.json
+      - name: Publish isolated assignment server
+        working-directory: server-candidate
+        env:
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ github.token }}
+        run: |
+          "$RUNNER_TEMP/server-dotnet/dotnet" publish src/Honua.Server/Honua.Server.csproj \
+            --runtime linux-x64 --self-contained true --configuration Debug \
+            -p:PublishAot=false -p:PublishTrimmed=false -p:PublishSingleFile=false \
+            --output "$RUNNER_TEMP/assigned-work-server"
+      - name: Enable emulator hardware acceleration
+        run: sudo chmod a+rw /dev/kvm
+      - name: Verify installed assignment before and after relaunch
+        uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
+        env:
+          PILOT_APK_ARTIFACT_DIGEST: ${{ steps.pilot-apk.outputs.artifact-digest }}
+          PILOT_APK_ARTIFACT_ID: ${{ steps.pilot-apk.outputs.artifact-id }}
+          POSTGIS_IMAGE: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+        with:
+          emulator-build: 16970787 # 37.3.10.0
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics -camera-back none
+          script: bash .github/workflows/run-assigned-work-android-gate.sh
+      - name: Upload installed assignment diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: honua-field-assigned-work-diagnostics
+          path: ${{ runner.temp }}/assigned-work-stage.txt
+          if-no-files-found: ignore
+      - name: Upload authenticated assignment readback
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: honua-field-assigned-work-readback
+          path: ${{ runner.temp }}/assigned-work-readback.json
           if-no-files-found: error

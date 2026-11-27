@@ -47,10 +47,10 @@ public partial class LoginPage : ContentPage
 
     private async Task ResumeAsync()
     {
-        var resumed = await _manager.RestoreAsync().ConfigureAwait(true);
+        var resumed = await _manager.RestoreAsync().ConfigureAwait(false);
         if (resumed is not null)
         {
-            SignedInLabel.Text = $"Signed in as {resumed.DisplayName ?? resumed.UserId}. Sync uses your account.";
+            ShowSignedIn(resumed);
         }
     }
 
@@ -58,8 +58,14 @@ public partial class LoginPage : ContentPage
     {
         // This is the seam that makes login functional: the transport handler now
         // sends this token on every request, and the session is persisted for resume.
-        await _manager.SignInAsync(session).ConfigureAwait(true);
-        SignedInLabel.Text = $"Signed in as {session.DisplayName ?? session.UserId}. Sync uses your account.";
+        await _manager.SignInAsync(session).ConfigureAwait(false);
+        ShowSignedIn(session);
+    }
+
+    private void ShowSignedIn(AuthSession session)
+    {
+        Dispatcher.Dispatch(() =>
+            SignedInLabel.Text = $"Signed in as {session.DisplayName ?? session.UserId}. Sync uses your account.");
     }
 
     private void OnSessionExpired(object? sender, EventArgs e)
