@@ -141,7 +141,9 @@ public class FeatureSyncE2ETests
 
         using var readHttp = Authed();
         var server = new GeoServicesFeatureSync(readHttp);
-        var record = Site(Marker());
+        var record = Site(Marker(), record => record.Status = RecordStatus.Submitted);
+        var entry = new FieldRecordEntry(record);
+        entry.MarkPending();
         var added = await server.SubmitAsync(record, Target);
         Assert.True(added.Success, added.Error);
         var objectId = Assert.IsType<long>(added.ObjectId);
@@ -155,7 +157,6 @@ public class FeatureSyncE2ETests
         try
         {
             var store = await SqliteRecordStore.OpenEncryptedAsync(path, key);
-            var entry = new FieldRecordEntry(record);
             entry.MarkSynced(objectId.ToString(CultureInfo.InvariantCulture));
             var photoId = Guid.NewGuid();
             var name = $"{photoId:N}.png";
