@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.Core.Enterprise;
 using Honua.Field.Core.History;
@@ -63,7 +64,7 @@ public partial class RecordsPage : ContentPage
         {
             try
             {
-                var (package, session) = draft.Open(row.Entry.Record.FormId, row.RecordId, _settings.BaseUri);
+                var (package, session) = draft.Open(row.Entry.Record.FormId, row.RecordId, _settings.BaseUri, CaptureFiles.MediaDirectory);
                 var isCorrection = draft.ReplacesRejectedSubmission || row.Entry.SyncState == Core.Records.RecordSyncState.SubmissionRejected;
                 await Navigation.PushAsync(_inspections.Create(package, session, isCorrection: isCorrection));
             }

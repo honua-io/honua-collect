@@ -17,6 +17,10 @@ public sealed record SubmissionFile(string PartName, string LocalPath, string Co
 /// <summary>The versioned request and evidence captured before the first upload.</summary>
 public sealed record PublishedFormSubmission(string FormId, string RequestJson, IReadOnlyList<SubmissionFile> Files, string? ServerBaseUrl = null)
 {
+    /// <summary>Locates the frozen evidence in the current app installation while preserving the wire request.</summary>
+    public PublishedFormSubmission ResolveMediaPaths(string mediaDirectory) =>
+        this with { Files = Files.Select(file => file with { LocalPath = CapturedMediaPath.Resolve(file.LocalPath, mediaDirectory) }).ToArray() };
+
     /// <summary>Freezes the request, destination, and evidence references for replay.</summary>
     public static PublishedFormSubmission Capture(PublishedFormPackage package, FormSession session, Uri serverBaseUri,
         DateTimeOffset? submittedAt = null, string? idempotencyKey = null)
