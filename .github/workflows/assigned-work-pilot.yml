@@ -55,6 +55,15 @@ jobs:
           dotnet workload install maui-android
           dotnet build "$project" -f net11.0-android -p:EnableAssignedWorkPilot=true \
             -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
+          # Embed the isolated HTTPS fixture in this optional APK only.
+          settings="src/Honua.Field.App/Resources/Raw/appsettings.json"
+          original="$(mktemp)"
+          cp "$settings" "$original"
+          trap 'mv "$original" "$settings"' EXIT
+          jq '.server |= (.baseUrl = "https://127.0.0.1:5191"
+            | .serviceId = "svc-field-inspections-feature"
+            | .layerId = 68950
+            | .formId = "field_runtime_inspection")' "$original" > "$settings"
           dotnet build "$project" -f net11.0-android -p:EnableAssignedWorkPilot=true \
             -c Release -t:SignAndroidPackage -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false
       - name: Upload pilot APK
