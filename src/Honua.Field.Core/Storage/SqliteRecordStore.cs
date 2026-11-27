@@ -66,13 +66,15 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
     {
         ArgumentNullException.ThrowIfNull(entry);
 
+        var photos = entry.OrdinaryPhotos;
+        var expectedPhotos = entry.PersistedOrdinaryPhotos;
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
         await using var transaction = connection.BeginTransaction(deferred: false);
         await using (var previous = connection.CreateCommand())
         {
             previous.Transaction = transaction;
             previous.CommandText = $"""
-                SELECT sync_state, remote_id, published_submission_json
+                SELECT sync_state, remote_id, published_submission_json, ordinary_photos_json
                 FROM {TableName} WHERE record_id = $id;
                 """;
             previous.Parameters.AddWithValue("$id", entry.Record.RecordId);
@@ -80,6 +82,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             var exists = await reader.ReadAsync(ct).ConfigureAwait(false);
             ValidateOrdinaryWrite(entry, exists ? (RecordSyncState)reader.GetInt32(0) : null,
                 exists && !reader.IsDBNull(1), exists && !reader.IsDBNull(2));
+            FieldRecordEntry.ValidateOrdinaryPhotos(expectedPhotos, exists ? ReadOrdinaryPhotos(reader, 3) ?? [] : []);
         }
 
         await using var command = connection.CreateCommand();
@@ -88,11 +91,11 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             INSERT INTO {TableName}
                 (record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                  created_utc, submitted_utc, completed_utc, values_json,
-                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json, published_draft_json)
+                 sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json, published_draft_json, ordinary_photos_json)
             VALUES
                 ($record_id, $form_id, $status, $assigned_user_id, $lat, $lon, $accuracy,
                  $created_utc, $submitted_utc, $completed_utc, $values_json,
-                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version, $published_submission_json, $published_draft_json)
+                 $sync_state, $remote_id, $last_error, $failed_attempts, $last_synced_utc, $version, $published_submission_json, $published_draft_json, $ordinary_photos_json)
             ON CONFLICT(record_id) DO UPDATE SET
                 form_id = excluded.form_id,
                 status = excluded.status,
@@ -111,7 +114,8 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 last_synced_utc = excluded.last_synced_utc,
                 version = excluded.version,
                 published_submission_json = excluded.published_submission_json,
-                published_draft_json = excluded.published_draft_json;
+                published_draft_json = excluded.published_draft_json,
+                ordinary_photos_json = excluded.ordinary_photos_json;
             """;
 
         var record = entry.Record;
@@ -142,9 +146,16 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
             ? JsonSerializer.Serialize(draft, RecordStoreJsonContext.Default.PublishedFormDraft)
             : DBNull.Value);
 
+        command.Parameters.AddWithValue("$ordinary_photos_json", photos.Count == 0 ? DBNull.Value
+            : JsonSerializer.Serialize(photos.ToArray(), RecordStoreJsonContext.Default.OrdinaryFeaturePhotoArray));
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        entry.AcceptPersistedOrdinaryPhotos(photos);
     }
+
+    private static OrdinaryFeaturePhoto[]? ReadOrdinaryPhotos(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null
+            : JsonSerializer.Deserialize(reader.GetString(ordinal), RecordStoreJsonContext.Default.OrdinaryFeaturePhotoArray);
 
     internal static void ValidateOrdinaryWrite(FieldRecordEntry entry, RecordSyncState? priorState,
         bool priorHasRemoteId, bool priorPublished)
@@ -173,7 +184,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         command.CommandText = $"""
             SELECT record_id, form_id, status, assigned_user_id, lat, lon, accuracy,
                    created_utc, submitted_utc, completed_utc, values_json,
-                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json, published_draft_json
+                   sync_state, remote_id, last_error, failed_attempts, last_synced_utc, version, published_submission_json, published_draft_json, ordinary_photos_json
             FROM {TableName};
             """;
 
@@ -248,6 +259,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         var entry = new FieldRecordEntry(record) { PublishedSubmission = submission, PublishedDraft = draft };
         Rehydrate(entry, syncState, remoteId, lastError, failedAttempts, lastSyncedUtc);
         entry.SetVersion(version);
+        entry.RestoreOrdinaryPhotos(ReadOrdinaryPhotos(reader, 19));
         return entry;
     }
 
@@ -364,6 +376,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
                 """;
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         await EnsureColumnAsync(command, "version", "INTEGER NOT NULL DEFAULT 0", ct).ConfigureAwait(false);
+        await EnsureColumnAsync(command, "ordinary_photos_json", "TEXT NULL", ct).ConfigureAwait(false);
         await EnsureColumnAsync(command, "published_submission_json", "TEXT NULL", ct).ConfigureAwait(false);
         await EnsureColumnAsync(command, "published_draft_json", "TEXT NULL", ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
@@ -382,6 +395,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 
 [JsonSerializable(typeof(PublishedFormSubmission))]
 [JsonSerializable(typeof(PublishedFormDraft))]
+[JsonSerializable(typeof(OrdinaryFeaturePhoto[]))]
 internal sealed partial class RecordStoreJsonContext : JsonSerializerContext
 {
 }

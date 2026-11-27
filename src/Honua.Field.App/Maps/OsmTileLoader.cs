@@ -33,6 +33,7 @@ public sealed class OsmTileLoader : IDisposable
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
 
     private readonly HttpClient _http;
+    private readonly HttpClient _offlineHttp;
     private readonly TileCache _disk;
     private readonly LruImageCache _cache = new(MaxCachedTiles);
     private readonly ConcurrentDictionary<string, byte> _inFlight = new();
@@ -54,10 +55,12 @@ public sealed class OsmTileLoader : IDisposable
     /// The HTTP client for tile requests, from <c>IHttpClientFactory</c> (the
     /// caller owns its lifetime, so this type does not dispose it).
     /// </param>
-    public OsmTileLoader(string cacheRoot, HttpClient http)
+    /// <param name="offlineHttp">The download client, configured to reject redirects.</param>
+    public OsmTileLoader(string cacheRoot, HttpClient http, HttpClient offlineHttp)
     {
-        _disk = new TileCache(cacheRoot);
+        _disk = new TileCache(OsmTileUrl.CacheDirectory(cacheRoot, OsmTileUrl.Template));
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _offlineHttp = offlineHttp ?? throw new ArgumentNullException(nameof(offlineHttp));
     }
 
     /// <summary>
@@ -112,20 +115,29 @@ public sealed class OsmTileLoader : IDisposable
                     return;
                 }
 
-                var bytes = await DownloadAsync(zoom, x, y).ConfigureAwait(false);
+                var bytes = await DownloadAsync(_http, zoom, x, y).ConfigureAwait(false);
                 if (bytes is null)
                 {
                     return;
                 }
 
-                // Persist before decoding so a future session/offline run finds it.
-                await _disk.SaveAsync(zoom, x, y, bytes).ConfigureAwait(false);
-
                 using var ms = new MemoryStream(bytes, writable: false);
                 var img = PlatformImage.FromStream(ms);
-                if (img is not null && _cache.TrySet(key, img))
+                if (img is null)
+                {
+                    return;
+                }
+
+                if (img.Width <= 0 || img.Height <= 0)
+                {
+                    img.Dispose();
+                    return;
+                }
+
+                if (_cache.TrySet(key, img))
                 {
                     TileLoaded?.Invoke(this, EventArgs.Empty);
+                    await _disk.SaveAsync(zoom, x, y, bytes).ConfigureAwait(false);
                 }
             }
             finally
@@ -160,7 +172,7 @@ public sealed class OsmTileLoader : IDisposable
         return false;
     }
 
-    private async Task<byte[]?> DownloadAsync(int zoom, int x, int y, CancellationToken cancellationToken = default)
+    private static async Task<byte[]?> DownloadAsync(HttpClient http, int zoom, int x, int y, CancellationToken cancellationToken = default)
     {
         var url = OsmTileUrl.For(zoom, x, y);
 
@@ -171,7 +183,7 @@ public sealed class OsmTileLoader : IDisposable
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(RequestTimeout);
 
-        using var response = await _http.GetAsync(url, cts.Token).ConfigureAwait(false);
+        using var response = await http.GetAsync(url, cts.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             return null;
@@ -180,96 +192,70 @@ public sealed class OsmTileLoader : IDisposable
         return await response.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Downloads every tile covering <paramref name="bbox"/> across the inclusive
-    /// zoom range into the on-disk cache, so the area works fully offline. Tiles
-    /// already cached are skipped. Refuses areas larger than
-    /// <paramref name="maxTiles"/> by returning the over-cap plan without
-    /// downloading, so callers can warn and let the user narrow the area.
-    /// </summary>
-    /// <param name="bbox">The geographic area to make available offline.</param>
-    /// <param name="minZoom">The lowest (coarsest) zoom, inclusive.</param>
-    /// <param name="maxZoom">The highest (most detailed) zoom, inclusive.</param>
-    /// <param name="progress">Reports tiles completed out of the total to fetch.</param>
-    /// <param name="maxTiles">The cap on tiles per area.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The plan that was executed (or refused when it exceeds the cap).</returns>
-    public async Task<OfflineAreaPlan> PrefetchAreaAsync(
-        GeoBoundingBox bbox,
-        int minZoom,
-        int maxZoom,
-        IProgress<TilePrefetchProgress>? progress = null,
-        int maxTiles = OfflineAreaPlanner.DefaultMaxTiles,
-        CancellationToken cancellationToken = default)
+    /// <summary>Verifies cached tiles and fetches missing tiles from an offline-capable source.</summary>
+    public Task<OfflineAreaDownload> PrefetchAreaAsync(
+        OfflineAreaPlan plan,
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        OfflineAreaDownload.RunAsync(plan, EnsureCachedAsync, progress, cancellationToken);
+
+    public static bool SupportsOfflineDownloads =>
+        OsmTileUrl.AllowsOfflinePrefetch(OsmTileUrl.Template, OsmTileUrl.AllowOfflinePrefetch);
+
+    private async ValueTask<bool> EnsureCachedAsync(TileCoordinate tile, CancellationToken cancellationToken)
     {
-        var plan = OfflineAreaPlanner.Plan(bbox, minZoom, maxZoom, maxTiles);
-        if (plan.ExceedsCap)
+        try
         {
-            return plan;
-        }
-
-        var total = plan.Count;
-        var done = 0;
-        progress?.Report(new TilePrefetchProgress(0, total));
-
-        // Dispatch every missing tile concurrently and let the shared 6-slot gate cap
-        // in-flight downloads. Awaiting each download inside the foreach (the previous
-        // shape) serialized the whole run — the gate gave zero parallelism — so a large
-        // offline area downloaded ~6x slower than the design's budget and one slow tile
-        // stalled everything behind it. The same gate also bounds the on-demand Get
-        // path, so total concurrency across both stays at 6.
-        var tasks = new List<Task>(total);
-        foreach (var t in plan.Tiles)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (_disk.Contains(t.Zoom, t.X, t.Y))
+            if (_disk.TryGetPath(tile.Zoom, tile.X, tile.Y, out var path))
             {
-                ReportTileDone();
-                continue;
+                try
+                {
+                    using var stream = File.OpenRead(path);
+                    using var image = PlatformImage.FromStream(stream);
+                    if (image is { Width: > 0, Height: > 0 })
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Invalid or unreadable cached bytes must be replaced.
+                }
             }
 
-            tasks.Add(FetchTileAsync(t));
-        }
+            if (!SupportsOfflineDownloads)
+            {
+                return false;
+            }
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-        return plan;
-
-        async Task FetchTileAsync(TileCoordinate t)
-        {
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var bytes = await DownloadAsync(t.Zoom, t.X, t.Y, cancellationToken).ConfigureAwait(false);
-                if (bytes is not null)
+                var bytes = await DownloadAsync(_offlineHttp, tile.Zoom, tile.X, tile.Y, cancellationToken).ConfigureAwait(false);
+                if (bytes is null)
                 {
-                    await _disk.SaveAsync(t.Zoom, t.X, t.Y, bytes, cancellationToken).ConfigureAwait(false);
+                    return false;
                 }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // A real cancellation of the prefetch aborts the whole run.
-                throw;
-            }
-            catch
-            {
-                // A single failed tile (including a per-tile fetch timeout) shouldn't
-                // abort the whole area; it will be re-fetched on demand later.
+
+                using var stream = new MemoryStream(bytes, writable: false);
+                using var image = PlatformImage.FromStream(stream);
+                if (image is not { Width: > 0, Height: > 0 })
+                {
+                    return false;
+                }
+
+                await _disk.SaveAsync(tile.Zoom, tile.X, tile.Y, bytes, cancellationToken).ConfigureAwait(false);
+                return true;
             }
             finally
             {
                 _gate.Release();
             }
-
-            ReportTileDone();
         }
-
-        void ReportTileDone()
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // Tiles complete on pooled threads, so the running count must be advanced
-            // atomically; IProgress<T>.Report is itself safe to call concurrently.
-            var completed = Interlocked.Increment(ref done);
-            progress?.Report(new TilePrefetchProgress(completed, total));
+            // A failed tile remains missing. Other tiles can still be cached.
+            return false;
         }
     }
 
@@ -384,13 +370,4 @@ public sealed class OsmTileLoader : IDisposable
             public IImage Image { get; } = image;
         }
     }
-}
-
-/// <summary>Progress for an offline-area prefetch: tiles completed out of the total.</summary>
-/// <param name="Completed">Tiles finished so far.</param>
-/// <param name="Total">Total tiles in the area.</param>
-public readonly record struct TilePrefetchProgress(int Completed, int Total)
-{
-    /// <summary>Completion fraction in [0, 1]; 1 when there is nothing to fetch.</summary>
-    public double Fraction => Total <= 0 ? 1.0 : (double)Completed / Total;
 }

@@ -1,7 +1,6 @@
 # App screens — verified on Android emulator
 
-The MAUI app is now a tabbed Shell (Capture / Records / Geometry / Signature),
-verified running on a KVM-accelerated Android-35 emulator.
+These screenshots show the Capture, Records, Geometry and Signature tabs in an earlier Field build running on a KVM-accelerated Android 35 emulator. The [current verification guide](../e2e/README.md) covers the installed app and Honua Server.
 
 | File | Demonstrates |
 | --- | --- |
@@ -11,9 +10,7 @@ verified running on a KVM-accelerated Android-35 emulator.
 | `04-signature.png` | **Signature/sketch pad** (C4/C5): freehand ink on a GraphicsView. |
 
 `RecordBoxViewModel` (Drafts/Outbox/Sent grouping) is unit-tested in
-`Honua.Field.Presentation.Tests`. The photo widget is wired to MAUI
-`MediaPicker` (camera/gallery); on-device photo capture needs a real
-camera/gallery so it isn't exercised in the headless emulator run.
+`Honua.Field.Presentation.Tests`. The photo widget uses MAUI `MediaPicker`. The [ordinary photo scenario](../e2e/README.md#ordinary-feature-photos-on-android) exercises gallery selection, offline persistence and attachment sync. Physical-camera capture remains a separate device check.
 
 ## Offline sync + conflict review (verified)
 
