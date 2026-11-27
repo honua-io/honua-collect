@@ -103,6 +103,7 @@ jobs:
       # The APK restore writes Android RID lock entries to the shared projects.
       - name: Build ordinary feature sync integration tests
         env:
+          MSBuildEnableWorkloadResolver: "false"
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
