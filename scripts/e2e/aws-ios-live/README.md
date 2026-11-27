@@ -56,8 +56,26 @@ secret field. In these pinned builds the secret field supplies the existing
 OIDC JWT to `POST /sharing/rest/generateToken` for exchange. Keep JWTs out of
 build inputs, screenshots and evidence. Revoke the worker access and tear down
 the fixture after the sessions. Record the build run and artifact digests.
-Use the native picker with a known JPEG on the physical device and record the
-digest of the bytes Field stored before syncing.
+Attach one photo through Field's native camera or photo picker. The
+HTTPS fixture build writes the SHA-256 of the imported bytes to a Documents
+file. Appium can read it through
+[XCUITest file transfer](https://appium.github.io/appium-xcuitest-driver/latest/guides/file-transfer/).
+With the baseline still installed and the record offline, record the digest
+in the scenario's evidence:
+
+```python
+from base64 import b64decode
+from re import fullmatch
+
+digest = b64decode(
+    driver.pull_file("@io.honua.collect:documents/honua-imported-attachment.sha256")
+).decode("ascii").strip()
+assert fullmatch(r"[0-9a-f]{64}", digest)
+```
+
+Keep the QA build inside the disposable Device Farm session. Its shared
+Documents file contains the digest. The photo stays in Field's private
+media directory.
 
 To check device installation before setting up the workbook fixture, run
 `run-devicefarm-smoke.py` with the baseline `--app` and `--revision`,
