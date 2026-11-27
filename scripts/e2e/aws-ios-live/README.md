@@ -112,3 +112,8 @@ established an XCUITest connection on an Apple iPhone 18 Pro running iOS 27.0.
 Appium listed installed apps and confirmed the device was clean of Field.
 The session ended before Field installation or fixture access. The project had
 no private device or VPC path to the seeded fixture.
+
+The [Device Farm Mac toolchain preflight](https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/afe2be56-2a71-433e-8d74-1b0354523ff2/runs/6cfbfbe0-cc91-4ff7-a546-57dd662d9822)
+found Xcode 27.0 and iPhoneOS SDK 27.0 on the managed Mac. The pinned .NET
+workload uses iOS SDK 27.2. Build the physical IPAs on the workflow's Xcode
+27.2 runner.
