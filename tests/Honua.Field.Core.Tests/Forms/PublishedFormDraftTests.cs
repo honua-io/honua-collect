@@ -39,6 +39,57 @@ public sealed class PublishedFormDraftTests
         }
         """;
 
+    [Fact]
+    public async Task Ios_upgrade_reopens_draft_and_replays_frozen_attachment_from_relocated_container()
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var application = Path.Combine(root.FullName, "Application");
+            var oldContainer = Path.Combine(application, Guid.NewGuid().ToString("D"));
+            var newContainer = Path.Combine(application, Guid.NewGuid().ToString("D"));
+            var media = Directory.CreateDirectory(Path.Combine(oldContainer, "Library", "media"));
+            var oldPath = Path.Combine(media.FullName, $"{Guid.NewGuid():N}.jpg");
+            await File.WriteAllBytesAsync(oldPath, [1, 2, 3]);
+            var package = PublishedFormPackage.Parse("inspection", PackageJson);
+            var session = package.CreateSession("stable-id");
+            session.SetValue("where", new FieldGeoPoint(38, -122));
+            var photo = new CapturedMediaAttachment { AttachmentId = "evidence", FieldId = "photo", LocalPath = oldPath };
+            session.AddMedia(photo);
+            var frozen = PublishedFormSubmission.Capture(package, session, Server);
+            session.AddRepeatInstance("visits").AddMedia(photo with { AttachmentId = "repeat", FieldId = "rowPhoto" });
+            var draft = PublishedFormDraft.Capture(package, session, Server);
+
+            Directory.Move(oldContainer, newContainer);
+            var newMedia = Path.Combine(newContainer, "Library", "media");
+            var newPath = Path.Combine(newMedia, Path.GetFileName(oldPath));
+            var (_, reopened) = draft.Open("inspection", "stable-id", Server, newMedia);
+            Assert.Equal(newPath, Assert.Single(reopened.GetField("photo").Media).LocalPath);
+            var repeat = Assert.Single(reopened.GetRepeat("visits").Instances);
+            Assert.Equal(newPath, Assert.Single(repeat.GetField("rowPhoto").Media).LocalPath);
+            var replay = frozen.ResolveMediaPaths(newMedia);
+            Assert.Equal(frozen.RequestJson, replay.RequestJson);
+            Assert.Equal(oldPath, Assert.Single(frozen.Files).LocalPath);
+            Assert.Equal(Assert.Single(frozen.Files) with { LocalPath = newPath }, Assert.Single(replay.Files));
+            Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(Assert.Single(replay.Files).LocalPath));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/tmp/media/00000000000000000000000000000002.jpg")]
+    [InlineData("/tmp/Application/20000000-0000-0000-0000-000000000000/Library/media/logo.jpg")]
+    [InlineData("/tmp/Application/20000000-0000-0000-0000-000000000000/Library/media/../media/00000000000000000000000000000002.jpg")]
+    public void Upgrade_leaves_paths_outside_the_capture_convention_untouched(string path)
+    {
+        const string newMedia = "/tmp/Application/10000000-0000-0000-0000-000000000000/Library/media";
+        var frozen = new PublishedFormSubmission("inspection", "{}", [new SubmissionFile("file0", path, "image/jpeg", "photo.jpg")]);
+        Assert.Equal(path, Assert.Single(frozen.ResolveMediaPaths(newMedia).Files).LocalPath);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

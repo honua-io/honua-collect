@@ -1,6 +1,7 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using Honua.Field.App.Capture;
 using Honua.Field.App.Views;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Field.Related;
@@ -86,7 +87,7 @@ public sealed class PublishedInspectionPages(AppSettings settings, RecordBook bo
             using var http = clients.CreateClient(pending.Files.Count > 0
                 ? MauiProgram.UploadHttpClient
                 : MauiProgram.ServerHttpClient);
-            var receipt = await pending.UploadAsync(http);
+            var receipt = await pending.ResolveMediaPaths(CaptureFiles.MediaDirectory).UploadAsync(http);
             if (!receipt.Success)
             {
                 if (receipt.CanCorrectSubmission)

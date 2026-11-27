@@ -76,7 +76,7 @@ launch_and_run_flow() {
 
 list_media() {
     if [[ -d "$data/Library/media" ]]; then
-        find "$data/Library/media" -type f | LC_ALL=C sort
+        (cd "$data/Library/media" && find . -type f | LC_ALL=C sort)
     fi
 }
 
@@ -84,7 +84,7 @@ report_storage() {
     [[ -n $report ]] || return 0
     local container
     container=$("${simctl[@]}" get_app_container "$device" "$app" data)
-    python3 - "$1" "$data" "$container" "$report/$1-storage.json" <<'PY_STORAGE'
+    python3 - "$1" "$original_data" "$container" "$report/$1-storage.json" <<'PY_STORAGE'
 import json
 from pathlib import Path
 import sys
@@ -169,6 +169,7 @@ if [[ -n $report ]]; then
 fi
 echo "Preparing the installed Field app and local test proxy."
 data=$("${simctl[@]}" get_app_container "$device" "$app" data)
+original_data=$data
 settings="$data/Library/appsettings.local.json"
 "${simctl[@]}" terminate "$device" "$app" >/dev/null 2>&1 || true
 if [[ -f $settings ]]; then
@@ -234,25 +235,55 @@ stop_process_watch
 report_storage after-draft-save
 "${simctl[@]}" terminate "$device" "$app"
 report_storage after-draft-stop
-latest_version=$("$script_dir/publish-next-inspection-version.sh" "$port" "$version" "$admin_key")
-launch_and_run_flow resume-draft-ios
-"${simctl[@]}" terminate "$device" "$app"
-launch_and_run_flow verify-outbox-ios
-
 list_media > "$working_dir/after"
 LC_ALL=C comm -13 "$working_dir/before" "$working_dir/after" > "$working_dir/new-media"
 if [[ $(wc -l < "$working_dir/new-media") -ne 1 ]]; then
-    echo "Expected one stored Apple attachment to survive process restart." >&2
+    echo "Expected one stored Apple attachment before upgrade." >&2
     exit 1
 fi
 attachment=$(cat "$working_dir/new-media")
-test -s "$attachment"
-cp -- "$attachment" "$working_dir/attachment"
+test -s "$data/Library/media/$attachment"
+cp -- "$data/Library/media/$attachment" "$working_dir/attachment"
+
+latest_version=$("$script_dir/publish-next-inspection-version.sh" "$port" "$version" "$admin_key")
+upgrade_state=${HONUA_E2E_UPGRADE_STATE:-draft}
+case "$upgrade_state" in
+    draft) ;;
+    outbox)
+        launch_and_run_flow resume-draft-ios
+        "${simctl[@]}" terminate "$device" "$app"
+        ;;
+    *) echo "Unknown iOS upgrade state $upgrade_state" >&2; exit 2 ;;
+esac
+if [[ -n ${HONUA_E2E_IOS_UPGRADE_APP:-} ]]; then
+    "${simctl[@]}" install "$device" "$HONUA_E2E_IOS_UPGRADE_APP"
+    bundle=$("${simctl[@]}" get_app_container "$device" "$app" app)
+    executable=$(plutil -extract CFBundleExecutable raw -o - "$bundle/Info.plist")
+    cmp "$bundle/$executable" "$HONUA_E2E_IOS_UPGRADE_APP/$executable"
+    data=$("${simctl[@]}" get_app_container "$device" "$app" data)
+    settings="$data/Library/appsettings.local.json"
+    test -s "$settings"
+    if [[ -n $report ]]; then
+        jq -n --arg state "$upgrade_state" --arg previous "${HONUA_E2E_IOS_PREVIOUS_REVISION:-}" \
+            --arg current "${GITHUB_SHA:-}" --arg server "${HONUA_E2E_SERVER_REVISION:-}" \
+            '{upgradedWith: $state, previousFieldRevision: $previous, fieldRevision: $current, serverRevision: $server}' \
+            > "$report/installed-upgrade.json"
+    fi
+fi
+if [[ $upgrade_state == draft ]]; then
+    launch_and_run_flow resume-draft-ios
+    "${simctl[@]}" terminate "$device" "$app"
+fi
+launch_and_run_flow verify-outbox-ios
+cmp "$data/Library/media/$attachment" "$working_dir/attachment"
 
 touch "$working_dir/lose-receipt"
 rm -- "$working_dir/offline"
 run_flow retry-outbox
-test -f "$working_dir/withheld"
+if [[ ! -f "$working_dir/withheld" ]]; then
+    echo "The server did not accept the first submission through the lost-receipt proxy." >&2
+    exit 1
+fi
 "${simctl[@]}" terminate "$device" "$app"
 launch_and_run_flow verify-outbox-ios
 rm -- "$working_dir/lose-receipt"

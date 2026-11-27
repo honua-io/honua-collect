@@ -6,12 +6,12 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 output = Path(sys.argv[1])
 sheets = {
     "survey": [
-        ["type", "name", "label", "required", "relevant", "constraint", "calculation"],
+        ["type", "name", "label", "required", "relevant", "constraint", "calculation", "default"],
         ["text", "name", "Inspection name", "yes", "", "string-length(.) >= 3"],
         ["select_multiple states", "status", "Status", "yes"],
         ["calculate", "total", "Calculated total", "", "", "", "if(selected(${status}, 'open'), 2, 1)"],
         ["begin_repeat", "visits", "Visits"],
-        ["text", "note", "Visit note", "yes"],
+        ["text", "note", "Visit note", "yes", "", "", "", "Offline visit one"],
         ["end_repeat"],
         ["image", "photo", "Inspection photo", "", "selected(${status}, 'open')"],
         ["geopoint", "where", "Location", "yes"],
