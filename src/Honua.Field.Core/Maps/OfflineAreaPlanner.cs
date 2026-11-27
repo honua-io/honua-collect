@@ -12,9 +12,7 @@ namespace Honua.Field.Core.Maps;
 public static class OfflineAreaPlanner
 {
     /// <summary>
-    /// The default cap on tiles per offline area. The public OSM tile server is
-    /// a shared community resource with a bulk-download policy; a few thousand
-    /// tiles covers a typical work-site at field zooms without abusing it.
+    /// The default cap on tiles per offline area for sources that allow prefetch.
     /// </summary>
     public const int DefaultMaxTiles = 5_000;
 

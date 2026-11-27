@@ -38,6 +38,7 @@ public static class MauiProgram
 
 	/// <summary>Named HTTP client for OpenStreetMap tile requests (no server auth).</summary>
 	public const string TileHttpClient = "osm";
+	public const string OfflineTileHttpClient = "offline-tiles";
 
 	/// <summary>Named HTTP client for the Anthropic API (no server auth).</summary>
 	public const string AnthropicHttpClient = "anthropic";
@@ -228,11 +229,14 @@ public static class MauiProgram
 			});
 
 		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
-		builder.Services.AddHttpClient(TileHttpClient, client =>
+		void ConfigureTileClient(HttpClient client)
 		{
 			client.DefaultRequestHeaders.UserAgent.ParseAdd("HonuaField/1.0 (+https://honua.io)");
 			client.Timeout = TileRequestTimeout;
-		});
+		}
+		builder.Services.AddHttpClient(TileHttpClient, ConfigureTileClient);
+		builder.Services.AddHttpClient(OfflineTileHttpClient, ConfigureTileClient)
+			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 		builder.Services.AddHttpClient(AnthropicHttpClient, client => client.Timeout = AiRequestTimeout);
 
 		// The feature-sync transport over the auth-aware server client, with a

@@ -39,6 +39,19 @@
           "Honua.Sdk.Abstractions": "2.2.0"
         }
       },
+      "Honua.Sdk.Geometry": {
+        "type": "Direct",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "iskvfVAI2XgfdJFkOb3C1v+US54lkBp9/TB9D8wuA1dBjFbMN5B6acQCIz8GuQoRmOWSbnH3FNZrbRfqj4DuCg==",
+        "dependencies": {
+          "Geospatial.Grpc": "1.0.2",
+          "Honua.Sdk.Abstractions": "2.2.0",
+          "NetTopologySuite": "2.6.0",
+          "NetTopologySuite.IO.GeoJSON4STJ": "4.0.0",
+          "ProjNET": "2.1.0"
+        }
+      },
       "Honua.Sdk.GeoServices": {
         "type": "Direct",
         "requested": "[2.2.0, )",
@@ -124,18 +137,6 @@
         "type": "Transitive",
         "resolved": "2.2.0",
         "contentHash": "QC8C0CwgBsTkPiqtxhb2dZ72EQ9OVyK73RldRyLsKhyA6NKKXt9uBUktH73uxNN6PYum6zwcAGiQ589jbToOTg=="
-      },
-      "Honua.Sdk.Geometry": {
-        "type": "Transitive",
-        "resolved": "2.2.0",
-        "contentHash": "iskvfVAI2XgfdJFkOb3C1v+US54lkBp9/TB9D8wuA1dBjFbMN5B6acQCIz8GuQoRmOWSbnH3FNZrbRfqj4DuCg==",
-        "dependencies": {
-          "Geospatial.Grpc": "1.0.2",
-          "Honua.Sdk.Abstractions": "2.2.0",
-          "NetTopologySuite": "2.6.0",
-          "NetTopologySuite.IO.GeoJSON4STJ": "4.0.0",
-          "ProjNET": "2.1.0"
-        }
       },
       "Microsoft.Data.Sqlite": {
         "type": "Transitive",

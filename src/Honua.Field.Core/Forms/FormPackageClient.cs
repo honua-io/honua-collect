@@ -31,8 +31,7 @@ namespace Honua.Field.Core.Forms;
 /// </code>
 /// </para>
 /// <para>
-/// Field <c>type</c> tokens are mapped to <see cref="FormFieldType"/> using the
-/// same token-mapping approach as <c>XlsFormImporter</c>; unknown tokens fall
+/// Field <c>type</c> tokens map to <see cref="FormFieldType"/>. Unknown tokens fall
 /// back to <see cref="FormFieldType.Text"/>. Fields are grouped under their
 /// section by <c>sectionId</c>, preserving section order and the field order in
 /// which fields appear in the package.

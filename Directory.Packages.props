@@ -28,6 +28,7 @@
   <ItemGroup>
     <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageVersion Include="Honua.Sdk.GeoServices" Version="$(HonuaSdkDotNetTrainVersion)" />
+    <PackageVersion Include="Honua.Sdk.Geometry" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />

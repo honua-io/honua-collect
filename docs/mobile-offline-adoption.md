@@ -1,15 +1,77 @@
 # Shared offline runtime adoption
 
+## Offline basemap coverage
+
+In geometry capture, frame the work area before selecting **Download area** on a
+source whose provider authorizes prefetch. Set the source URL in
+`OsmTileUrl.Template` and the adjacent `AllowOfflinePrefetch` to `true` before
+building. Each alternate URL template uses its own cache. The plan covers the visible extent at the
+current zoom and up to two finer levels, within the tile cap. For the public
+OpenStreetMap source, **Check offline area** verifies the existing cache at the
+current zoom. Advance your map views normally to populate that cache.
+
+Readiness refers to the checked extent and zoom levels at the time of the
+check. Cancelled or incomplete downloads keep the usable tiles. Retry the
+same area to reuse those tiles, then verify the intended map view with
+connectivity disabled.
+
 Implementation tracking: [Field #173](https://github.com/honua-io/honua-field/issues/173)
 and [mobile #421](https://github.com/honua-io/honua-mobile/issues/421).
 This document defines the migration boundary and installation acceptance
 journey. It is a test script, not evidence that the migration has shipped.
 
+## Capability ownership
+
+| Capability | Owner | Verification |
+| --- | --- | --- |
+| Portable XLSForm conversion, field schemas, validation and expression semantics | `honua-sdk-dotnet` provides the shared form model and evaluator. Honua Server owns publication and submission acceptance. Field renders the published version and preserves it with each draft. | Run the same fixtures through workbook conversion and published-form evaluation. Cover repeat scope, multi-select `selected()`, empty answers, division and modulo. |
+| Feature queries, edits, attachment requests, sync contracts and the reconciliation algorithm | `honua-sdk-dotnet` owns the protocol clients, per-edit results, and sync engine. | Against Honua Server, distinguish an explicit rejection from acceptance followed by a lost response. Verify remote feature and attachment counts after retry. |
+| Encrypted GeoPackage storage and device lifecycle | `honua-mobile` implements the journal, checkpoints and local transactions, integrates with platform key storage, and schedules sync on connectivity changes. | Reopen after process death, reject a wrong key without replacing the database, and interrupt replay between server acceptance and durable local acknowledgement. |
+| Phone and tablet capture, record identity and operator decisions | Field owns the draft's pinned form, local UUID to remote object ID association, outbox presentation, conflict choices, and map editor interactions. | Exercise the installed app at phone and tablet sizes. Save offline, restart, reconnect, and verify one server record and one copy of each photo. Record the device type and server version with the result. |
+| Offline assigned work | The [SDK task client](https://github.com/honua-io/honua-sdk-dotnet/pull/596) sends scoped commands and reads typed receipts. The [Mobile adapter](https://github.com/honua-io/honua-mobile/pull/456) caches assignments and persists command IDs and expected versions. The [Field pilot](https://github.com/honua-io/honua-field/pull/203) connects the active worker's session to that adapter and presents their assignments. | With two workers, drop the first successful response, reopen the store, and check that retry produces one server receipt. Switch accounts while a refresh is in flight and verify the previous worker's pending command stays with that account. |
+
+### Migration order
+
+1. **Protect pending records during storage migration.** Field currently uses
+   [SqliteRecordStore](../src/Honua.Field.Core/Storage/SqliteRecordStore.cs).
+   Switch its persistence adapter only after the encrypted upgrade and
+   interrupted-replay checks below pass on populated data.
+   [Field #173](https://github.com/honua-io/honua-field/issues/173)
+2. **Consolidate feature and attachment transport.** Replace hand-built requests in
+   [GeoServicesFeatureSync](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs)
+   with typed SDK operations. Preserve the distinction between a rejected add
+   and one with an unknown outcome. Field decides how the worker verifies an
+   uncertain upload before sending again.
+   [SDK GlobalID support](https://github.com/honua-io/honua-sdk-dotnet/pull/601),
+   [Field #209](https://github.com/honua-io/honua-field/issues/209) and
+   [Field #214](https://github.com/honua-io/honua-field/issues/214)
+3. **Adopt shared expression evaluation.** XLSForm authoring uses the
+   [SDK workbook converter](https://github.com/honua-io/honua-sdk-dotnet/blob/trunk/src/Honua.Sdk.Field/Forms/Authoring/XlsFormConverter.cs).
+   Compare Field's [published-expression adapter](../src/Honua.Field.Core/Forms/PublishedXlsFormExpressions.cs)
+   with the SDK evaluator on the same answers, including restored drafts and
+   repeat rows. Switch callers once the pinned SDK handles each rule. Field
+   keeps widget selection and draft display.
+   [SDK expression support](https://github.com/honua-io/honua-sdk-dotnet/pull/603) and
+   [Field #169](https://github.com/honua-io/honua-field/issues/169)
+4. **Reuse geometry primitives.** When snapping is enabled, the capture session
+   calls [GeoSnapping](../src/Honua.Field.Core/Field/Geometry/GeoSnapping.cs).
+   Compare its vertex and edge results with `Honua.Sdk.Geometry` using explicit
+   coordinate systems, metre tolerances and equidistant targets. The separate
+   [PlanarTopology](../src/Honua.Field.Core/Field/Geometry/PlanarTopology.cs)
+   has only test callers in this repository. Mobile supplies device positions.
+   Field chooses the candidate targets and tolerance for the active tool and owns undo.
+   [Field #223](https://github.com/honua-io/honua-field/issues/223)
+
+Field also owns the decision to use the JavaScript map renderer for capture.
+Benchmark the offline editing flow on both phone and tablet before switching
+renderers, as tracked in [Field #168](https://github.com/honua-io/honua-field/issues/168).
+The reusable browser embed has a separate
+[transfer to the JavaScript SDK](https://github.com/honua-io/honua-mobile/issues/425).
+
 ## Adapter boundary
 
-Keep the tested form runtime, record lifecycle and presentation contracts. Put
-adapters behind those contracts that use published `Honua.Mobile.Offline`
-packages. Do not introduce another HTTP upload loop, retry scheduler or store.
+Preserve the app’s record lifecycle and presentation contracts when adopting
+published `Honua.Mobile.Offline` packages behind its storage interfaces. Do not introduce another HTTP upload loop, retry scheduler or store.
 The app supplies the native SQLite provider and obtains its encryption key from
 platform secure storage before opening the SDK database. A missing or incorrect
 key must fail closed without replacing the existing database.

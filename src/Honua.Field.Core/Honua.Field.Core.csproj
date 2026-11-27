@@ -23,6 +23,7 @@
   <ItemGroup>
     <PackageReference Include="Honua.Sdk.Field" />
     <PackageReference Include="Honua.Sdk.GeoServices" />
+    <PackageReference Include="Honua.Sdk.Geometry" />
     <PackageReference Include="Honua.Mobile.Sdk" />
     <PackageReference Include="Honua.Mobile.Offline" />
     <!-- SQLCipher-capable SQLite: the .Core package + the e_sqlcipher batteries
