@@ -54,6 +54,9 @@ public sealed record FeatureSyncResult(bool Success, long? ObjectId, string? Err
     /// <summary>The server explicitly rejected this edit without assigning an object ID.</summary>
     public bool DefinitiveEditRejection { get; init; }
 
+    /// <summary>Feature encoding failed before an add request could be sent.</summary>
+    public bool AddNotDispatched { get; init; }
+
     /// <summary>
     /// A single one-line description of this result's failure (message plus code when
     /// present), suitable for surfacing in the sync center; empty when successful.
@@ -228,9 +231,18 @@ public sealed class GeoServicesFeatureSync
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(target);
+        string addsJson;
+        try
+        {
+            addsJson = BuildFeaturesJson(record, null, includeGlobalId: true);
+        }
+        catch (ArgumentException)
+        {
+            return Task.FromResult(AddEncodingFailure());
+        }
+
         return PostEditsAsync(
-            target, "adds", BuildFeaturesJson(record, null, includeGlobalId: true), "addResults",
-            idempotent: false, useGlobalIds: true, cancellationToken);
+            target, "adds", addsJson, "addResults", idempotent: false, useGlobalIds: true, cancellationToken);
     }
 
     /// <summary>
@@ -295,7 +307,15 @@ public sealed class GeoServicesFeatureSync
             return [];
         }
 
-        var addsJson = BuildFeaturesArrayJson(records);
+        string addsJson;
+        try
+        {
+            addsJson = BuildFeaturesArrayJson(records);
+        }
+        catch (ArgumentException)
+        {
+            return Enumerable.Repeat(AddEncodingFailure(), records.Count).ToArray();
+        }
 
         try
         {
@@ -311,6 +331,12 @@ public sealed class GeoServicesFeatureSync
             return FailEach(records.Count, ex.Message); // request timeout
         }
     }
+
+    private static FeatureSyncResult AddEncodingFailure() =>
+        new(false, null, "The upload could not be prepared. Check the record values and location.", Attempts: 0)
+        {
+            AddNotDispatched = true
+        };
 
     private async Task<IReadOnlyList<FeatureSyncResult>> AttemptBatchAsync(
         GeoServicesTarget target,
