@@ -38,6 +38,10 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 - On iPhone and iPad simulators, Field can draw a polygon, show its GeoJSON
   and undo the last vertex. The Apple workflow also builds Mac Catalyst.
   [Phone and tablet verification](docs/verification/e2e/README.md#iphone-and-ipad-geometry)
+- Two AWS Device Farm iPhone simulator runs preserved an offline XLSForm draft
+  or queued submission across an app upgrade. Honua Server verified the
+  original form version, repeat rows and photo after sync.
+  [iOS upgrade evidence](docs/verification/e2e/README.md#installed-ios-upgrade-on-aws)
 - Remaining device work includes camera and GNSS integration, map editing,
   background sync, push notifications and enterprise sign-in. Windows device
   verification is also pending.

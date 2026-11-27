@@ -3,6 +3,7 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
 using Honua.Field.App.Views;
 using Honua.Field.Core.Field.Forms;
@@ -12,9 +13,6 @@ using Honua.Field.Core.Records;
 using Honua.Field.Core.Storage;
 using Honua.Field.Core.Sync;
 using Honua.Field.Presentation.Forms;
-using Microsoft.Extensions.DependencyInjection;
-using Honua.Sdk.Field.Forms;
-using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.App;
 
@@ -80,10 +78,12 @@ public partial class MainPage : ContentPage
 
     private async void OnSampleInspectionClicked(object? sender, EventArgs e)
     {
-        var session = FormSession.CreateForNewRecord(SampleForms.FieldSite(), Guid.NewGuid().ToString("n"));
+        var session = SampleForms.CreateFieldSiteSession(Guid.NewGuid().ToString("n"));
         var viewModel = new FormPageViewModel(session);
-        viewModel.SubmitSucceeded += (_, record) => OnSubmitted(session, record);
-        await Navigation.PushAsync(new FormPage(viewModel, _httpClientFactory, _relatedStore, _book));
+        var page = new FormPage(viewModel, _httpClientFactory, _relatedStore, _book);
+        var target = _settings.Target;
+        page.OnOrdinarySubmission(target, onQueued: entry => OnQueuedAsync(entry, target));
+        await Navigation.PushAsync(page);
     }
 
     private async void OnCaptureKitClicked(object? sender, EventArgs e)
@@ -123,18 +123,15 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private async void OnSubmitted(FormSession session, FieldRecord record)
+    private async Task OnQueuedAsync(FieldRecordEntry entry, GeoServicesTarget target)
     {
-        // Stamp a capture location (the layer is point geometry), track it in the
-        // Outbox, and push to the server.
-        if (session.VisibleFields.Select(field => field.Value).OfType<FieldGeoPoint>().FirstOrDefault() is { } point)
-        {
-            record.Location ??= point;
-        }
-        FieldRecordEntry? entry = null;
         try
         {
-            entry = await _book.AddSubmittedAsync(record);
+            if (_settings.Target != target)
+            {
+                StatusLabel.Text = "Saved to the Outbox. Reconnect to the original inspection service to sync.";
+                return;
+            }
             if (Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess == Microsoft.Maui.Networking.NetworkAccess.None)
             {
                 StatusLabel.Text = "Saved to the Outbox. Sync when a network connection is available.";
@@ -145,7 +142,7 @@ public partial class MainPage : ContentPage
             StatusLabel.Text = "Submitting to server…";
 
             var sync = _syncFactory();
-            var result = await sync.SubmitAsync(record, _settings.Target);
+            var result = await sync.SubmitAsync(entry.Record, target);
             var synced = entry.ApplyOrdinaryAddResult(result);
             if (!entry.RequiresServerVerification)
             {
@@ -154,7 +151,16 @@ public partial class MainPage : ContentPage
 
             if (synced)
             {
-                await UploadAttachmentsAsync(session, sync, result.ObjectId);
+                if (entry.OrdinaryPhotos.Count > 0)
+                {
+                    await OrdinaryPhotoReplay.ReplayAsync(entry, sync, target, CaptureFiles.MediaDirectory, _book.SaveAsync);
+                    if (entry.OrdinaryPhotos.Any(photo => photo.State != OrdinaryPhotoState.Synced))
+                    {
+                        StatusLabel.Text = entry.LastError ?? "Feature saved. Open Sync to verify pending photos.";
+                        return;
+                    }
+                }
+
                 StatusLabel.Text = $"Synced to server — objectId {result.ObjectId}. See the Records tab.";
             }
             else
@@ -164,28 +170,9 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = entry?.RequiresServerVerification == true
+            StatusLabel.Text = entry.RequiresServerVerification
                 ? $"Check the record in the Outbox before retrying. {ex.Message}"
                 : $"Could not finish saving or uploading: {ex.Message}";
-        }
-    }
-
-    private async Task UploadAttachmentsAsync(FormSession session, GeoServicesFeatureSync sync, long? objectId)
-    {
-        if (objectId is not { } featureId)
-        {
-            return;
-        }
-
-        var media = session.Fields.SelectMany(f => f.Media).ToList();
-        for (var i = 0; i < media.Count; i++)
-        {
-            var attachment = media[i];
-            var result = await sync.AddAttachmentAsync(
-                featureId, attachment.LocalPath, attachment.ContentType, _settings.Target);
-            StatusLabel.Text = result.Success
-                ? $"Uploaded attachment {i + 1}/{media.Count} (id {result.ObjectId})."
-                : $"Attachment {i + 1}/{media.Count} failed: {result.Error}";
         }
     }
 }

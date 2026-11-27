@@ -57,6 +57,10 @@ Both mobile workflows take their Server commit from `scripts/e2e/fixtures/server
 
 Maestro downloads the form as a layer-scoped worker, saves a draft offline with two repeat rows and a photo, and resumes it after a cold start. The host publishes the next form version while the draft is offline. During the first sync, a proxy forwards the submission and replaces the successful response with HTTP 503. The outbox must survive another restart. After retry, the gate queries FeatureServer and the receipt table for one feature, one matching attachment and one accepted receipt at the original form version. The `published-ios-results` artifact includes per-stage JUnit results and the readback evidence. [iOS workflow](../../../.github/workflows/published-ios.yml)
 
+### Installed iOS upgrade on AWS
+
+AWS Device Farm also ran two iPhone simulator journeys against Honua Server and PostGIS. Each installed a previous Field build, preserved a draft or queued submission across an in-place update, then synchronized it after version 2 of the XLSForm became available. Each server readback contained one accepted version 1 receipt, two repeat rows and the original photo checksum. The runs used Field revisions `6e3db0b` and `c6551c2`. See the [Device Farm runs and readbacks](https://github.com/honua-io/honua-field/pull/208#issuecomment-7217287017) and the [upgrade harness](https://github.com/honua-io/honua-field/pull/208).
+
 ## GeoServices capture topology
 
 - **App**: `io.honua.collect` (Release APK) on a KVM-accelerated Android-35 emulator.
