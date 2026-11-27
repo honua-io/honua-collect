@@ -15,8 +15,8 @@ def put(entry):
         time.sleep(3)
     raise TimeoutError(kind)
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
-    a,z,s=ex.map(put,[("field-live-c6551c2.ipa","IOS_APP"),("field-ios-honua-live.zip","APPIUM_PYTHON_TEST_PACKAGE"),("live.yml","APPIUM_PYTHON_TEST_SPEC")])
-device="arn:aws:devicefarm:us-west-2::device:1ED2EBCF5578549493A578A98C1956B3"
+    a,z,s=ex.map(put,[("field-live.ipa","IOS_APP"),("field-ios-honua-live.zip","APPIUM_PYTHON_TEST_PACKAGE"),("live.yml","APPIUM_PYTHON_TEST_SPEC")])
+device=os.environ.get("HONUA_DEVICEFARM_DEVICE_ARN", "arn:aws:devicefarm:us-west-2::device:1ED2EBCF5578549493A578A98C1956B3")
 request=dict(projectArn=project,appArn=a,deviceSelectionConfiguration={"filters":[{"attribute":"ARN","operator":"IN","values":[device]}],"maxDevices":1},name="Honua Field iOS installed upgrade and loopback Server replay",test=dict(type="APPIUM_PYTHON",testPackageArn=z,testSpecArn=s),executionConfiguration=dict(skipAppResign=True,jobTimeoutMinutes=45),configuration=dict(billingMethod="METERED"))
 pathlib.Path("request.json").write_text(json.dumps(request))
 run=aws("schedule-run","--cli-input-json","file://request.json")["run"]["arn"]

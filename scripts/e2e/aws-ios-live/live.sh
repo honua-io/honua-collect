@@ -15,6 +15,21 @@ trap cleanup EXIT
 export HONUA_E2E_REPORT_DIR="$DEVICEFARM_LOG_DIR/published-ios"
 mkdir -p "$HONUA_E2E_REPORT_DIR"
 exec > >(tee "$HONUA_E2E_REPORT_DIR/preflight.log") 2>&1
+(
+    cd "$inputs"
+    shasum -a 256 --check inputs.sha256
+    cp inputs.sha256 "$HONUA_E2E_REPORT_DIR/input-digests.txt"
+    cp provenance.txt "$HONUA_E2E_REPORT_DIR/provenance.txt"
+)
+export RUNNER_TEMP="$work"
+export GITHUB_WORKSPACE="$work/field"
+{
+    read -r HONUA_E2E_IOS_PREVIOUS_REVISION
+    read -r GITHUB_SHA
+    read -r HONUA_E2E_SERVER_REVISION
+    read -r HONUA_E2E_UPGRADE_STATE
+} < "$inputs/provenance.txt"
+export HONUA_E2E_IOS_PREVIOUS_REVISION GITHUB_SHA HONUA_E2E_SERVER_REVISION HONUA_E2E_UPGRADE_STATE
 download() {
     local url=$1 file=$2 expected=$3
     curl --fail --retry 3 --location --silent --show-error --output "$file" "$url"
@@ -44,19 +59,8 @@ if ! command -v jq >/dev/null; then
 fi
 export PATH="$work:$JAVA_HOME/bin:$pg_path:$work/maestro/bin:$PATH"
 java -version
-(
-    cd "$inputs"
-    shasum -a 256 --check inputs.sha256
-    cp inputs.sha256 "$HONUA_E2E_REPORT_DIR/input-digests.txt"
-)
-export RUNNER_TEMP="$work"
-export GITHUB_WORKSPACE="$work/field"
-export HONUA_E2E_IOS_PREVIOUS_REVISION=6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46
-export GITHUB_SHA=c6551c28995ed4f15cd9db92ec5df95938ae0da4
-export HONUA_E2E_SERVER_REVISION=ea127fc0916f2bce70596deb7e4f11784ce9f7d1
 export HONUA_E2E_HTTP_PORT=5189
 export HONUA_E2E_PUBLISH_NEXT_VERSION=1
-export HONUA_E2E_UPGRADE_STATE=outbox
 export MAESTRO_CLI_NO_ANALYTICS=1 MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 export HONUA_E2E_IOS_DEVICE=${DEVICEFARM_DEVICE_UDID:?}
 mkdir -p "$GITHUB_WORKSPACE" "$RUNNER_TEMP/published-server"
@@ -65,8 +69,8 @@ tar -xzf "$inputs/server.tar.gz" -C "$RUNNER_TEMP"
 test -x "$RUNNER_TEMP/published-server/Honua.Server"
 build_path=src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64
 mkdir -p "$GITHUB_WORKSPACE/$build_path" "$GITHUB_WORKSPACE/field-previous/$build_path"
-ditto -x -k "$inputs/$GITHUB_SHA.zip" "$GITHUB_WORKSPACE/$build_path"
-ditto -x -k "$inputs/$HONUA_E2E_IOS_PREVIOUS_REVISION.zip" "$GITHUB_WORKSPACE/field-previous/$build_path"
+ditto -x -k "$inputs/candidate.zip" "$GITHUB_WORKSPACE/$build_path"
+ditto -x -k "$inputs/previous.zip" "$GITHUB_WORKSPACE/field-previous/$build_path"
 xcrun simctl list devices booted
 # Device Farm pre-installs the declared app. Remove it from this ephemeral simulator so the journey starts clean.
 xcrun simctl uninstall "$HONUA_E2E_IOS_DEVICE" io.honua.collect

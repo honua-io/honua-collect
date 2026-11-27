@@ -3,8 +3,17 @@ set -euo pipefail
 umask 077
 setup=$(cd "$(dirname -- "$0")" && pwd)
 field=$(git -C "$setup" rev-parse --show-toplevel)
-server_revision=ea127fc0916f2bce70596deb7e4f11784ce9f7d1
-field_revision=c6551c28995ed4f15cd9db92ec5df95938ae0da4
+server_revision=${HONUA_E2E_SERVER_REVISION:-ea127fc0916f2bce70596deb7e4f11784ce9f7d1}
+field_revision=${HONUA_E2E_FIELD_REVISION:-c6551c28995ed4f15cd9db92ec5df95938ae0da4}
+previous_revision=${HONUA_E2E_IOS_PREVIOUS_REVISION:-6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46}
+upgrade_state=${HONUA_E2E_UPGRADE_STATE:-outbox}
+for revision in "$server_revision" "$field_revision" "$previous_revision"; do
+    [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected a full Git revision" >&2; exit 2; }
+done
+case "$upgrade_state" in
+    draft|outbox) ;;
+    *) echo "Upgrade state must be draft or outbox" >&2; exit 2 ;;
+esac
 if [ "$#" -ne 5 ]; then
     echo "Usage: $0 <new-output-directory> <app-artifact-directory> <server-git-checkout> <server-tar.gz> <server-sha256-file>" >&2
     exit 2
@@ -14,8 +23,17 @@ mkdir -- "$destination"
 destination=$(cd "$destination" && pwd)
 cp "$setup"/{live.sh,live.yml,schedule.py,pack.sh,requirements.txt} "$destination/"
 cp -R "$setup/tests" "$destination/"
-cp "$2"/*.zip "$destination/"
-cat "$2"/*.zip.sha256 > "$destination/app-digests.sha256"
+(
+    cd "$2"
+    for revision in "$previous_revision" "$field_revision"; do
+        digest=$(awk 'NR == 1 {print $1}' "$revision.zip.sha256")
+        printf '%s  %s\n' "$digest" "$revision.zip" | sha256sum --check -
+    done
+    cp "$previous_revision.zip" "$destination/previous.zip"
+    cp "$field_revision.zip" "$destination/candidate.zip"
+)
+printf '%s\n' "$previous_revision" "$field_revision" "$server_revision" "$upgrade_state" > "$destination/provenance.txt"
+
 digest=$(awk 'NR == 1 {print $1}' "$5")
 printf '%s  %s\n' "$digest" "$4" | sha256sum --check -
 cp "$4" "$destination/server.tar.gz"

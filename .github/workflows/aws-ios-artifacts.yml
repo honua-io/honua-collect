@@ -3,6 +3,18 @@ on:
   push:
     branches: [validation/aws-ios-live-artifacts]
     paths: [.github/workflows/aws-ios-artifacts.yml]
+  workflow_dispatch:
+    inputs:
+      previous_revision:
+        description: Full revision for the installed baseline
+        type: string
+        required: true
+        default: 6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46
+      candidate_revision:
+        description: Full revision for the upgrade candidate
+        type: string
+        required: true
+        default: c6551c28995ed4f15cd9db92ec5df95938ae0da4
 permissions:
   actions: read
   contents: read
@@ -13,10 +25,15 @@ jobs:
     timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      FIELD_PREVIOUS: ${{ inputs.previous_revision || '6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46' }}
+      FIELD_CANDIDATE: ${{ inputs.candidate_revision || 'c6551c28995ed4f15cd9db92ec5df95938ae0da4' }}
     steps:
+      - name: Check immutable source inputs
+        run: |
+          [[ "$FIELD_PREVIOUS" =~ ^[0-9a-f]{40}$ && "$FIELD_CANDIDATE" =~ ^[0-9a-f]{40}$ && "$FIELD_PREVIOUS" != "$FIELD_CANDIDATE" ]]
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: c6551c28995ed4f15cd9db92ec5df95938ae0da4
+          ref: ${{ env.FIELD_CANDIDATE }}
           persist-credentials: false
       - uses: ./.github/actions/mobile-validation-feed
         with:
@@ -24,7 +41,7 @@ jobs:
       - name: Check out the previous Field build
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: 6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46
+          ref: ${{ env.FIELD_PREVIOUS }}
           path: field-previous
           persist-credentials: false
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
@@ -47,9 +64,9 @@ jobs:
               --configuration Debug --disable-build-servers)
             app=$(find "$checkout/src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64" -maxdepth 1 -name '*.app' -type d)
             test -d "$app"
-            revision=6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46
+            revision=$FIELD_PREVIOUS
             if [[ "$checkout" == "." ]]; then
-              revision=c6551c28995ed4f15cd9db92ec5df95938ae0da4
+              revision=$FIELD_CANDIDATE
             fi
             test "$(git -C "$checkout" rev-parse HEAD)" = "$revision"
             ditto -c -k --keepParent "$app" "$RUNNER_TEMP/$revision.zip"
