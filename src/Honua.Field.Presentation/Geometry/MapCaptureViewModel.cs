@@ -30,6 +30,13 @@ public sealed class MapCaptureViewModel : ObservableObject
     }
 
     private GpsAverager? _averaging;
+    private DateTimeOffset _latestDeviceSample;
+
+    /// <summary>Number of independent device readings required for a GPS vertex.</summary>
+    public const int RequiredDeviceSamples = 3;
+
+    /// <summary>Maximum reported horizontal accuracy (metres) to accept.</summary>
+    public const double MaximumDeviceAccuracyMeters = 25;
 
     /// <summary>The geometry type being captured.</summary>
     public CapturedGeometryType GeometryType => _session.Type;
@@ -145,6 +152,7 @@ public sealed class MapCaptureViewModel : ObservableObject
     public void BeginGpsAveraging()
     {
         _averaging = new GpsAverager();
+        _latestDeviceSample = default;
         OnPropertyChanged(nameof(IsAveraging));
         OnPropertyChanged(nameof(AveragingSampleCount));
     }
@@ -161,6 +169,33 @@ public sealed class MapCaptureViewModel : ObservableObject
 
         _averaging.Add(fix);
         OnPropertyChanged(nameof(AveragingSampleCount));
+    }
+
+    /// <summary>Admits a fresh, accurate device fix to the running average.</summary>
+    /// <param name="latitude">Device latitude in degrees.</param>
+    /// <param name="longitude">Device longitude in degrees.</param>
+    /// <param name="accuracyMeters">Reported horizontal accuracy in metres.</param>
+    /// <param name="timestamp">Fix timestamp reported by the device.</param>
+    /// <param name="receivedAt">Time at which the fix was received.</param>
+    /// <returns>Whether the fix was added.</returns>
+    public bool TryAddDeviceGpsSample(
+        double latitude, double longitude, double? accuracyMeters,
+        DateTimeOffset timestamp, DateTimeOffset receivedAt)
+    {
+        if (!IsAveraging || AveragingSampleCount >= RequiredDeviceSamples ||
+            timestamp <= _latestDeviceSample || timestamp > receivedAt ||
+            receivedAt - timestamp > TimeSpan.FromSeconds(5) ||
+            !double.IsFinite(latitude) || latitude is < -90 or > 90 ||
+            !double.IsFinite(longitude) || longitude is < -180 or > 180 ||
+            accuracyMeters is not { } accuracy || !double.IsFinite(accuracy) ||
+            accuracy is <= 0 or > MaximumDeviceAccuracyMeters)
+        {
+            return false;
+        }
+
+        _latestDeviceSample = timestamp;
+        AddGpsSample(new FieldGeoPoint(latitude, longitude, accuracy));
+        return true;
     }
 
     /// <summary>

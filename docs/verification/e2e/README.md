@@ -27,6 +27,14 @@ The installed upgrade and receipt replay use a phone window (411 × 891 dp). Rej
 
 The geometry check draws a three-vertex polygon on a 360 × 720 dp phone window. It rotates the phone, resizes to an 800 × 1280 dp tablet window, rotates the tablet and returns to the original phone window. At each size it checks that the editing controls are visible and the exported GeoJSON has exactly the original coordinates. It also checks Undo and the home form column width. The `adaptive` artifact folder contains screenshots and the bounds of each control.
 
+The GPS geometry check uses a fresh local store on the installed candidate. It grants Android location permission, injects fresh location fixes through the emulator console, waits for the three-fix average, and verifies that Done returns a Point within 0.0001° of the injected coordinates. The `gps-geometry` artifact folder contains the screenshot and returned GeoJSON. This exercises the Android location and capture flow with mock fixes. Unit tests exercise stale and inaccurate fixes.
+
+Run the same check after installing the signed candidate APK on an unlocked disposable emulator:
+
+```bash
+python3 scripts/e2e/check-gps-geometry.py emulator-5554 ./gps-geometry-report
+```
+
 A separate local Android check typed `field27` into the sample inspection’s Site name. The unsaved answer stayed visible through phone landscape, tablet portrait, tablet landscape and the return to phone portrait. At 240 dpi the entry was 492 pixels wide on the portrait phone and 1,032 pixels wide in both tablet orientations.
 
 A local Records check loaded 175 drafts, five outbox records and five sent records. On a portrait phone and a landscape tablet, the tester scrolled through all three groups and opened the edit history for the last sent record.

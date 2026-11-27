@@ -26,7 +26,7 @@ public sealed class OfflineAreaDownloadTests
 
                 await cache.SaveAsync(tile.Zoom, tile.X, tile.Y, [1], token);
                 return true;
-            }, cancellationToken: TestContext.Current.CancellationToken);
+            });
 
             Assert.Equal(1, partial.Cached);
             Assert.False(partial.IsReady);
@@ -42,7 +42,7 @@ public sealed class OfflineAreaDownloadTests
                 }
 
                 return true;
-            }, cancellationToken: TestContext.Current.CancellationToken);
+            });
 
             Assert.True(retried.IsReady);
             Assert.Equal(plan.Count - 1, fetched);
@@ -59,8 +59,7 @@ public sealed class OfflineAreaDownloadTests
         var plan = OfflineAreaPlanner.Plan(new GeoBoundingBox(-10, -10, 10, 10), 2, 2, maxTiles: 1);
 
         var result = await OfflineAreaDownload.RunAsync(plan,
-            (_, _) => throw new InvalidOperationException("Oversized plan attempted a tile."),
-            cancellationToken: TestContext.Current.CancellationToken);
+            (_, _) => throw new InvalidOperationException("Oversized plan attempted a tile."));
 
         Assert.True(result.Plan.ExceedsCap);
         Assert.False(result.IsReady);
@@ -70,7 +69,7 @@ public sealed class OfflineAreaDownloadTests
     [Fact]
     public async Task Cancelled_area_does_not_return_ready_even_if_a_tile_finishes()
     {
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using var cancellation = new CancellationTokenSource();
         var plan = OfflineAreaPlanner.Plan(new GeoBoundingBox(-10, -10, 10, 10), 2, 2);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
