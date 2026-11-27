@@ -237,6 +237,32 @@ public sealed class MobileRecordStoreTests
         Assert.Equal(submission.RequestJson, durable.PublishedSubmission.RequestJson);
     }
 
+    [Fact]
+    public async Task Legacy_conflict_retains_local_state_without_fabricating_server_comparison()
+    {
+        using var directory = new TemporaryRecordDirectory();
+        const string key = "device-test-key";
+        var legacy = await SqliteRecordStore.OpenEncryptedAsync(directory.Database, key);
+        var local = new FieldRecord { RecordId = "legacy-conflict", FormId = "inspection", Status = RecordStatus.Submitted };
+        local.Values["name"] = "Mine";
+        var server = CreateRecord("legacy-conflict");
+        server.Values["name"] = "Theirs";
+        var entry = new FieldRecordEntry(local);
+        entry.MarkPending();
+        entry.MarkSynced("11");
+        entry.SetVersion(17);
+        entry.MarkConflicted(new RecordConflict(local, server, [new FieldConflict("name", "Name", "Mine", "Theirs")]));
+        await legacy.SaveAsync(entry);
+
+        var store = await MobileRecordStore.OpenEncryptedAsync(directory.Database, key);
+        var restored = Assert.Single(await store.LoadAllAsync());
+        Assert.True(restored.IsConflicted);
+        Assert.Equal("11", restored.RemoteId);
+        Assert.Equal(17, restored.Version);
+        Assert.Equal("Mine", restored.Record.Values["name"]?.ToString());
+        Assert.Null(restored.Conflict);
+    }
+
     private sealed class TemporaryRecordDirectory : IDisposable
     {
         private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory();

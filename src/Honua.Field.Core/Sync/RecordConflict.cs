@@ -53,6 +53,8 @@ public sealed class RecordConflict
     /// <summary>Fields whose values differ between the two versions.</summary>
     public IReadOnlyList<FieldConflict> FieldConflicts { get; }
 
+    internal IReadOnlyDictionary<string, object?> ServerValues => _server.Values;
+
     /// <summary>Whether there is anything to resolve.</summary>
     public bool HasConflicts => FieldConflicts.Count > 0;
 

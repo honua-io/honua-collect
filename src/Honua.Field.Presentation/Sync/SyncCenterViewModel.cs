@@ -143,7 +143,9 @@ public sealed class SyncCenterViewModel : ObservableObject
         _logger = logger ?? NullLogger<SyncCenterViewModel>.Instance;
         _entries = entries.ToList();
         Pending = new ObservableCollection<FieldRecordEntry>(_entries.Where(e => e.IsPendingUpload));
-        Conflicts = new ObservableCollection<ConflictReviewViewModel>();
+        Conflicts = new ObservableCollection<ConflictReviewViewModel>(_entries
+            .Where(entry => entry.IsConflicted && entry.Conflict is not null)
+            .Select(entry => new ConflictReviewViewModel(entry)));
         NewFromServer = new ObservableCollection<PullClassification>();
         _summary = SyncSummary.From(_entries);
         SyncCommand = new RelayCommand(() => _ = SyncAsync(), () => !IsSyncing && Summary.HasPendingWork);
@@ -209,10 +211,16 @@ public sealed class SyncCenterViewModel : ObservableObject
     public bool CanPull => _puller is not null && _form is not null && !IsPulling;
 
     /// <summary>
-    /// Conflicts produced by the most recent pull, ready for the review screen to
+    /// Conflicts with captured comparison details, ready for the review screen to
     /// resolve. A <see cref="ConflictReviewViewModel"/> binds to each entry.
     /// </summary>
     public ObservableCollection<ConflictReviewViewModel> Conflicts { get; }
+
+    /// <summary>Whether the latest pull could not save all conflict reviews to local storage.</summary>
+    public bool HasUnsavedPullConflicts { get; private set; }
+
+    /// <summary>Whether an available conflict can be reviewed offline.</summary>
+    public bool HasReviewableConflicts => Conflicts.Count > 0;
 
     /// <summary>
     /// Server features the device had not seen before, surfaced by the most recent
@@ -235,6 +243,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         }
 
         IsPulling = true;
+        HasUnsavedPullConflicts = false;
         _logger.LogInformation("Starting feature pull for form {FormId}.", _form.FormId);
         try
         {
@@ -247,7 +256,6 @@ public sealed class SyncCenterViewModel : ObservableObject
 
             var merge = _pullService.Merge(_form, queryResult.Records, IndexFeatureLayerRecords(_entries, _form.FormId));
 
-            Conflicts.Clear();
             foreach (var classification in merge.Classifications)
             {
                 if (classification.Disposition != PullDisposition.Conflict || classification.Conflict is null)
@@ -263,14 +271,28 @@ public sealed class SyncCenterViewModel : ObservableObject
                 if (entry is not null)
                 {
                     entry.MarkConflicted(classification.Conflict);
-                    Conflicts.Add(new ConflictReviewViewModel(entry));
-                }
-                else
-                {
-                    Conflicts.Add(new ConflictReviewViewModel(classification.Conflict));
+                    if (_persist is not null)
+                    {
+                        try
+                        {
+                            await _persist(entry);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            HasUnsavedPullConflicts = true;
+                            _logger.LogError(ex, "Failed to save pulled conflict for record {RecordId}.", entry.Record.RecordId);
+                        }
+                    }
                 }
             }
 
+            Conflicts.Clear();
+            foreach (var entry in _entries.Where(entry => entry.IsConflicted && entry.Conflict is not null))
+            {
+                Conflicts.Add(new ConflictReviewViewModel(entry));
+            }
+
+            OnPropertyChanged(nameof(HasReviewableConflicts));
             NewFromServer.Clear();
             foreach (var item in merge.NewRecords)
             {

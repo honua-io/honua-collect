@@ -256,7 +256,10 @@ public sealed class MobileRecordStore : IRecordStore
             record.CreatedAtUtc, record.SubmittedAtUtc, record.CompletedAtUtc,
             JsonSerializer.SerializeToElement(record.Values, SqliteRecordStore.ValuesJsonOptions),
             entry.SyncState, entry.RemoteId, entry.LastError, entry.FailedAttempts, entry.LastSyncedUtc,
-            entry.Version, entry.PublishedSubmission, entry.PublishedDraft, entry.LastAttemptUtc);
+            entry.Version, entry.PublishedSubmission, entry.PublishedDraft, entry.LastAttemptUtc,
+            entry.Conflict is { } conflict ? new MobileRecordConflictData(
+                JsonSerializer.SerializeToElement(conflict.ServerValues, SqliteRecordStore.ValuesJsonOptions),
+                conflict.FieldConflicts.Select(field => new MobileRecordConflictField(field.FieldId, field.Label)).ToArray()) : null);
         return new OfflineDocument(record.RecordId, JsonSerializer.Serialize(data, MobileRecordJsonContext.Default.MobileRecordData));
     }
 
@@ -275,24 +278,43 @@ public sealed class MobileRecordStore : IRecordStore
             SubmittedAtUtc = data.SubmittedAtUtc,
             CompletedAtUtc = data.CompletedAtUtc,
         };
-        foreach (var value in data.Values.EnumerateObject())
-        {
-            record.Values[value.Name] = value.Value.ValueKind == JsonValueKind.Null ? null : value.Value;
-        }
+        ReadValues(record, data.Values);
 
         var entry = new FieldRecordEntry(record) { PublishedSubmission = data.Submission, PublishedDraft = data.Draft };
         entry.RestoreSyncState(data.SyncState, data.RemoteId, data.LastError, data.FailedAttempts, data.LastAttemptUtc, data.LastSyncedUtc);
         entry.SetVersion(data.Version);
+        if (entry.IsConflicted && data.Conflict is { } conflict)
+        {
+            var server = new FieldRecord { RecordId = record.RecordId, FormId = record.FormId };
+            ReadValues(server, conflict.ServerValues);
+            entry.MarkConflicted(new RecordConflict(record, server, conflict.Fields.Select(field =>
+                new FieldConflict(field.Id, field.Label, record.Values.GetValueOrDefault(field.Id),
+                    server.Values.GetValueOrDefault(field.Id))).ToArray()));
+        }
+
         return entry;
     }
+
+    private static void ReadValues(FieldRecord record, JsonElement values)
+    {
+        foreach (var value in values.EnumerateObject())
+        {
+            record.Values[value.Name] = value.Value.ValueKind == JsonValueKind.Null ? null : value.Value;
+        }
+    }
 }
+
+internal sealed record MobileRecordConflictData(JsonElement ServerValues, MobileRecordConflictField[] Fields);
+
+internal sealed record MobileRecordConflictField(string Id, string Label);
 
 internal sealed record MobileRecordData(
     string FormId, RecordStatus Status, string? AssignedUserId, FieldGeoPoint? Location,
     DateTimeOffset CreatedAtUtc, DateTimeOffset? SubmittedAtUtc, DateTimeOffset? CompletedAtUtc,
     JsonElement Values, RecordSyncState SyncState, string? RemoteId, string? LastError,
     int FailedAttempts, DateTimeOffset? LastSyncedUtc, int Version,
-    PublishedFormSubmission? Submission, PublishedFormDraft? Draft, DateTimeOffset? LastAttemptUtc = null);
+    PublishedFormSubmission? Submission, PublishedFormDraft? Draft, DateTimeOffset? LastAttemptUtc = null,
+    MobileRecordConflictData? Conflict = null);
 
 [JsonSerializable(typeof(MobileRecordData))]
 [JsonSerializable(typeof(PublishedFormSubmission))]

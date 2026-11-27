@@ -27,6 +27,7 @@
             <Label IsVisible="{Binding HasRejectedSubmissions}" Text="Review rejected submissions in Records." />
             <Label x:Name="ResultLabel" />
             <Button Text="Sync now" Command="{Binding SyncCommand}" />
+            <Button Text="Review conflicts" IsVisible="{Binding HasReviewableConflicts}" Clicked="OnReviewConflicts" />
             <Button Text="Pull from server" Clicked="OnPull" />
             <Button Text="Resilient paged inbox pull" Clicked="OnOpenPagedInboxPull" />
         </VerticalStackLayout>

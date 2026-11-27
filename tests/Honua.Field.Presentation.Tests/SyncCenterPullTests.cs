@@ -4,6 +4,7 @@
 using Honua.Field.Core.Forms;
 using Honua.Field.Core.Records;
 using Honua.Field.Core.Sync;
+using Honua.Field.Core.Storage;
 using Honua.Field.Presentation.Sync;
 using Honua.Sdk.Field.Forms;
 using PublishedFormSubmission = Honua.Field.Core.Forms.PublishedFormSubmission;
@@ -118,6 +119,28 @@ public class SyncCenterPullTests
     }
 
     [Fact]
+    public async Task Pull_warns_when_conflict_cannot_be_saved_and_can_retry_the_save()
+    {
+        var entry = SyncedEntry("rec-1", "11", "Mine");
+        var attempts = 0;
+        var vm = new SyncCenterViewModel([entry], (_, _) => Task.FromResult(FeatureSyncResult.Fail("unused")),
+            Puller(Server(11, "Theirs")), Form(), persist: _ => ++attempts == 1
+                ? Task.FromException(new IOException("Local store unavailable"))
+                : Task.CompletedTask);
+
+        await vm.PullAsync();
+
+        Assert.True(vm.HasUnsavedPullConflicts);
+        Assert.True(vm.HasReviewableConflicts);
+        Assert.Equal(RecordBox.Conflicts, entry.Box);
+
+        await vm.PullAsync();
+
+        Assert.False(vm.HasUnsavedPullConflicts);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
     public async Task PullAsync_returns_null_and_no_conflicts_on_query_failure()
     {
         var entries = new[] { SyncedEntry("rec-1", "11", "Mine") };
@@ -173,6 +196,51 @@ public class SyncCenterPullTests
         // ...and durably persisted exactly once (no silent discard).
         Assert.Same(entries[0], Assert.Single(persisted));
         Assert.True(review.IsResolved);
+    }
+
+    [Fact]
+    public async Task Persisted_conflict_can_be_reviewed_and_resolved_after_offline_restart()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(directory.FullName, "records.db");
+            var store = await MobileRecordStore.OpenEncryptedAsync(path, "conflict-test-key");
+            var entry = SyncedEntry("rec-1", "11", "Mine");
+            entry.SetVersion(17);
+            await store.SaveAsync(entry);
+            var server = Server(11, "Theirs");
+            server.Record.Values["server_only"] = "retained";
+            RecordUploader noUpload = (_, _) => Task.FromResult(FeatureSyncResult.Fail("offline"));
+            var online = new SyncCenterViewModel([entry], noUpload, Puller(server), Form(), persist: e => store.SaveAsync(e));
+
+            await online.PullAsync();
+
+            var reopened = await MobileRecordStore.OpenEncryptedAsync(path, "conflict-test-key");
+            var offline = new SyncCenterViewModel(await reopened.LoadAllAsync(), noUpload);
+            Assert.False(offline.CanPull);
+            Assert.True(offline.HasReviewableConflicts);
+            Assert.Equal(1, offline.Summary.Conflicts);
+            var review = Assert.Single(offline.Conflicts);
+            var field = Assert.Single(review.Conflicts);
+            Assert.Equal("Mine", field.LocalText);
+            Assert.Equal("Theirs", field.ServerText);
+            field.Resolution = ConflictResolution.KeepServer;
+            await review.ApplyResolutionAsync(e => reopened.SaveAsync(e));
+
+            var resolvedStore = await MobileRecordStore.OpenEncryptedAsync(path, "conflict-test-key");
+            var resolved = Assert.Single(await resolvedStore.LoadAllAsync());
+            Assert.Equal(RecordSyncState.PendingUpdate, resolved.SyncState);
+            Assert.Equal("11", resolved.RemoteId);
+            Assert.Equal(17, resolved.Version);
+            Assert.Equal("Theirs", resolved.Record.Values["name"]?.ToString());
+            Assert.Equal("retained", resolved.Record.Values["server_only"]?.ToString());
+            Assert.Null(resolved.Conflict);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]
