@@ -78,25 +78,58 @@ export Authentication__PortalCredentialVerifier__FallBackToAdminVerifier=true
 export FileStorage__Provider=Local FileStorage__LocalStorage__BasePath="$state/attachments"
 export Geocoding__Enabled=false
 cd "$RUNNER_TEMP/published-server"
+export DOTNET_HOST_TRACE=1 DOTNET_HOST_TRACEFILE="$state/server-host.trace"
 # Keep the fixture running across the restart helper's exit, without requiring nohup.
 (
     trap '' HUP
     exec ./Honua.Server
-) </dev/null >> "$state/server.log" 2>&1 &
-echo "$!" > "$pid_file"
+) </dev/null > "$state/server.log" 2>&1 &
+server_pid=$!
+echo "$server_pid" > "$pid_file"
 for ((attempt = 0; attempt < 90; ++attempt)); do
     if curl --fail --silent --max-time 2 "$base_url/healthz/ready" >/dev/null; then
         exit 0
     fi
-    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+    if ! kill -0 "$server_pid" 2>/dev/null; then
         server_status=0
-        wait "$(cat "$pid_file")" || server_status=$?
+        wait "$server_pid" || server_status=$?
         echo "::error::The fixture server exited before becoming ready (status $server_status)" >&2
-        # Keep startup secrets private. Report exception types without messages or values.
-        LC_ALL=C grep -Eo '^[[:space:]]*(Unhandled exception\. |---> )?[[:alnum:]_.]+Exception:' \
-            "$state/server.log" | sort -u >&2 || true
-        LC_ALL=C grep -Eo 'command not found|No such file or directory|Permission denied|Bad CPU type in executable|Library not loaded|Symbol not found|Failed to load[^[:alnum:]]|libhostfxr[.]dylib|libhostpolicy[.]dylib|libcoreclr[.]dylib|Microsoft[.]NETCore[.]App' \
-            "$state/server.log" | sort -u >&2 || true
+        python3 - "$state" <<'PYTHON'
+from pathlib import Path
+import re
+import sys
+from urllib.parse import quote, quote_plus
+
+state = Path(sys.argv[1])
+secrets = set()
+for filename in ("db-password", "admin-key", "master-key", "encryption-salt", "worker-key"):
+    secret_file = state / filename
+    if secret_file.exists():
+        value = secret_file.read_text().strip()
+        if value:
+            secrets.update((value, quote(value, safe=""), quote_plus(value, safe="")))
+for secret in tuple(secrets):
+    secrets.add(re.sub(r"%[0-9A-F]{2}", lambda match: match[0].lower(), secret))
+
+for filename, host_trace in (("server.log", False), ("server-host.trace", True)):
+    log = state / filename
+    if not log.exists():
+        continue
+    print(f"Startup diagnostics from {filename}", file=sys.stderr)
+    shown = 0
+    with log.open(errors="replace") as entries:
+        for line in entries:
+            if host_trace and not re.search(
+                r"error|failed|not found|could not|permission denied", line, re.IGNORECASE
+            ):
+                continue
+            for secret in sorted(secrets, key=len, reverse=True):
+                line = line.replace(secret, "[REDACTED]")
+            print(line.rstrip()[:1500], file=sys.stderr)
+            shown += 1
+            if shown == 16:
+                break
+PYTHON
         exit 1
     fi
     sleep 2
