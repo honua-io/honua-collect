@@ -227,6 +227,28 @@ public static class MauiProgram
 				return handler;
 			});
 
+#if HONUA_ASSIGNED_WORK_PILOT
+		const string assignedWorkHttpClient = "honua-assigned-work";
+		builder.Services.AddHttpClient(assignedWorkHttpClient, client => client.Timeout = ServerRequestTimeout)
+			.ConfigurePrimaryHttpMessageHandler(() =>
+			{
+				var handler = new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
+				if (pinningCallback is not null)
+				{
+					handler.ServerCertificateCustomValidationCallback =
+						(request, certificate, chain, errors) => pinningCallback(request, certificate, chain, errors);
+				}
+
+				return handler;
+			});
+		builder.Services.AddSingleton(sp => new AssignedWorkPilot(
+			sp.GetRequiredService<IAuthSessionStore>(),
+			async ct => (MobileRecordStore)await sp.GetRequiredService<LazyRecordStore>().GetStoreAsync(ct).ConfigureAwait(false),
+			() => sp.GetRequiredService<IHttpClientFactory>().CreateClient(assignedWorkHttpClient),
+			settings.BaseUri,
+			settings.ServiceId));
+#endif
+
 		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
 		builder.Services.AddHttpClient(TileHttpClient, client =>
 		{

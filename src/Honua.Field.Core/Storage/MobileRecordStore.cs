@@ -18,6 +18,12 @@ public sealed class MobileRecordStore : IRecordStore
 
     private MobileRecordStore(GeoPackageSyncStore store) => _store = store;
 
+#if HONUA_ASSIGNED_WORK_PILOT
+    internal Honua.Mobile.Offline.Tasks.OfflineAssignedWork CreateAssignedWork(
+        Honua.Sdk.Field.Tasks.WorkTaskClient client, Honua.Mobile.Offline.Tasks.AssignedWorkScope scope) =>
+        new(_store, client, scope);
+#endif
+
     /// <summary>Opens the existing encrypted database and imports legacy records once.</summary>
     public static async Task<MobileRecordStore> OpenEncryptedAsync(string path, string key, CancellationToken ct = default)
     {
