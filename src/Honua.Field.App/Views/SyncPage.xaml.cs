@@ -25,6 +25,7 @@ public partial class SyncPage : ContentPage
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
     private readonly IInboxPullProgressStore _pullProgressStore;
     private readonly ILogger<SyncCenterViewModel>? _logger;
+    private bool _syncRequested;
 
     public SyncPage(
         AppSettings settings,
@@ -47,18 +48,81 @@ public partial class SyncPage : ContentPage
     {
         base.OnAppearing();
         await _book.InitializeAsync();
+        await ForegroundSyncGate.Instance.WaitAsync();
+        try
+        {
+            if (!_syncRequested)
+            {
+                BindViewModel();
+            }
+        }
+        finally
+        {
+            ForegroundSyncGate.Instance.Release();
+        }
+    }
+
+    private SyncCenterViewModel BindViewModel()
+    {
         // 4-arg form enables bidirectional sync: the puller queries the server and
         // the active form lets the merge classify new-vs-conflicting records. The
         // persister durably saves each entry's post-upload state so a restart does
         // not re-upload (and duplicate) an already-synced record.
-        BindingContext = new SyncCenterViewModel(
-            _book.All, UploadAsync, PullAsync, SampleForms.FieldSite(), _book.SaveAsync, BatchUploadAsync,
+        var target = _settings.Target;
+        var vm = new SyncCenterViewModel(
+            _book.All, (entry, cancellationToken) => UploadAsync(entry, target, cancellationToken),
+            PullAsync, SampleForms.FieldSite(), _book.SaveAsync,
+            (entries, cancellationToken) => BatchUploadAsync(entries, target, cancellationToken),
             logger: _logger,
-            canDispatchOrdinaryAdd: () => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
-                != Microsoft.Maui.Networking.NetworkAccess.None);
+            canDispatchOrdinaryAdd: HasNetworkAccess,
+            replayOrdinaryPhotos: ReplayOrdinaryPhotosAsync,
+            canDispatchOrdinaryRecord: entry => entry.OrdinaryPhotos.All(photo => photo.Target == target));
+        BindingContext = vm;
+        var command = new Command(
+            async () => await RunSyncAsync(),
+            () => !_syncRequested && vm.SyncCommand.CanExecute(null));
+        vm.SyncCommand.CanExecuteChanged += (_, _) => command.ChangeCanExecute();
+        SyncButton.Command = command;
+        return vm;
     }
 
-    private async Task<FeatureSyncResult> UploadAsync(Core.Records.FieldRecordEntry entry, CancellationToken cancellationToken)
+    private static bool HasNetworkAccess() => Microsoft.Maui.Networking.Connectivity.Current.NetworkAccess
+        != Microsoft.Maui.Networking.NetworkAccess.None;
+
+    private Task<bool> ReplayOrdinaryPhotosAsync(Core.Records.FieldRecordEntry entry)
+        => HasNetworkAccess()
+            ? OrdinaryPhotoReplay.ReplayAsync(entry, _syncFactory(), _settings.Target, CaptureFiles.MediaDirectory, _book.SaveAsync)
+            : Task.FromResult(false);
+
+    private async Task RunSyncAsync()
+    {
+        if (_syncRequested)
+        {
+            return;
+        }
+
+        _syncRequested = true;
+        (SyncButton.Command as Command)?.ChangeCanExecute();
+        await ForegroundSyncGate.Instance.WaitAsync();
+        try
+        {
+            // The record book may have changed while another screen uploaded.
+            var vm = BindViewModel();
+            if (vm.SyncCommand.CanExecute(null))
+            {
+                await vm.SyncAsync();
+            }
+        }
+        finally
+        {
+            _syncRequested = false;
+            (SyncButton.Command as Command)?.ChangeCanExecute();
+            ForegroundSyncGate.Instance.Release();
+        }
+    }
+
+    private async Task<FeatureSyncResult> UploadAsync(
+        Core.Records.FieldRecordEntry entry, GeoServicesTarget target, CancellationToken cancellationToken)
     {
         if (entry.PublishedSubmission is { } submission)
         {
@@ -88,13 +152,18 @@ public partial class SyncPage : ContentPage
         // error message/code verbatim.
         if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted)
         {
-            if (entry.RemoteId is { } remoteId
-                && long.TryParse(remoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var deleteId))
+            if (entry.RemoteId is null)
             {
-                return await sync.DeleteAsync(deleteId, _settings.Target, cancellationToken);
+                return FeatureSyncResult.Ok(null);
             }
 
-            return FeatureSyncResult.Ok(null);
+            if (!long.TryParse(entry.RemoteId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var deleteId)
+                || deleteId <= 0)
+            {
+                return FeatureSyncResult.Fail("This feature has an invalid server object ID. Check the server layer before retrying.");
+            }
+
+            return await sync.DeleteAsync(deleteId, target, cancellationToken);
         }
 
         if (entry.RemoteId is { } storedObjectId)
@@ -105,19 +174,19 @@ public partial class SyncPage : ContentPage
                 return FeatureSyncResult.Fail("This feature has an invalid server object ID. Check the server layer before retrying.");
             }
 
-            return await sync.UpdateAsync(objectId, entry.Record, _settings.Target, cancellationToken: cancellationToken);
+            return await sync.UpdateAsync(objectId, entry.Record, target, cancellationToken: cancellationToken);
         }
 
-        return await sync.SubmitAsync(entry.Record, _settings.Target, cancellationToken);
+        return await sync.SubmitAsync(entry.Record, target, cancellationToken);
     }
 
     private async Task<IReadOnlyList<FeatureSyncResult>> BatchUploadAsync(
         IReadOnlyList<Core.Records.FieldRecordEntry> entries,
-        CancellationToken cancellationToken)
+        GeoServicesTarget target, CancellationToken cancellationToken)
     {
         var sync = _syncFactory();
         var records = entries.Select(e => e.Record).ToList();
-        return await sync.SubmitBatchAsync(records, _settings.Target, cancellationToken);
+        return await sync.SubmitBatchAsync(records, target, cancellationToken);
     }
 
     private async Task<FeatureQueryResult> PullAsync(CancellationToken cancellationToken)

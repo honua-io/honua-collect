@@ -1,7 +1,10 @@
 // Copyright (c) Honua Geo Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
+using Honua.Field.Core.Field.Forms;
 using Honua.Sdk.Field.Forms;
+using Honua.Sdk.Field.Records;
 
 namespace Honua.Field.App;
 
@@ -14,6 +17,17 @@ namespace Honua.Field.App;
 /// </summary>
 public static class SampleForms
 {
+    /// <summary>Starts an inspection with the defaults required by the Offline Field Sites layer.</summary>
+    public static FormSession CreateFieldSiteSession(string recordId, FieldRecord? seed = null)
+    {
+        var session = FormSession.CreateForNewRecord(FieldSite(), recordId, seedFrom: seed,
+            seedDefaults: new Dictionary<string, object?> { ["priority"] = "normal" });
+        session.Record.Values["inspection_date"] = session.Record.CreatedAtUtc.ToString("O", CultureInfo.InvariantCulture);
+        session.Record.Values["sync_version"] = 1;
+        session.Record.Values["offline_action"] = "field-capture";
+        return session;
+    }
+
     /// <summary>A field-site inspection matching the server's editable layer schema.</summary>
     public static FormDefinition FieldSite() => new()
     {
@@ -36,24 +50,29 @@ public static class SampleForms
                         Required = true,
                         Choices =
                         [
-                            new FieldChoice { Value = "new", Label = "New" },
+                            new FieldChoice { Value = "open", Label = "New" },
                             new FieldChoice { Value = "in_progress", Label = "In progress" },
-                            new FieldChoice { Value = "done", Label = "Done" },
+                            new FieldChoice { Value = "resolved", Label = "Done" },
+                            new FieldChoice { Value = "blocked", Label = "Blocked" },
                         ],
                     },
                     new FormField
                     {
                         FieldId = "priority",
                         Label = "Priority",
+                        Required = true,
                         Type = FormFieldType.SingleChoice,
                         Choices =
                         [
                             new FieldChoice { Value = "low", Label = "Low" },
+                            new FieldChoice { Value = "normal", Label = "Normal" },
                             new FieldChoice { Value = "high", Label = "High" },
+                            new FieldChoice { Value = "critical", Label = "Critical" },
                         ],
                     },
                     new FormField { FieldId = "assigned_to", Label = "Assigned to", Type = FormFieldType.Text },
                     new FormField { FieldId = "notes", Label = "Notes", Type = FormFieldType.Text },
+                    new FormField { FieldId = "photo", Label = "Photo", Type = FormFieldType.Photo },
                 ],
             },
         ],
