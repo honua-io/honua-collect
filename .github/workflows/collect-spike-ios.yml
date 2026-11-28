@@ -41,17 +41,6 @@ jobs:
           xcodebuild -version
           xcrun simctl list devices available
 
-      - name: Authenticate package feed
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NUGET_AUTH_USER: ${{ github.actor }}
-        run: >-
-          dotnet nuget update source github-honua
-          --username "$NUGET_AUTH_USER"
-          --password "$NUGET_AUTH_TOKEN"
-          --store-password-in-clear-text
-          --configfile NuGet.config
-
       - name: Install iOS workload
         run: dotnet workload install maui-ios --skip-manifest-update --source https://api.nuget.org/v3/index.json
 
@@ -61,6 +50,9 @@ jobs:
           npm run assets --prefix scripts/shell-spike
 
       - name: Build unsigned ARM64 simulator application
+        env:
+          # NuGet reads this only when the pinned checkout defines github-honua.
+          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           # Select iOS only in this runner's app project. A command-line
           # TargetFrameworks override propagates to the net10.0 shared libraries
