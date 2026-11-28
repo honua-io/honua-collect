@@ -207,9 +207,13 @@ PYTEST
     then
         fail_gate "Live feature sync integration evidence is incomplete"
     fi
+    # Suppress launcher ANR dialogs on the disposable emulator before using the gallery.
     if ! "$workspace/scripts/e2e/create-fixture-worker.sh" "http://127.0.0.1:$HONUA_E2E_HTTP_PORT" "$working_dir/admin-key" \
             "mobile_offline_demo/Offline Field Sites" "$working_dir/ordinary-worker-key" ||
         ! prepare_candidate_check 822x1782 320 ||
+        ! "${adb_device[@]}" shell settings put global hide_error_dialogs 1 ||
+        ! "${adb_device[@]}" shell settings put secure anr_show_background 0 ||
+        ! "${adb_device[@]}" shell am force-stop com.google.android.apps.nexuslauncher ||
         ! python3 "$workspace/scripts/e2e/run-ordinary-photo-android.py" "$serial" "$report_root/ordinary-photo" "$working_dir/ordinary-worker-key"; then
         fail_gate "Installed Android offline feature photo replay failed"
     fi
