@@ -41,6 +41,25 @@ A local Records check loaded 175 drafts, five outbox records and five sent recor
 
 The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45895394432) passed the installed .NET 10 to .NET 11 upgrade (versionCode 3 to 4), encryption-key recovery, receipt replay, rejection correction and adaptive geometry checks. For each submission scenario, Honua Server returned exactly one feature, one accepted receipt, two repeat rows and the expected attachment checksum. The [run artifact](https://github.com/honua-io/honua-field/actions/runs/45895394432/artifacts/15155210669) contains the matching upgrade snapshots, device screenshots, both server readbacks and the correction ledger.
 
+## Ordinary feature photos on Android
+
+The installed app picks a fixture image from the Android gallery in airplane mode, submits the inspection to the outbox and restarts Field. Before reconnecting, the gate verifies the server has no matching feature. After sync, the gate compares the server attachment against the JPEG saved by Field. It restarts Field again, verifies the record is Sent and checks that the feature and attachment IDs stay the same.
+
+All four Maestro phases passed with Field `eae4e68` and Honua Server `1c59eb2`. The layer-scoped worker synced one feature and one attachment. The downloaded JPEG matched all 952 bytes of Field’s private copy. The artifact contains the Field, Server and harness revisions, installed APK checksum and JUnit results. [Workflow run](https://github.com/honua-io/honua-field/actions/runs/46118802646) · [Hosted artifact](https://github.com/honua-io/honua-field/actions/runs/46118802646/artifacts/15252944002) · [Server readback](ordinary-photo-android.json)
+
+The [published Android workflow](../../../.github/workflows/published-android.yml) builds the Debug APK, installs Maestro and runs the [gate](../../../.github/workflows/run-published-android-gate.sh). The gate starts the pinned Server with PostGIS and local attachment storage, seeds `mobile_offline_demo/Offline Field Sites` (layer `68910`) with attachments enabled, and creates the layer-scoped worker key. It uploads `ordinary-photo/server-readback.json` and the four Maestro reports in `published-android-results`.
+
+To run just the photo scenario against an equivalently seeded fixture, put Python 3.11+, Java, `adb`, `curl`, `jq` and Maestro 2.12.1 on PATH. Install the Debug APK on a disposable emulator, clear its Field sandbox and start with airplane mode off. Use the same display size and density as the gate (822×1782 at 320 dpi). Keep the seeded server on host port `5189` or set `HONUA_E2E_HTTP_PORT` to match the fixture. The harness toggles airplane mode and uses `adb reverse` to reconnect to the fixture. Only the worker key goes to the emulator.
+
+```bash
+port=${HONUA_E2E_HTTP_PORT:-5189}
+scripts/e2e/create-fixture-worker.sh "http://127.0.0.1:$port" /path/to/fixture-admin-key \
+  "mobile_offline_demo/Offline Field Sites" /path/to/worker-key
+python3 scripts/e2e/run-ordinary-photo-android.py emulator-5554 /tmp/field-photo-results /path/to/worker-key
+```
+
+The [live GeoServices test](../../../tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs) covers a dropped upload acknowledgment. After the server stores the photo and the reply is lost, the test reopens the encrypted store, verifies the remote attachment and confirms that the original feature lists one attachment and Field made only one upload request.
+
 ## iPhone and iPad geometry
 
 The [Apple workflow](../../../.github/workflows/field-apple.yml) builds Field for the iOS simulator and Mac Catalyst. Separate iPhone and iPad jobs check the app bundle's camera, microphone, photo-library and location permission descriptions before running Maestro. On iOS 27.2, both simulators displayed the empty Drafts, Outbox and Sent groups, captured a polygon, showed its GeoJSON and undid the last vertex. The [iPhone 18 Pro artifact](https://github.com/honua-io/honua-field/actions/runs/45895399423/artifacts/15154032425) and [iPad Pro 13-inch (M5) artifact](https://github.com/honua-io/honua-field/actions/runs/45895399423/artifacts/15153613595) contain the JUnit reports and screenshots.
