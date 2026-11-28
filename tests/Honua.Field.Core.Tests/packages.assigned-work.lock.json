@@ -64,8 +64,8 @@
       },
       "Grpc.Core.Api": {
         "type": "Transitive",
-        "resolved": "2.84.0",
-        "contentHash": "p2SOMl6q/GZ4/5MLkgboC/z55g4zKUEruRn/g46QgppjQBVnsLZVBU/9VO7n60ll38G3Eo8Zu9b7x+W01GKFVg=="
+        "resolved": "2.85.0",
+        "contentHash": "cpYu/nw/QhwHcRZMJbYD8lEllKrdwYMiDS4U3oH61nhYPUMNkcCcef4ulv11svHvTBThYV+ju332N9bCrfe7cQ=="
       },
       "Grpc.Net.Client": {
         "type": "Transitive",
@@ -85,58 +85,57 @@
       },
       "Honua.Sdk.Abstractions": {
         "type": "Transitive",
-        "resolved": "5.1.1-fieldtasks.3",
-        "contentHash": "yHcf4lBa6ruKMZuhMzRNg6CT9KUMfZIQsOLbjdtEK/SR19Tlx3x/GFdnmreTCzW/F9XBqbfW9lEhGo5PUsiCZw=="
+        "resolved": "5.2.0",
+        "contentHash": "a13mo/J44o2WcOwMEpr0SmTOf1ljnygNwyeh35BMfnSQEHakQu5Ts8ySyTcbZu2k8sGNYorgKve4XSkRo/JueA=="
       },
       "Honua.Sdk.Grpc": {
         "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "ETTP378NRdjm7bhLOZKCyVN/7ron2vkih+Cxv1F2ogYSDn1jTctGl/Qd0nR9/5r/uT+2qJHFbC7ZzG28Kh0Q8A==",
+        "resolved": "5.2.0",
+        "contentHash": "4okbFTrfnHcGdwvN9YIK1gD1IDHoOfqQS6BELLcsRdElsWbtOmdcJP24yrjJkhpnfdrVj2cMXkuZsKxN8SUMYQ==",
         "dependencies": {
-          "Geospatial.Grpc": "1.0.0",
-          "Google.Protobuf": "3.35.1",
+          "Geospatial.Grpc": "1.5.0",
+          "Google.Protobuf": "3.36.2",
           "Grpc.Net.Client": "2.76.0",
-          "Honua.Sdk.Abstractions": "1.10.0",
-          "Honua.Sdk.Geometry": "1.10.0",
-          "Honua.Sdk.Processes": "1.10.0",
-          "Microsoft.Extensions.Http": "10.0.7"
+          "Honua.Sdk.Abstractions": "5.2.0",
+          "Honua.Sdk.Geometry": "5.2.0",
+          "Honua.Sdk.Processes": "5.2.0"
         }
       },
       "Honua.Sdk.Offline": {
         "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "R2jrN3hmUY/A9zTnifOqJgD3XBQz4NAfDrpyVMaXd917qjRk+KEn8RRvh/cXNvz46qA8S2Li6Fc/6kPVdbP15A==",
+        "resolved": "5.2.0",
+        "contentHash": "fxy8/yLt7wLz4r1PVI6BMdoWl5aBHjavMNtL+Y8UkruHgRUSYZrXhlCDxb1QtZoaSgpUb/KWYx/XXSDJ42Rw4w==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.10.0"
+          "Honua.Sdk.Abstractions": "5.2.0"
         }
       },
       "Honua.Sdk.OgcFeatures": {
         "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "yvs3+SHoZXU7lDbqKFNV5OkIiZEbRgJsgLLhf9bXKD/9E7nmVPb9uW42K60dN8pd/PI5T6FU+9EBzb232ISjdA==",
+        "resolved": "5.2.0",
+        "contentHash": "S22tI4GmfBHcgbKt0FJP+sduNmwUuPeu9dbGfEWeOq2Np0bKSbZXfL46oVFin9pM9VR3H8kj6aEEv5zVFUC2LA==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.10.0",
-          "Honua.Sdk.Geometry": "1.10.0",
+          "Honua.Sdk.Abstractions": "5.2.0",
+          "Honua.Sdk.Geometry": "5.2.0",
           "Microsoft.Extensions.Http": "10.0.7",
           "Microsoft.Extensions.Http.Resilience": "10.5.0"
         }
       },
       "Honua.Sdk.Processes": {
         "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "YL3+52J9VddDvtZ+hGi0W0MZWb3acXuF9O8v2jVtMdOcbuHj0Ncok8ziFZUOrrfANrZtCu/fLI/1KrGHlskSpg==",
+        "resolved": "5.2.0",
+        "contentHash": "tg8+sJ+KaOFP8jGAlp1IJ7Tc7F8fISiiJ9c+6Vr44sa3Rh+CCT5RBVdSj+PSvDewwA0Qrw2TcNfCZWiylaling==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.10.0",
+          "Honua.Sdk.Abstractions": "5.2.0",
           "Microsoft.Extensions.Http": "10.0.7",
           "Microsoft.Extensions.Http.Resilience": "10.5.0"
         }
       },
       "Honua.Sdk.Scenes": {
         "type": "Transitive",
-        "resolved": "1.10.0",
-        "contentHash": "zMT1KkIJ2hrWFQYmA5qVzxQrUNiN1qweKE7/l1rUGUKi8ohCY5R4Za//nQrrjRXBhnn02+lC3JVv9UmO5iFWoQ==",
+        "resolved": "5.2.0",
+        "contentHash": "hih5U/aLsew3b4QExqnYdi088vwapRNygdFb5Vzd45zF6PUH8J+EbNRxP6nMwnfi3alZ4eK/qjaGm5aiSQZCbw==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.10.0",
+          "Honua.Sdk.Abstractions": "5.2.0",
           "Microsoft.Extensions.Http": "10.0.7",
           "Microsoft.Extensions.Http.Resilience": "10.5.0"
         }
@@ -429,13 +428,13 @@
         "type": "Project",
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, )",
-          "Geospatial.Grpc": "[1.0.2, )",
-          "Honua.Mobile.Offline": "[0.1.0-fieldtasks.45963856191.1, )",
-          "Honua.Mobile.Offline.Tasks": "[0.1.0-fieldtasks.45963856191.1, )",
-          "Honua.Mobile.Sdk": "[0.1.0-fieldtasks.45963856191.1, )",
-          "Honua.Sdk.Field": "[5.1.1-fieldtasks.3, )",
-          "Honua.Sdk.GeoServices": "[2.2.0, )",
-          "Honua.Sdk.Geometry": "[2.2.0, )",
+          "Geospatial.Grpc": "[1.5.0, )",
+          "Honua.Mobile.Offline": "[0.1.0-alpha.1, )",
+          "Honua.Mobile.Offline.Tasks": "[0.1.0-alpha.1, )",
+          "Honua.Mobile.Sdk": "[0.1.0-alpha.1, )",
+          "Honua.Sdk.Field": "[5.2.0, )",
+          "Honua.Sdk.GeoServices": "[5.2.0, )",
+          "Honua.Sdk.Geometry": "[5.2.0, )",
           "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlcipher": "[2.1.11, )",
           "SkiaSharp": "[4.156.1, )"
@@ -445,7 +444,7 @@
         "type": "Project",
         "dependencies": {
           "Honua.Field.Core": "[1.0.0, )",
-          "Honua.Sdk.Field": "[5.1.1-fieldtasks.3, )",
+          "Honua.Sdk.Field": "[5.2.0, )",
           "Microsoft.Data.Sqlite.Core": "[11.0.0, )",
           "SkiaSharp": "[4.156.1, )"
         }
@@ -458,66 +457,66 @@
       },
       "Geospatial.Grpc": {
         "type": "CentralTransitive",
-        "requested": "[1.0.2, )",
-        "resolved": "1.0.2",
-        "contentHash": "kR3TThy8DUzHiL3ad/76gsx+GbqyXse5JWus17CXA/7KPzqFEzAcBjacxsHoDF8J5oZTH6n0vgoU01gv5DwxrQ==",
+        "requested": "[1.5.0, )",
+        "resolved": "1.5.0",
+        "contentHash": "sggyeiKXrOwEfMfM+EwSbwBMoPr0ir9oLKPOp0ZYco7hlp+H4TjUhHOeXZybEOd36uDWRIrK3PYZQmTOGMte+w==",
         "dependencies": {
           "Google.Protobuf": "3.36.2",
-          "Grpc.Core.Api": "2.84.0"
+          "Grpc.Core.Api": "2.85.0"
         }
       },
       "Honua.Mobile.Offline": {
         "type": "CentralTransitive",
-        "requested": "[0.1.0-fieldtasks.45963856191.1, )",
-        "resolved": "0.1.0-fieldtasks.45963856191.1",
-        "contentHash": "4VAWjboT35wC9hStVK81Uy2uREiuDsVfLF71zvHkx/zWS69BhNIJhv3YcWNPtYz3eA8gbsDPZcdJQTQgmfZpyw==",
+        "requested": "[0.1.0-alpha.1, )",
+        "resolved": "0.1.0-alpha.1",
+        "contentHash": "6IkGIHPFglqscEWWmxlsWV/Ijsap5HtuJUlIupb83xKx2BpOfH+AZmCjt1G2kF/cstpcW7YpdmG13pnxKTqv+w==",
         "dependencies": {
-          "Honua.Mobile.Sdk": "0.1.0-fieldtasks.45963856191.1",
-          "Honua.Sdk.Abstractions": "1.10.0",
-          "Honua.Sdk.Offline": "1.10.0",
+          "Honua.Mobile.Sdk": "0.1.0-alpha.1",
+          "Honua.Sdk.Abstractions": "5.2.0",
+          "Honua.Sdk.Offline": "5.2.0",
           "Microsoft.Data.Sqlite.Core": "10.0.10"
         }
       },
       "Honua.Mobile.Offline.Tasks": {
         "type": "CentralTransitive",
-        "requested": "[0.1.0-fieldtasks.45963856191.1, )",
-        "resolved": "0.1.0-fieldtasks.45963856191.1",
-        "contentHash": "xHE4+hsl2JM5ITwhOXvfokrfc6KtYD6LvTAjnz/ZW46k6BjpyBc1HfUaIH7c6dBNFq4lQqQ7qlBf762Jj2egPg==",
+        "requested": "[0.1.0-alpha.1, )",
+        "resolved": "0.1.0-alpha.1",
+        "contentHash": "GLfp2XudmXBTI0xXC7NmiZ41rGDKkZ3/iUyrSHL15Ih1ZJltcl1QNaGxYAkjgOYNS/jpzqfJzo/UY/EPJd89jQ==",
         "dependencies": {
-          "Honua.Mobile.Offline": "0.1.0-fieldtasks.45963856191.1",
-          "Honua.Sdk.Field": "5.1.1-fieldtasks.3"
+          "Honua.Mobile.Offline": "0.1.0-alpha.1",
+          "Honua.Sdk.Field": "5.2.0"
         }
       },
       "Honua.Mobile.Sdk": {
         "type": "CentralTransitive",
-        "requested": "[0.1.0-fieldtasks.45963856191.1, )",
-        "resolved": "0.1.0-fieldtasks.45963856191.1",
-        "contentHash": "I12fdlKuItKlI+Ybu1TB6R9LlrboTbekSBu4QwaSDHScltxC48qpNejQkXlpLQTNVtrMD4A2BFZvRayLcnNN7Q==",
+        "requested": "[0.1.0-alpha.1, )",
+        "resolved": "0.1.0-alpha.1",
+        "contentHash": "596reIEsNLCbgkWUCFhvjT5/E2E0ZqFYg+T95qyYhamNlV4UJLTdMXyl2WAg6kypKtZOeF2cjMpcrIRkc+7ZWg==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "1.10.0",
-          "Honua.Sdk.GeoServices": "1.10.0",
-          "Honua.Sdk.Grpc": "1.10.0",
-          "Honua.Sdk.OgcFeatures": "1.10.0",
-          "Honua.Sdk.Scenes": "1.10.0"
+          "Honua.Sdk.Abstractions": "5.2.0",
+          "Honua.Sdk.GeoServices": "5.2.0",
+          "Honua.Sdk.Grpc": "5.2.0",
+          "Honua.Sdk.OgcFeatures": "5.2.0",
+          "Honua.Sdk.Scenes": "5.2.0"
         }
       },
       "Honua.Sdk.Field": {
         "type": "CentralTransitive",
-        "requested": "[5.1.1-fieldtasks.3, )",
-        "resolved": "5.1.1-fieldtasks.3",
-        "contentHash": "3/VQizLJKHmi4aD/tYPj9ych7/voqK9TO+TNX7KO7IjkeQcz0CbrTKThRTI91O9yC/hPM/Puwn+FLb86Fd4KUw==",
+        "requested": "[5.2.0, )",
+        "resolved": "5.2.0",
+        "contentHash": "ZVOt4HxA3e5rnD672Z7hL7mKCMwLgF0wSqoZzd3XzxFh8mtDSm2AsPaEcv/f42XLOJh5u3OvR4gKAaDJkFlhGw==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "5.1.1-fieldtasks.3"
+          "Honua.Sdk.Abstractions": "5.2.0"
         }
       },
       "Honua.Sdk.Geometry": {
         "type": "CentralTransitive",
-        "requested": "[2.2.0, )",
-        "resolved": "2.2.0",
-        "contentHash": "iskvfVAI2XgfdJFkOb3C1v+US54lkBp9/TB9D8wuA1dBjFbMN5B6acQCIz8GuQoRmOWSbnH3FNZrbRfqj4DuCg==",
+        "requested": "[5.2.0, )",
+        "resolved": "5.2.0",
+        "contentHash": "kaEzlomx9fWn0xjKGmON24gbXJSQwGiJ7dZqXr1t2XFmU7fEoAJxHSCphsFePDsMS687sFzxeV9pkmdMALRS3A==",
         "dependencies": {
-          "Geospatial.Grpc": "1.0.2",
-          "Honua.Sdk.Abstractions": "2.2.0",
+          "Geospatial.Grpc": "1.5.0",
+          "Honua.Sdk.Abstractions": "5.2.0",
           "NetTopologySuite": "2.6.0",
           "NetTopologySuite.IO.GeoJSON4STJ": "4.0.0",
           "ProjNET": "2.1.0"
@@ -525,12 +524,12 @@
       },
       "Honua.Sdk.GeoServices": {
         "type": "CentralTransitive",
-        "requested": "[2.2.0, )",
-        "resolved": "2.2.0",
-        "contentHash": "ea93O5PaRbn2W7aArrF2NVNdTcYkZKITh8zjqU1prr8LicjyCvUqN2hYsYr3RFf0n0iEAqeOk7HcbPRletkUYA==",
+        "requested": "[5.2.0, )",
+        "resolved": "5.2.0",
+        "contentHash": "EfCfSDrUAqpDEuaTlLULFKkwED91Z+4q432VxYrKpgIgsWijBiZenLz3DhA6GiNWto8SoXuLIQk9OygJIZOOGA==",
         "dependencies": {
-          "Honua.Sdk.Abstractions": "2.2.0",
-          "Honua.Sdk.Geometry": "2.2.0",
+          "Honua.Sdk.Abstractions": "5.2.0",
+          "Honua.Sdk.Geometry": "5.2.0",
           "Microsoft.Extensions.Http": "10.0.7",
           "Microsoft.Extensions.Http.Resilience": "10.5.0"
         }
