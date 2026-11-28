@@ -63,7 +63,7 @@ jobs:
         run: |
           dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
             -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
-            --disable-build-servers
+            -p:EnableAssignedWorkPilot=true --disable-build-servers
       - name: Package iPhone simulator app
         if: matrix.family == 'iPhone'
         run: |

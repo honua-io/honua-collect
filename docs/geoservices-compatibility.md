@@ -52,7 +52,7 @@ Field reads and writes GeoServices REST feature services, including services hos
 | Point / line / polygon geometry capture | ✅ (logic) / 🟡 (map surface) | [`GeometryCaptureSession`](../src/Honua.Field.Core/Field/Geometry/GeometryCaptureSession.cs); 2D map widget is app-layer ([#35](https://github.com/honua-io/honua-field/issues/35)) |
 | RFC 7946 GeoJSON geometry output | ✅ | `GeometryCaptureSession` |
 | GPS averaging for higher-accuracy vertices | ✅ | [`GpsAverager`](../src/Honua.Field.Core/Field/Geometry/GpsAverager.cs) |
-| Live device GPS binding (real fixes) | ✅ | the MAUI geometry screen averages three fresh fixes with reported accuracy of 25 m or better. Requires foreground location permission. |
+| Live device GPS binding (real fixes) | ✅ | The MAUI geometry screen averages three fresh fixes with reported accuracy of 25 m or better. An installed Android emulator produced the expected GeoJSON point from an injected location. [Device check](./verification/e2e/README.md#published-xlsform-android-gate) |
 | High-accuracy external GNSS / RTK | 🔭 | planned ([#36](https://github.com/honua-io/honua-field/issues/36)) |
 | Photo / signature capture | ✅ (policy) / 🟡 (camera surface) | [`MediaCaptureField`](../src/Honua.Field.Core/Field/Capture/MediaCaptureField.cs) enforces count/type/size; camera binding is app-layer |
 | Photo annotation/markup (non-destructive) | ✅ | [`PhotoAnnotationOverlay`](../src/Honua.Field.Core/Field/Annotation/PhotoAnnotationOverlay.cs) — original image never mutated |
@@ -68,7 +68,7 @@ Field reads and writes GeoServices REST feature services, including services hos
 | Bidirectional sync (push + pull) | ✅ | `GeoServicesFeatureSync` (`SubmitAsync` + `QueryAsync`) |
 | Field-level conflict **detection** | ✅ | [`RecordConflictDetector`](../src/Honua.Field.Core/Sync/RecordConflictDetector.cs) — per-field diffs |
 | Field-level conflict **resolution** (merge) | ✅ | [`RecordConflict.Resolve`](../src/Honua.Field.Core/Sync/RecordConflict.cs) (per-field keep-local/keep-server) |
-| Conflict-review **UI** | 🟡 | core logic done; review screen binding pending ([#38](https://github.com/honua-io/honua-field/issues/38)) |
+| Conflict-review **UI** | 🟡 | The [review screen](../src/Honua.Field.App/Views/ConflictReviewPage.xaml.cs) persists the chosen local and server fields. The two-device replica workflow remains open. [Acceptance criteria](../ROADMAP.md) |
 | Post-sync editability (never lose an edit) | 🔭 | tracked in [#38](https://github.com/honua-io/honua-field/issues/38) |
 | Selective / partial sync | 🟡 | query `where`-clause filtering exists in `QueryAsync` |
 | Background sync (WorkManager / push) | 🔭 | app-layer, planned ([#35](https://github.com/honua-io/honua-field/issues/35)) |
@@ -137,8 +137,7 @@ To avoid overstating:
 - **External GNSS / RTK (🔭):** not implemented — a future capability,
   planned in [#36](https://github.com/honua-io/honua-field/issues/36).
 - **Layer-wide attachment search (🔭)** remains planned. Recovery reads the attachments belonging to the queued feature.
-- **Conflict-review UI (🟡):** field-level detection and merge are complete and
-  tested in Core; the review **screen** is pending ([#38](https://github.com/honua-io/honua-field/issues/38)).
+- **Conflict-review UI (🟡):** Field can persist a reviewed merge from the Sync screen. Verifying concurrent offline edits on two installed clients remains open.
 - **Post-sync editability (🔭):** targeted ([#38](https://github.com/honua-io/honua-field/issues/38)) precisely
   because it is a planned capability — not yet shipped.
 - **Token refresh (🟡):** the lifecycle supports proactive refresh, but the

@@ -309,7 +309,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 
             case RecordSyncState.AddNeedsVerification:
             case RecordSyncState.AddRejected:
-                entry.RestoreOrdinaryAddState(syncState, lastError, failedAttempts);
+                entry.RestoreSyncState(syncState, remoteId, lastError, failedAttempts, null, lastSyncedUtc);
                 break;
             case RecordSyncState.SubmissionRejected:
             case RecordSyncState.Failed:

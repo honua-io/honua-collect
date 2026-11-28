@@ -30,10 +30,11 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
   runtime, records, sync, conflicts, export, provenance, …) and the
   `Honua.Field.Presentation` MVVM layer are implemented and unit-tested, with
   coverage gates and mutation testing in CI.
-- **Verified on device (Android emulator):** login, form-package download,
-  offline capture with live validation and repeats, SQLite persistence,
-  GeoServices feature sync, and attachment upload — with captured evidence in
-  [`docs/verification/`](docs/verification/).
+- On the Android emulator, Field downloaded a published XLSForm and captured
+  an inspection offline with validation and repeats. A separate feature-layer
+  inspection survived a restart in airplane mode with its photo. After sync
+  and another restart, Honua Server returned one feature and one byte-matched
+  JPEG. [Android verification](docs/verification/e2e/README.md#published-xlsform-android-gate) · [Photo readback](docs/verification/e2e/ordinary-photo-android.json)
 - Field places editing controls below the map in narrow windows and beside it
   in wide windows, including a phone turned sideways.
   Rotating or resizing the window preserves the captured vertices. Sign-in and
@@ -42,9 +43,13 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 - On iPhone and iPad simulators, Field can draw a polygon, show its GeoJSON
   and undo the last vertex. The Apple workflow also builds Mac Catalyst.
   [Phone and tablet verification](docs/verification/e2e/README.md#iphone-and-ipad-geometry)
+- Two AWS Device Farm iPhone simulator runs preserved an offline XLSForm draft
+  or queued submission across an app upgrade. Honua Server verified the
+  original form version, repeat rows and photo after sync.
+  [iOS upgrade evidence](docs/verification/e2e/README.md#installed-ios-upgrade-on-aws)
 - The Today prototype simulates the current request contract, which sends the title and asset IDs to dispatch while notes and the sample photo reference stay in the browser.
   [Repeatable phone and tablet capability check](docs/verification/today/README.md#chromium-regression)
-- Remaining device work includes camera and GNSS integration, map editing,
+- Remaining device work includes physical-camera capture, external GNSS receiver qualification, map editing,
   background sync, push notifications and enterprise sign-in. Windows device
   verification is also pending.
 
@@ -59,6 +64,8 @@ Android toolchain needed:
 dotnet test tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
 dotnet test tests/Honua.Field.Presentation.Tests/Honua.Field.Presentation.Tests.csproj
 ```
+
+See the [offline runtime guide](docs/mobile-offline-adoption.md#assigned-work-pilot) for the pilot build switch.
 
 ### Run the app on an Android emulator
 
@@ -82,7 +89,7 @@ adb wait-for-device
 dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android -t:Install \
   -p:AndroidSdkDirectory=$ANDROID_HOME -p:JavaSdkDirectory=$JAVA_HOME \
   -p:AdbTarget="-s emulator-5554"
-adb shell am start -n io.honua.collect/crc6490b85cd101108deb.MainActivity
+adb shell monkey -p io.honua.collect -c android.intent.category.LAUNCHER 1
 ```
 
 ### Local end-to-end server
@@ -230,6 +237,7 @@ Repo docs:
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
+| [Device and server verification](docs/verification/e2e/README.md) | Reproduce the Android, iOS and live Honua Server checks and inspect their artifacts. |
 | [Mutation testing](docs/mutation-testing.md) | Stryker.NET setup and how the Core mutation score is measured. |
 
 ## Related Honua repos

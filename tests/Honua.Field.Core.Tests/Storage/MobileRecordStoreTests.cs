@@ -13,6 +13,51 @@ namespace Honua.Field.Core.Tests.Storage;
 
 public sealed class MobileRecordStoreTests
 {
+    [Theory]
+    [InlineData("legacy")]
+    [InlineData("mobile")]
+    [InlineData("migrated")]
+    public async Task Ordinary_photos_preserve_independent_checkpoints_and_reject_stale_saves(string storage)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        const string key = "device-test-key";
+        IRecordStore store = storage == "mobile"
+            ? await directory.ReopenAsync()
+            : await SqliteRecordStore.OpenEncryptedAsync(directory.Database, key);
+        var target = new GeoServicesTarget("https://example.test", "inspections", 7);
+        var first = new OrdinaryFeaturePhoto(Guid.NewGuid(), "first.jpg", "image/jpeg", "stable-first.jpg", new string('A', 64), target);
+        var second = new OrdinaryFeaturePhoto(Guid.NewGuid(), "second.jpg", "image/jpeg", "stable-second.jpg", new string('B', 64), target);
+        var record = CreateRecord("ordinary");
+        record.Status = RecordStatus.Submitted;
+        await new RecordBook(store).AddSubmittedAsync(record, ordinaryPhotos: [first, second]);
+
+        var attempt = Assert.Single(await store.LoadAllAsync());
+        attempt.MarkAddNeedsVerification();
+        await store.SaveAsync(attempt);
+        attempt.MarkSynced("21");
+        await store.SaveAsync(attempt);
+        var stale = Assert.Single(await store.LoadAllAsync());
+        var held = first with { State = OrdinaryPhotoState.NeedsVerification };
+        attempt.UpdateOrdinaryPhoto(held);
+        await store.SaveAsync(attempt);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(stale));
+
+        store = await ReopenAsync();
+        var reopened = Assert.Single(await store.LoadAllAsync());
+        Assert.Equal("21", reopened.RemoteId);
+        Assert.Equal(new[] { held, second }, reopened.OrdinaryPhotos);
+        var synced = held with { State = OrdinaryPhotoState.Synced, ServerAttachmentId = 31 };
+        reopened.UpdateOrdinaryPhoto(synced);
+        await store.SaveAsync(reopened);
+
+        store = await ReopenAsync();
+        Assert.Equal(new[] { synced, second }, Assert.Single(await store.LoadAllAsync()).OrdinaryPhotos);
+
+        async Task<IRecordStore> ReopenAsync() => storage == "legacy"
+            ? await SqliteRecordStore.OpenEncryptedAsync(directory.Database, key)
+            : await directory.ReopenAsync();
+    }
+
     [Fact]
     public async Task Failed_import_rolls_back_records_and_marker_and_restarts_with_same_key()
     {
@@ -235,6 +280,89 @@ public sealed class MobileRecordStoreTests
         Assert.NotNull(durable.PublishedSubmission);
         Assert.Equal(oldPath, Assert.Single(durable.PublishedSubmission.Files).LocalPath);
         Assert.Equal(submission.RequestJson, durable.PublishedSubmission.RequestJson);
+    }
+
+    [Fact]
+    public async Task Legacy_conflict_retains_local_state_without_fabricating_server_comparison()
+    {
+        using var directory = new TemporaryRecordDirectory();
+        const string key = "device-test-key";
+        var legacy = await SqliteRecordStore.OpenEncryptedAsync(directory.Database, key);
+        var local = new FieldRecord { RecordId = "legacy-conflict", FormId = "inspection", Status = RecordStatus.Submitted };
+        local.Values["name"] = "Mine";
+        var server = CreateRecord("legacy-conflict");
+        server.Values["name"] = "Theirs";
+        var entry = new FieldRecordEntry(local);
+        entry.MarkPending();
+        entry.MarkSynced("11");
+        entry.SetVersion(17);
+        entry.MarkConflicted(new RecordConflict(local, server, [new FieldConflict("name", "Name", "Mine", "Theirs")]));
+        await legacy.SaveAsync(entry);
+
+        var store = await MobileRecordStore.OpenEncryptedAsync(directory.Database, key);
+        var restored = Assert.Single(await store.LoadAllAsync());
+        Assert.True(restored.IsConflicted);
+        Assert.Equal("11", restored.RemoteId);
+        Assert.Equal(17, restored.Version);
+        Assert.Equal("Mine", restored.Record.Values["name"]?.ToString());
+        Assert.Null(restored.Conflict);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Finished_local_record_remains_eligible_for_its_first_ordinary_add(bool useMobileStore)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        IRecordStore store = useMobileStore
+            ? await directory.ReopenAsync()
+            : await SqliteRecordStore.OpenEncryptedAsync(directory.Database, "device-test-key");
+        var record = CreateRecord("never-sent");
+        record.Status = RecordStatus.Submitted;
+        await store.SaveAsync(new FieldRecordEntry(record, RecordSyncState.Local));
+
+        var entry = Assert.Single(await store.LoadAllAsync());
+        Assert.True(entry.IsPendingUpload);
+        await entry.PrepareOrdinaryAddAsync(held => store.SaveAsync(held));
+        Assert.True(Assert.Single(await store.LoadAllAsync()).RequiresServerVerification);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Ordinary_add_hold_blocks_stale_writer_until_definite_rejection(bool useMobileStore)
+    {
+        using var directory = new TemporaryRecordDirectory();
+        var first = await OpenAsync();
+        var second = await OpenAsync();
+        var record = CreateRecord("ordinary-add");
+        record.Status = RecordStatus.Submitted;
+        await new RecordBook(first).AddSubmittedAsync(record);
+        var claimant = Assert.Single(await first.LoadAllAsync());
+        var stale = Assert.Single(await second.LoadAllAsync());
+
+        await claimant.PrepareOrdinaryAddAsync(entry => first.SaveAsync(entry));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            stale.PrepareOrdinaryAddAsync(entry => second.SaveAsync(entry)));
+        Assert.True(stale.IsPendingUpload);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => second.SaveAsync(stale));
+
+        var reopened = await OpenAsync();
+        var held = Assert.Single(await reopened.LoadAllAsync());
+        Assert.True(held.RequiresServerVerification);
+        Assert.False(held.IsPendingUpload);
+
+        claimant.ApplyOrdinaryAddResult(FeatureSyncResult.Fail("value rejected") with { DefinitiveEditRejection = true });
+        await first.SaveAsync(claimant);
+        var rejected = Assert.Single(await reopened.LoadAllAsync());
+        Assert.Equal(RecordSyncState.AddRejected, rejected.SyncState);
+        Assert.True(rejected.IsPendingUpload);
+        await rejected.PrepareOrdinaryAddAsync(entry => reopened.SaveAsync(entry));
+        Assert.True(Assert.Single(await second.LoadAllAsync()).RequiresServerVerification);
+
+        async Task<IRecordStore> OpenAsync() => useMobileStore
+            ? await directory.ReopenAsync()
+            : await SqliteRecordStore.OpenEncryptedAsync(directory.Database, "device-test-key");
     }
 
     private sealed class TemporaryRecordDirectory : IDisposable

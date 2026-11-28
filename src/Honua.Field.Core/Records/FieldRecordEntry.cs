@@ -125,13 +125,6 @@ public sealed class FieldRecordEntry
         }
     }
 
-    internal void RestoreOrdinaryAddState(RecordSyncState state, string? error, int failedAttempts)
-    {
-        SyncState = state;
-        LastError = error;
-        FailedAttempts = failedAttempts;
-    }
-
     public bool ApplyOrdinaryAddResult(Sync.FeatureSyncResult result)
     {
         if (result.Success && result.ObjectId is > 0)
@@ -384,6 +377,38 @@ public sealed class FieldRecordEntry
         {
             throw new InvalidOperationException("Another operation changed this record's photos. Reload the record before retrying.");
         }
+    }
+
+    /// <summary>Stages a resolved entry for persistence without changing the live record.</summary>
+    public FieldRecordEntry CreateResolvedSnapshot(FieldRecord merged)
+    {
+        var record = new FieldRecord
+        {
+            RecordId = Record.RecordId,
+            FormId = Record.FormId,
+            CreatedAtUtc = Record.CreatedAtUtc,
+            SubmittedAtUtc = Record.SubmittedAtUtc,
+            CompletedAtUtc = Record.CompletedAtUtc
+        };
+        foreach (var media in Record.Media)
+        {
+            record.Media.Add(media);
+        }
+
+        var snapshot = new FieldRecordEntry(record, SyncState)
+        {
+            PublishedDraft = PublishedDraft,
+            PublishedSubmission = PublishedSubmission,
+            Version = Version,
+            RemoteId = RemoteId,
+            LastSyncedUtc = LastSyncedUtc,
+            LastAttemptUtc = LastAttemptUtc,
+            FailedAttempts = FailedAttempts,
+            OrdinaryPhotos = OrdinaryPhotos,
+            PersistedOrdinaryPhotos = PersistedOrdinaryPhotos
+        };
+        snapshot.ApplyResolution(merged);
+        return snapshot;
     }
 
     /// <summary>

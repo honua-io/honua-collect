@@ -52,6 +52,23 @@ public class GeoServicesFeatureSyncTests
     }
 
     [Fact]
+    public void BuildAddsJson_preserves_persisted_json_primitives()
+    {
+        using var persisted = JsonDocument.Parse("""{"sync_version":1,"checked":false,"empty":null}""");
+        var record = Record();
+        foreach (var attribute in persisted.RootElement.EnumerateObject())
+        {
+            record.Values[attribute.Name] = attribute.Value;
+        }
+
+        using var adds = JsonDocument.Parse(GeoServicesFeatureSync.BuildAddsJson(record));
+        var attrs = adds.RootElement[0].GetProperty("attributes");
+        Assert.Equal(1, attrs.GetProperty("sync_version").GetInt32());
+        Assert.False(attrs.GetProperty("checked").GetBoolean());
+        Assert.False(attrs.TryGetProperty("empty", out _));
+    }
+
+    [Fact]
     public async Task SubmitAsync_posts_applyEdits_and_parses_object_id()
     {
         var handler = new CapturingHandler(HttpStatusCode.OK, """{"addResults":[{"objectId":6892003,"success":true}]}""");
@@ -180,12 +197,13 @@ public class GeoServicesFeatureSyncTests
         try
         {
             var result = await sync.AddAttachmentAsync(42, file, "image/jpeg",
-                new GeoServicesTarget("http://server:18080", "mobile_offline_demo", 68910));
+                new GeoServicesTarget("http://server:18080/proxy", "folder/mobile_offline_demo", 68910));
 
             Assert.True(result.Success);
             Assert.Equal(555, result.ObjectId);
             Assert.Equal(HttpMethod.Post, handler.CapturedMethod);
-            Assert.EndsWith("/rest/services/mobile_offline_demo/FeatureServer/68910/42/addAttachment", handler.CapturedUri!.AbsoluteUri);
+            Assert.Equal("http://server:18080/proxy/rest/services/folder/mobile_offline_demo/FeatureServer/68910/42/addAttachment",
+                handler.CapturedUri!.AbsoluteUri);
             Assert.Equal("multipart/form-data", handler.CapturedMediaType);
             Assert.Contains("name=attachment", handler.CapturedBody!.Replace("\"", ""));
             Assert.Contains("name=f", handler.CapturedBody.Replace("\"", ""));

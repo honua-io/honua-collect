@@ -23,6 +23,7 @@ public partial class ConflictReviewPage : ContentPage
     private readonly IReadOnlyList<ConflictReviewViewModel> _reviews;
     private readonly RecordStatePersister? _persist;
     private int _index;
+    private bool _isResolving;
 
     public ConflictReviewPage(IReadOnlyList<ConflictReviewViewModel> reviews, RecordStatePersister? persist = null)
     {
@@ -43,20 +44,39 @@ public partial class ConflictReviewPage : ContentPage
 
     private async void OnResolve(object? sender, EventArgs e)
     {
-        if (BindingContext is ConflictReviewViewModel vm && vm.CanApply)
+        if (_isResolving || BindingContext is not ConflictReviewViewModel vm || !vm.CanApply)
         {
-            // Persist + re-queue the user's chosen merge. Without this the resolution
-            // is lost on the next launch — the data-loss bug this screen fixes (#98).
-            await vm.ApplyResolutionAsync(_persist);
-        }
-
-        _index++;
-        if (_index < _reviews.Count)
-        {
-            ShowCurrent();
             return;
         }
 
-        await Navigation.PopAsync();
+        _isResolving = true;
+        try
+        {
+            try
+            {
+                await vm.ApplyResolutionAsync(_persist);
+            }
+            catch (Exception)
+            {
+                await DisplayAlert("Conflict resolution", "Couldn’t save the resolution. Try again.", "OK");
+                return;
+            }
+
+            _index++;
+            if (_index < _reviews.Count)
+            {
+                ShowCurrent();
+                return;
+            }
+
+            if (Navigation.NavigationStack.LastOrDefault() == this)
+            {
+                await Navigation.PopAsync();
+            }
+        }
+        finally
+        {
+            _isResolving = false;
+        }
     }
 }

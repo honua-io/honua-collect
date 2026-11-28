@@ -7,6 +7,8 @@ on:
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
       - scripts/e2e/**
+      - tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs
+      - tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
       - src/**
       - Directory.Build.*
       - Directory.Packages.props
@@ -18,6 +20,8 @@ on:
       - .github/workflows/published-android.yml
       - .github/workflows/run-published-android-gate.sh
       - scripts/e2e/**
+      - tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs
+      - tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
       - src/**
       - Directory.Build.*
       - Directory.Packages.props
@@ -85,16 +89,16 @@ jobs:
           "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
             -c Release -p:RestoreLockedMode=true
 
-      - name: Build current standalone .NET 11 Debug APK
+      - name: Build current standalone .NET 11 Debug APK with assigned work
         env:
           NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-candidate
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
           "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
-            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
+            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True -p:EnableAssignedWorkPilot=true
           "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
-            -f net11.0-android -c Debug -t:SignAndroidPackage \
+            -f net11.0-android -c Debug -t:SignAndroidPackage -p:EnableAssignedWorkPilot=true \
             -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
             -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
           mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net11.0-android -type f -name '*-Signed.apk' -print0)
@@ -169,8 +173,8 @@ jobs:
             ${{ runner.temp }}/published-android-report/upgrade/*.xml
             ${{ runner.temp }}/published-android-report/adaptive/*
             ${{ runner.temp }}/published-android-report/gps-geometry/*
-            ${{ runner.temp }}/published-android-report/*/failure-state.json
             ${{ runner.temp }}/published-android-report/feature-sync/feature-sync.trx
+            ${{ runner.temp }}/published-android-report/*/failure-state.json
             ${{ runner.temp }}/published-android-report/upgrade/before.json
             ${{ runner.temp }}/published-android-report/upgrade/after.json
             ${{ runner.temp }}/published-android-report/upgrade/recovered-key.json

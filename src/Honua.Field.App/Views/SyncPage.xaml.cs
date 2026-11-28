@@ -199,12 +199,24 @@ public partial class SyncPage : ContentPage
         ResultLabel.Text =
             $"Pulled: {result.NewRecords.Count} new · {result.Conflicts.Count} conflict(s) · {result.Unchanged.Count} unchanged.";
 
-        if (vm.Conflicts.Count > 0)
+        if (vm.HasUnsavedPullConflicts)
         {
-            // Hand the review screen the entry-bound conflict view-models (the whole
-            // list, not just the first) plus the record store so each resolution is
-            // applied to its entry AND durably persisted/re-queued — not discarded
-            // (#98). vm.Conflicts is built by PullAsync, bound to the local entries.
+            ResultLabel.Text = "Some conflicts could not be saved on this device. Pull again before restarting to keep the review available offline.";
+            return;
+        }
+
+        if (result.Conflicts.Count > 0)
+        {
+            await OpenConflictReviewAsync();
+        }
+    }
+
+    private async void OnReviewConflicts(object? sender, EventArgs e) => await OpenConflictReviewAsync();
+
+    private async Task OpenConflictReviewAsync()
+    {
+        if (BindingContext is SyncCenterViewModel { HasReviewableConflicts: true } vm)
+        {
             await Navigation.PushAsync(new ConflictReviewPage(vm.Conflicts.ToList(), _book.SaveAsync));
         }
     }

@@ -8,11 +8,11 @@ PostgreSQL — the full capture → sync → store loop.
 
 The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) builds two signed Debug APKs, starts the pinned Honua Server revision with PostGIS and publishes the inspection workbook. Maestro drives the native Field screens on Android API 33 under a layer-scoped worker account.
 
-The first scenario installs the .NET 10 Field versionCode 3 from commit `fb16d0b`, downloads the workbook, disconnects the server and saves two inspections. One stays editable and one is queued. The gate installs the .NET 11 versionCode 4 APK over the older app and compares the Android UID, signing certificate, record IDs, queue state, cached form version and both attachment hashes. It then temporarily removes access to the device key, taps Retry, verifies that the local database files have identical hashes and restores the key. The saved draft must reopen and the queued inspection must still be ready to send.
+The first scenario installs the .NET 11 Field APK (version code 4) from commit `6e3db0b`, downloads the workbook, disconnects the server and saves two inspections. One stays editable and one is queued. The gate installs the candidate APK (version code 5) over the older app and compares the Android UID, signing certificate, record IDs, queue state, cached form version and both attachment hashes. It then temporarily removes access to the device key, taps Retry, verifies that the local database files have identical hashes and restores the key. The saved draft must reopen. The final upgrade phase sends the queued inspection and verifies it against the original workbook version.
 
 After clearing Field’s local data on the emulator, the gate disconnects Field from the server, cold-starts the app, captures multiple choices, a calculated value, two repeat rows, a GPS fix and a photo, and reopens the draft after process death. In CI the host publishes a newer revision while the draft is offline. The original version must still be used when the draft resumes and uploads. During upload a proxy withholds the first successful server response. Field must keep the item in its outbox across a restart, retry it and show it as sent. The test then reads the feature and photo through FeatureServer and checks PostGIS for exactly one accepted receipt at the downloaded form version.
 
-The final scenario exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
+The tablet scenario exercises correction after the server rejects an over-length answer. The worker reopens the inspection offline, shortens the answer and uploads again. The gate checks that the server recorded the rejection and then accepted a new submission identity at the original version, with the repeat rows and photo intact.
 
 To rerun the dropped-response scenario on a dedicated emulator with the Debug APK already installed and the fixture published, run from the repository root. Supply a worker key file and a separate host-side readback key file. To exercise the version change locally, set `HONUA_E2E_PUBLISH_NEXT_VERSION=1` and pass the disposable fixture admin key as the third argument. The script removes its temporary settings and network forwarding on exit.
 
@@ -27,7 +27,9 @@ The installed upgrade and receipt replay use a phone window (411 × 891 dp). Rej
 
 The geometry check draws a three-vertex polygon on a 360 × 720 dp phone window. It rotates the phone, resizes to an 800 × 1280 dp tablet window, rotates the tablet and returns to the original phone window. At each size it checks that the editing controls are visible and the exported GeoJSON has exactly the original coordinates. It also checks Undo and the home form column width. The `adaptive` artifact folder contains screenshots and the bounds of each control.
 
-The GPS geometry check uses a fresh local store on the installed candidate. It grants Android location permission, injects fresh location fixes through the emulator console, waits for the three-fix average, and verifies that Done returns a Point within 0.0001° of the injected coordinates. The `gps-geometry` artifact folder contains the screenshot and returned GeoJSON. This exercises the Android location and capture flow with mock fixes. Unit tests exercise stale and inaccurate fixes.
+On November 27, 2026, the local Android emulator passed this check using the signed APK from the offline-basemap change. The **Check offline area** control remained accessible in both phone and tablet orientations. The test compared the polygon coordinates after each rotation and resize, then verified Undo on the phone. [Signed APK build](https://github.com/honua-io/honua-field/actions/runs/46039617686) · [Test revision and APK digest](https://github.com/honua-io/honua-field/pull/212)
+
+The GPS geometry check uses a fresh local store on the installed candidate. It grants Android location permission, injects fresh location fixes through the emulator console, waits for the three-fix average, and verifies that Done returns a Point within 0.0001° of the injected coordinates. The `gps-geometry` artifact folder contains the screenshot and returned GeoJSON. This exercises the Android location and capture flow with mock fixes. Unit tests exercise stale and inaccurate fixes. In a local run with the signed candidate APK, the emulator supplied longitude −122.4194 and latitude 37.7749. Field returned `[-122.41939833333333, 37.7749]`. Physical receiver accuracy is tracked separately. [Hosted Android run](https://github.com/honua-io/honua-field/actions/runs/46036690515) · [GPS screenshot and coordinates](https://github.com/honua-io/honua-field/actions/runs/46036690515/artifacts/15218964014)
 
 Run the same check after installing the signed candidate APK on an unlocked disposable emulator:
 
@@ -45,7 +47,9 @@ The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45
 
 The installed app picks a fixture image from the Android gallery in airplane mode, submits the inspection to the outbox and restarts Field. Before reconnecting, the gate verifies the server has no matching feature. After sync, the gate compares the server attachment against the JPEG saved by Field. It restarts Field again, verifies the record is Sent and checks that the feature and attachment IDs stay the same.
 
-All four Maestro phases passed with Field `eae4e68` and Honua Server `1c59eb2`. The layer-scoped worker synced one feature and one attachment. The downloaded JPEG matched all 952 bytes of Field’s private copy. The artifact contains the Field, Server and harness revisions, installed APK checksum and JUnit results. [Workflow run](https://github.com/honua-io/honua-field/actions/runs/46118802646) · [Hosted artifact](https://github.com/honua-io/honua-field/actions/runs/46118802646/artifacts/15252944002) · [Server readback](ordinary-photo-android.json)
+All four Maestro phases passed with Field `eae4e68` and Honua Server `1c59eb2`. The layer-scoped worker synced one feature and one attachment. The downloaded JPEG matched all 952 bytes of Field’s private copy. The artifact contains the Field, Server and harness revisions, installed APK checksum and JUnit results. [Workflow run](https://github.com/honua-io/honua-field/actions/runs/46118802646) · [Hosted artifact](https://github.com/honua-io/honua-field/actions/runs/46118802646/artifacts/15252944002) · [Trunk server readback](ordinary-photo-android-trunk.json)
+
+A locally installed Debug APK at Field `aae54ed` and Honua Server `ea127fc` passed the same four Maestro phases. The fixture returned one feature and one 952-byte attachment that matched Field’s saved JPEG. [Staged server readback](ordinary-photo-android.json)
 
 The [published Android workflow](../../../.github/workflows/published-android.yml) builds the Debug APK, installs Maestro and runs the [gate](../../../.github/workflows/run-published-android-gate.sh). The gate starts the pinned Server with PostGIS and local attachment storage, seeds `mobile_offline_demo/Offline Field Sites` (layer `68910`) with attachments enabled, and creates the layer-scoped worker key. It uploads `ordinary-photo/server-readback.json` and the four Maestro reports in `published-android-results`.
 
@@ -71,6 +75,10 @@ The iPhone workflow runs on a GitHub-hosted Apple silicon Mac (`runs-on: xcode-2
 Both mobile workflows take their Server commit from `scripts/e2e/fixtures/server-revision.txt`. Each hosted `server-readback.json` records the Field and Server commits and verifies that the Server checkout matches that pin.
 
 Maestro downloads the form as a layer-scoped worker, saves a draft offline with two repeat rows and a photo, and resumes it after a cold start. The host publishes the next form version while the draft is offline. During the first sync, a proxy forwards the submission and replaces the successful response with HTTP 503. The outbox must survive another restart. After retry, the gate queries FeatureServer and the receipt table for one feature, one matching attachment and one accepted receipt at the original form version. The `published-ios-results` artifact includes per-stage JUnit results and the readback evidence. [iOS workflow](../../../.github/workflows/published-ios.yml)
+
+### Installed iOS upgrade on AWS
+
+AWS Device Farm also ran two iPhone simulator journeys against Honua Server and PostGIS. Each installed a previous Field build, preserved a draft or queued submission across an in-place update, then synchronized it after version 2 of the XLSForm became available. Each server readback contained one accepted version 1 receipt, two repeat rows and the original photo checksum. The runs used Field revisions `6e3db0b` and `c6551c2`. See the [Device Farm runs and readbacks](https://github.com/honua-io/honua-field/pull/208#issuecomment-7217287017) and the [upgrade harness](https://github.com/honua-io/honua-field/pull/208).
 
 ## GeoServices capture topology
 
@@ -110,35 +118,24 @@ request shape and response parsing.
 
 ## Comprehensive scenario coverage
 
-`FeatureSyncE2ETests` (opt-in, gated on `HONUA_E2E_SERVER`) now covers, against a
-live server:
+The [live GeoServices tests](../../../tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs) run against seeded layer `68910` when `HONUA_E2E_SERVER` is set.
 
-- **add** — geometry + attribute round-trip and read-back;
-- **update** — attribute change reflected server-side;
-- **delete** — feature removed;
-- **missing feature** — an update returns the server rejection and a repeated delete succeeds idempotently;
-- **submit without credentials** — fails gracefully and writes nothing;
-- **concurrent adds (×12)** — all persist with distinct object ids (no id
-  collision or lost write);
-- **concurrent updates to the same feature (×10)** — transient write contention
-  is retried with backoff, so **every** submission succeeds (no spurious
-  failures) and exactly one consistent row remains;
-- **independent captures with identical answers** — distinct record IDs produce two feature rows.
+| Operation | What the live test checks |
+| --- | --- |
+| Add, update and delete | Geometry and typed attributes survive an add and readback. Updates change the saved attributes and deletes remove the feature. |
+| Missing feature or credentials | Updating a missing feature returns a rejection, deleting it again succeeds, and submitting without credentials leaves the server unchanged. |
+| Batch and concurrent edits | Each batch result identifies its feature. Twelve concurrent adds get distinct IDs, and ten updates to one feature complete after retries. Two independent captures with identical answers produce distinct rows. |
+| Lost feature acknowledgement | After the server commits an add and the reply is lost, reopening the store and recovering the receipt leaves one feature. |
+| Photo upload | Listing and downloading the attachment returns the expected metadata and original photo bytes. |
+| Lost photo acknowledgement | After the server stores the photo and the reply is lost, Field reopens the encrypted store and verifies the attachment. The test counts features and attachments to detect duplicates. |
 
-Findings the suite surfaced (and the fix): concurrent same-row updates fail
-transiently under contention — the server reuses error code 1000 for both that
-and "feature not found", so `GeoServicesFeatureSync` now retries with backoff,
-classifying permanence by message; contended submissions all succeed. Separately,
-integer attributes in the shared `features` JSONB column round-trip as strings
-(asserted tolerantly; a server-side storage-mapping item).
-
-All nine tests passed on Field `889b8d1` against the repository’s seeded layer 68910, Honua Server `83127df`, PostgreSQL 18.6 and PostGIS 3.6.4. This live suite exercises Field’s GeoServices client directly. The Maestro workflow above covers the installed Android app and published XLSForm path.
+The server can return error code 1000 for both transient write contention and a missing feature. Field uses the error message to decide whether to retry. The tests also account for integer attributes returned as strings from server JSONB storage.
 
 Bring the stack up/down with `scripts/e2e/up.sh` / `scripts/e2e/down.sh`.
 
 ### AWS Device Farm native smoke
 
-Run the Records and geometry journey on a Device Farm phone or tablet. Use a fresh device session and an installable Android APK or iOS IPA built for the selected device architecture. The iPhone simulator IPA is available from the Field on Apple platforms workflow. Use Python 3.11 or newer and an AWS profile with Device Farm project, device, upload and remote session permissions in us-west-2.
+Run the Records and geometry journey on a Device Farm phone or tablet. Use a fresh device session and an installable Android APK or iOS IPA built for the selected device architecture. For a physical iPhone or iPad, supply a device-signed IPA. For an iOS simulator, use the simulator artifact from the Field on Apple platforms workflow. Use Python 3.11 or newer and an AWS profile with Device Farm project, device, upload and remote session permissions in us-west-2.
 
 ```sh
 python3 -m venv .venv-devicefarm

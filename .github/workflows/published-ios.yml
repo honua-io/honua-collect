@@ -118,6 +118,7 @@ jobs:
         run: |
           dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
             -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+            -p:EnableAssignedWorkPilot=true \
             -p:RestoreConfigFile="$PWD/NuGet.config" \
             --configuration Debug --disable-build-servers
       - name: Publish the candidate server for macOS

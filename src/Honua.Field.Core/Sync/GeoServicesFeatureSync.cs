@@ -1008,13 +1008,12 @@ public sealed class GeoServicesFeatureSync
 
     /// <summary>
     /// Reads a single GeoServices per-edit result item
-    /// (<c>{success, objectId, error:{description,code}}</c>) shared by the
-    /// add/update/delete and addAttachment result shapes.
+    /// (<c>{success, objectId, error:{description,code}}</c>) from an
+    /// add, update, or delete operation.
     /// </summary>
     /// <param name="item">The per-edit result element.</param>
     /// <param name="defaultDetail">
     /// The failure detail to use when the item omits an error description
-    /// (context-specific, e.g. "Edit was not applied." vs "Attachment was not added.").
     /// </param>
     /// <returns>The decoded outcome.</returns>
     private static EditOutcome ReadEditOutcome(JsonElement item, string defaultDetail)
