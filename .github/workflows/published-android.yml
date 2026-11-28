@@ -87,6 +87,7 @@ jobs:
           global-json-file: global.json
       - name: Build current standalone .NET 11 Debug APK with assigned work
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-candidate
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
@@ -103,6 +104,7 @@ jobs:
 
       - name: Build Field feature sync integration tests
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-candidate
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests
@@ -110,6 +112,7 @@ jobs:
       - name: Build historical standalone .NET 11 Debug APK
         working-directory: field-previous
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-previous
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \

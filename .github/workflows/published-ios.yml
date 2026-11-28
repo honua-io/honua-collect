@@ -116,7 +116,8 @@ jobs:
             if [[ "$checkout" == "." ]]; then
               pilot=(-p:EnableAssignedWorkPilot=true)
             fi
-            (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            packages=$(mktemp -d "$RUNNER_TEMP/field-nuget.XXXXXX")
+            (cd "$checkout" && NUGET_PACKAGES="$packages" dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
               -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
               -p:RestoreConfigFile="$PWD/NuGet.config" "${pilot[@]}" \
               --configuration Debug --disable-build-servers)
