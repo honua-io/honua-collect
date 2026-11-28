@@ -165,3 +165,24 @@ redacted screenshots or logs and any follow-up issue. Include the installable
 build's access location and retain the written journey with that build. A build
 artifact without a completed installation and journey record does not satisfy
 acceptance.
+
+## Assigned-work pilot
+
+Build with `-p:EnableAssignedWorkPilot=true` to compile the assigned-work lifecycle
+integration. The pilot restores the published Mobile 0.1.0-alpha.1 packages,
+including `Honua.Mobile.Offline.Tasks`, and `Honua.Sdk.Field` 5.2.0 from
+nuget.org. Default builds exclude the pilot and its task adapter. The hosted
+Assigned work pilot job tests the opt-in graph and verifies assignment behavior
+on an installed Android app.
+
+The pilot restores the saved authenticated session after encrypted storage opens.
+Use the canonical service ID from server metadata and the authenticated user ID
+that matches the server's task assignee handle. Assignment snapshots and pending commands are separated by server, service and user. Offline
+reads use the stored snapshot. Startup, resume, connectivity and identity changes
+trigger replay and a fresh paginated download when online. An account switch
+cancels the previous sync. Replays retain the original command IDs and expected
+versions, and persist receipts or terminal conflict evidence in the account's
+encrypted store.
+
+The host integration tests exercise the versioned packages and encrypted store
+with controlled HTTP responses. A pilot rollout also requires verification with a deployed server and installed app.

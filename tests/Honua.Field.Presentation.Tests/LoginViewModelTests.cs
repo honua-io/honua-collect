@@ -69,6 +69,27 @@ public class LoginViewModelTests
     }
 
     [Fact]
+    public void ResumeSession_ExposesRestoredIdentityWithoutRaisingSignInEvent_AndCanExpire()
+    {
+        var vm = new LoginViewModel((_, _, _) => throw new InvalidOperationException("Unexpected sign-in."));
+        var raised = false;
+        vm.Authenticated += (_, _) => raised = true;
+        var restored = SampleSession();
+
+        vm.ResumeSession(restored);
+
+        Assert.True(vm.IsAuthenticated);
+        Assert.Same(restored, vm.Session);
+        Assert.False(raised);
+
+        vm.NotifySessionExpired();
+
+        Assert.False(vm.IsAuthenticated);
+        Assert.Null(vm.Session);
+        Assert.Equal("Your session expired. Please sign in again.", vm.ErrorMessage);
+    }
+
+    [Fact]
     public async Task NotifySessionExpired_AfterSignIn_ClearsStateAndPrompts()
     {
         var vm = new LoginViewModel((_, _, _) => Task.FromResult<AuthSession?>(SampleSession()))

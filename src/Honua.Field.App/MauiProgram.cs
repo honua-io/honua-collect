@@ -228,6 +228,29 @@ public static class MauiProgram
 				return handler;
 			});
 
+#if HONUA_ASSIGNED_WORK_PILOT
+		const string assignedWorkHttpClient = "honua-assigned-work";
+		builder.Services.AddHttpClient(assignedWorkHttpClient, client => client.Timeout = ServerRequestTimeout)
+			.ConfigurePrimaryHttpMessageHandler(() =>
+			{
+				var handler = new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
+				if (pinningCallback is not null)
+				{
+					handler.ServerCertificateCustomValidationCallback =
+						(request, certificate, chain, errors) => pinningCallback(request, certificate, chain, errors);
+				}
+
+				return handler;
+			});
+		builder.Services.AddSingleton(sp => new AssignedWorkPilot(
+			sp.GetRequiredService<IAuthSessionStore>(),
+			sp.GetRequiredService<AuthSessionManager>(),
+			async ct => (MobileRecordStore)await sp.GetRequiredService<LazyRecordStore>().GetStoreAsync(ct).ConfigureAwait(false),
+			() => sp.GetRequiredService<IHttpClientFactory>().CreateClient(assignedWorkHttpClient),
+			settings.BaseUri,
+			settings.ServiceId));
+#endif
+
 		// Unauthenticated clients for third-party endpoints (still pooled by the factory).
 		void ConfigureTileClient(HttpClient client)
 		{
@@ -255,7 +278,7 @@ public static class MauiProgram
 		// book builds the store lazily so the encryption key is fetched from secure
 		// storage off the UI thread (no startup blocking).
 		builder.Services.AddSingleton(_ => new LazyRecordStore(async () =>
-			await SqliteRecordStore.OpenEncryptedAsync(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false)).ConfigureAwait(false)));
+			await MobileRecordStore.OpenEncryptedAsync(dbPath, await databaseKey.GetOrCreateAsync().ConfigureAwait(false)).ConfigureAwait(false)));
 		builder.Services.AddSingleton<IRecordStore>(sp => sp.GetRequiredService<LazyRecordStore>());
 		builder.Services.AddSingleton(sp => new RecordBook(sp.GetRequiredService<IRecordStore>()));
 		builder.Services.AddSingleton<IRelatedRecordStore>(_ => new LazyRelatedRecordStore(async _ =>

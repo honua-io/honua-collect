@@ -21,7 +21,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
 {
     private const string TableName = "collect_records";
 
-    private static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
+    internal static readonly JsonSerializerOptions ValuesJsonOptions = new(JsonSerializerDefaults.General);
 
     /// <summary>
     /// Creates a store over the given connection string or database file path.
@@ -157,7 +157,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         reader.IsDBNull(ordinal) ? null
             : JsonSerializer.Deserialize(reader.GetString(ordinal), RecordStoreJsonContext.Default.OrdinaryFeaturePhotoArray);
 
-    private static void ValidateOrdinaryWrite(FieldRecordEntry entry, RecordSyncState? priorState,
+    internal static void ValidateOrdinaryWrite(FieldRecordEntry entry, RecordSyncState? priorState,
         bool priorHasRemoteId, bool priorPublished)
     {
         var eligibleToDispatch = !priorHasRemoteId && !priorPublished
@@ -268,7 +268,7 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
     /// its internal bookkeeping (error, retry count, timestamps) is consistent with
     /// the stored transport state, rather than fabricated by direct assignment.
     /// </summary>
-    private static void Rehydrate(
+    internal static void Rehydrate(
         FieldRecordEntry entry,
         RecordSyncState syncState,
         string? remoteId,
@@ -276,6 +276,10 @@ public sealed class SqliteRecordStore : SqliteStoreBase, IRecordStore
         int failedAttempts,
         DateTimeOffset? lastSyncedUtc)
     {
+        // A retry or conflict can belong to a previously synced feature.
+        // Its server identity survives every subsequent upload state.
+        entry.RestoreServerIdentity(remoteId, lastSyncedUtc);
+
         // Local records (including drafts) never transitioned; the constructor's
         // default already models that, so leave them untouched.
         if (syncState == RecordSyncState.Local)

@@ -172,7 +172,34 @@ public sealed class PublishedFormDraftTests
                 File.Delete(packageFile);
             }
 
-            var reopenedBook = new RecordBook(new SqliteRecordStore(database, "draft-test-key"));
+            var legacyStore = new SqliteRecordStore(database, "draft-test-key");
+            var pendingPayload = new PublishedFormSubmission("inspection",
+                """{"idempotencyKey":"pending-id","formVersion":7}""",
+                [new SubmissionFile("photo", photoPath, "image/jpeg", "inspection.jpg")],
+                Server.AbsoluteUri);
+            await new RecordBook(legacyStore).AddSubmittedAsync(new FieldRecord
+            {
+                RecordId = "pending-id",
+                FormId = "inspection",
+                AssignedUserId = "assigned-worker",
+                Status = RecordStatus.Submitted,
+                Location = location,
+            }, pendingPayload);
+
+            var mobileStore = await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key");
+            var migratedPending = Assert.Single(await mobileStore.LoadAllAsync(), candidate => candidate.Record.RecordId == "pending-id");
+            Assert.Equal(RecordSyncState.Pending, migratedPending.SyncState);
+            Assert.Equal("assigned-worker", migratedPending.Record.AssignedUserId);
+            Assert.Equal(location, migratedPending.Record.Location);
+            Assert.Equal(pendingPayload.RequestJson, migratedPending.PublishedSubmission?.RequestJson);
+            Assert.Equal(pendingPayload.ServerBaseUrl, migratedPending.PublishedSubmission?.ServerBaseUrl);
+            var replayPhoto = Assert.Single(migratedPending.PublishedSubmission!.Files);
+            Assert.Equal(Assert.Single(pendingPayload.Files), replayPhoto);
+            Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(replayPhoto.LocalPath));
+            await mobileStore.DeleteAsync("pending-id");
+            Assert.Contains(await legacyStore.LoadAllAsync(), candidate => candidate.Record.RecordId == "pending-id");
+
+            var reopenedBook = new RecordBook(await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key"));
             await reopenedBook.InitializeAsync();
             var entry = Assert.Single(reopenedBook.All);
             Assert.Equal(RecordSyncState.Local, entry.SyncState);
@@ -217,7 +244,7 @@ public sealed class PublishedFormDraftTests
 
             submitted.MarkSubmissionRejected("Correct the site name.");
             await reopenedBook.SaveAsync(submitted);
-            var persisted = Assert.Single(await new SqliteRecordStore(database, "draft-test-key").LoadAllAsync());
+            var persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync());
             Assert.Equal(RecordSyncState.SubmissionRejected, persisted.SyncState);
             Assert.Equal("Correct the site name.", persisted.LastError);
             Assert.False(persisted.IsPendingUpload);
@@ -234,7 +261,7 @@ public sealed class PublishedFormDraftTests
 
             var correctionDraft = PublishedFormDraft.Capture(correctionPackage, correction, Server) with { ReplacesRejectedSubmission = true };
             await reopenedBook.SaveDraftAsync(correction.Record, correctionDraft);
-            persisted = Assert.Single(await new SqliteRecordStore(database, "draft-test-key").LoadAllAsync());
+            persisted = Assert.Single(await (await MobileRecordStore.OpenEncryptedAsync(database, "draft-test-key")).LoadAllAsync());
             Assert.Null(persisted.PublishedSubmission);
             Assert.True(persisted.CanOpenPublishedEditor);
             Assert.True(persisted.PublishedDraft!.ReplacesRejectedSubmission);

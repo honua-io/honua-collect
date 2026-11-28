@@ -38,7 +38,9 @@ appId: io.honua.collect
             - tapOn:
                 point: 16%,24%
                 retryTapIfNoChange: false
-      - assertVisible: Skip
+      - extendedWaitUntil:
+          visible: Skip
+          timeout: 12000
 - tapOn: Skip
 - assertVisible: 1 attached
 - scrollUntilVisible:
