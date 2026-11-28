@@ -26,6 +26,7 @@ jobs:
         run: printf "NUGET_PACKAGES=%s/field-candidate-packages\nNUGET_HTTP_CACHE_PATH=%s/field-candidate-http\n" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 3 # two workflow commits plus the exact candidate
           persist-credentials: false
       - uses: ./.github/actions/mobile-validation-feed
         with:
@@ -185,13 +186,13 @@ jobs:
                   if repo == "." and name in mobile:
                       assert version == signed["version"]
                       assert sha256 == {key.lower(): value for key, value in signed["packages"].items()}[name], name
-                      assert Path(source).parent == runner and Path(source).name.startswith("honua-validation-feed."), name
+                      assert Path(source).parent == runner and Path(source).name.startswith("honua-validation-feed."), (name, source)
                   if repo == "field-previous":
-                      assert source == "https://nuget.pkg.github.com/honua-io/index.json", (repo, name)
+                      assert source == "https://nuget.pkg.github.com/honua-io/index.json", (repo, name, source)
                   print(f"{repo} {name}/{version} sha256={sha256} sha512={digest} source={source}")
 
           server_assets = json.loads(Path("server-candidate/src/Honua.Server/obj/project.assets.json").read_text())
-          assert set(map(Path, server_assets["packageFolders"])) == {runner / "field-server-packages"}
+          assert set(map(Path, server_assets["packageFolders"])) == {runner / "field-server-packages"}, server_assets["packageFolders"]
           assert not any(key.lower().startswith("honua.mobile.") for key in server_assets["libraries"])
           for name, settings in sorted(server_assets["libraries"].items()):
               if name.lower().startswith("honua.sdk."):
