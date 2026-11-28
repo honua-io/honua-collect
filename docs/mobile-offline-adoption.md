@@ -41,13 +41,14 @@ journey. It is a test script, not evidence that the migration has shipped.
    same file. Field still reads related records and history from their own tables.
    Verify upgrades and interrupted replay with a populated database.
    [Field #173](https://github.com/honua-io/honua-field/issues/173)
-2. **Consolidate feature and attachment transport.** Ordinary feature-layer
-   inspections still use Field's single-feature, batch and attachment paths in
+2. **Migrate the remaining ordinary feature requests.**
    [GeoServicesFeatureSync](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs)
-   while published XLSForm submissions use the shared SDK client. Migrate the
-   remaining requests to typed SDK operations. Preserve the distinction between a rejected add
-   and one with an unknown outcome. Field decides how the worker verifies an
-   uncertain upload before sending again.
+   already delegates feature updates and deletes, plus photo uploads, listing
+   and downloads, to the shared SDK. Field still constructs single-feature adds,
+   batch adds and paged feature queries. Migrate those requests to typed SDK
+   operations. Field owns Outbox state and the worker's follow-up when the
+   outcome is unknown, including verifying remote state before a retry and
+   keeping explicit rejections distinct from unknown outcomes.
    [SDK GlobalID support](https://github.com/honua-io/honua-sdk-dotnet/pull/601),
    [Field #209](https://github.com/honua-io/honua-field/issues/209) and
    [Field #214](https://github.com/honua-io/honua-field/issues/214)
