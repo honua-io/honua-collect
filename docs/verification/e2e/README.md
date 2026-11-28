@@ -45,19 +45,24 @@ The [hosted Android run](https://github.com/honua-io/honua-field/actions/runs/45
 
 ## Ordinary feature photos on Android
 
-The ordinary inspection scenario picks a fixture image from the Android gallery in airplane mode, submits the inspection to the outbox and restarts Field. Before reconnecting, the gate checks that the server has no matching feature. It then syncs, compares the downloaded attachment byte for byte against the JPEG saved by Field, and restarts again to verify that the feature and attachment IDs stay the same. The counts, IDs, photo checksum and installed APK checksum are recorded in `ordinary-photo/server-readback.json`. CI also records the Field and Honua Server revisions.
+The installed app picks a fixture image from the Android gallery in airplane mode, submits the inspection to the outbox and restarts Field. Before reconnecting, the gate verifies the server has no matching feature. After sync, the gate compares the server attachment against the JPEG saved by Field. It restarts Field again, verifies the record is Sent and checks that the feature and attachment IDs stay the same.
 
-On November 27, 2026, all four Maestro phases passed on the local Android emulator with a signed .NET 11 Debug APK and a layer-scoped worker. After the offline restart, Honua Server had zero matching features. The server returned one feature and one attachment immediately after sync, and their IDs stayed the same after a second restart. The downloaded JPEG matched all 952 bytes of Field’s private copy. The report includes both source revisions and the APK and photo checksums. [Server readback](ordinary-photo-android.json)
+All four Maestro phases passed with Field `eae4e68` and Honua Server `1c59eb2`. The layer-scoped worker synced one feature and one attachment. The downloaded JPEG matched all 952 bytes of Field’s private copy. The artifact contains the Field, Server and harness revisions, installed APK checksum and JUnit results. [Workflow run](https://github.com/honua-io/honua-field/actions/runs/46118802646) · [Hosted artifact](https://github.com/honua-io/honua-field/actions/runs/46118802646/artifacts/15252944002) · [Trunk server readback](ordinary-photo-android-trunk.json)
 
-For a local run, install the candidate Debug APK on a disposable emulator with a freshly cleared Field sandbox. Start the seeded `mobile_offline_demo` server and provision a worker key with read and write access to layer `68910` as shown below. Only this key goes to the device. The default host port is `5189`. Set `HONUA_E2E_HTTP_PORT` if your fixture uses another port. The harness toggles airplane mode and uses `adb reverse` to reconnect the app to the fixture.
+A locally installed Debug APK at Field `aae54ed` and Honua Server `ea127fc` passed the same four Maestro phases. The fixture returned one feature and one 952-byte attachment that matched Field’s saved JPEG. [Staged server readback](ordinary-photo-android.json)
+
+The [published Android workflow](../../../.github/workflows/published-android.yml) builds the Debug APK, installs Maestro and runs the [gate](../../../.github/workflows/run-published-android-gate.sh). The gate starts the pinned Server with PostGIS and local attachment storage, seeds `mobile_offline_demo/Offline Field Sites` (layer `68910`) with attachments enabled, and creates the layer-scoped worker key. It uploads `ordinary-photo/server-readback.json` and the four Maestro reports in `published-android-results`.
+
+To run just the photo scenario against an equivalently seeded fixture, put Python 3.11+, Java, `adb`, `curl`, `jq` and Maestro 2.12.1 on PATH. Install the Debug APK on a disposable emulator, clear its Field sandbox and start with airplane mode off. Use the same display size and density as the gate (822×1782 at 320 dpi). Keep the seeded server on host port `5189` or set `HONUA_E2E_HTTP_PORT` to match the fixture. The harness toggles airplane mode and uses `adb reverse` to reconnect to the fixture. Only the worker key goes to the emulator.
 
 ```bash
-scripts/e2e/create-fixture-worker.sh http://127.0.0.1:5189 /path/to/fixture-admin-key \
+port=${HONUA_E2E_HTTP_PORT:-5189}
+scripts/e2e/create-fixture-worker.sh "http://127.0.0.1:$port" /path/to/fixture-admin-key \
   "mobile_offline_demo/Offline Field Sites" /path/to/worker-key
 python3 scripts/e2e/run-ordinary-photo-android.py emulator-5554 /tmp/field-photo-results /path/to/worker-key
 ```
 
-The live .NET scenario also drops the upload acknowledgement after the server stores the photo, reopens the encrypted store and checks for a duplicate feature or attachment. See the [scenario list](#comprehensive-scenario-coverage).
+The [live GeoServices test](../../../tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs) covers a dropped upload acknowledgment. After the server stores the photo and the reply is lost, the test reopens the encrypted store, verifies the remote attachment and confirms that the original feature lists one attachment and Field made only one upload request.
 
 ## iPhone and iPad geometry
 
