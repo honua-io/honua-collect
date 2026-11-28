@@ -28,6 +28,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - uses: ./.github/actions/mobile-validation-feed
+        with:
+          token: ${{ github.token }}
       - name: Check the optional installed smoke harness
         run: python3 -m py_compile scripts/e2e/run-assigned-work-android.py
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0

@@ -1,0 +1,21 @@
+[
+  {
+    "repo": "honua-io/honua-mobile",
+    "repository_id": 1172123454,
+    "run": 46105236683,
+    "job": 140856387949,
+    "tag": "mobile-dotnet-v0.1.0-alpha.1",
+    "tag_object": "3d62604f8d04c876178ca81b5f38446ab0d627c8",
+    "revision": "f4db7c565362fd7d7bbf55003446e54d2c50de41",
+    "id": 15247680911,
+    "sha256": "8f7fe74c36f0de21f9f8eed0ac8e4021de1b08556e3d227c488398dc23b4714b",
+    "source": "mobile-validation",
+    "version": "0.1.0-alpha.1",
+    "packages": {
+      "Honua.Mobile.Maui": "e0d59cc86dc2dee0fe90f761de4da986855852aafe62fb993c4ccb3f7416ee32",
+      "Honua.Mobile.Offline": "3809a1f9562e3b512e74448ddc2192d4a2034ad59817b53ceb9108370aad8dcd",
+      "Honua.Mobile.Offline.Tasks": "f21d1c4c571a7186dec824b056ae99665fbf066c3edb24878581c9587ce73dcb",
+      "Honua.Mobile.Sdk": "e777017ed4e86bcecdfd3334d97f2a65c2f955f31196131f6a73acb04a57c889"
+    }
+  }
+]
