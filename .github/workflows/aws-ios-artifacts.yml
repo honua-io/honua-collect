@@ -105,10 +105,33 @@ jobs:
                private async Task CaptureVideoAsync(FieldViewModel field)
           PATCH
             fi
-            (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            # The baseline and candidate can use different feeds for the same package ID and version.
+            # NuGet checks the global packages folder before evaluating package source mappings.
+            packages=$(mktemp -d "$RUNNER_TEMP/field-nuget.XXXXXX")
+            (cd "$checkout" && NUGET_PACKAGES="$packages" dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
               -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier="$FIELD_RUNTIME" \
               -p:RestoreConfigFile="$PWD/NuGet.config" "${pilot[@]}" "${signing[@]}" \
               --configuration Debug --disable-build-servers)
+            if [[ "$checkout" == "." && -f .github/actions/mobile-validation-feed/artifacts.json ]]; then
+              python3 - "$packages" <<'PYTHON'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          manifest = Path(".github/actions/mobile-validation-feed/artifacts.json")
+          for artifact in json.loads(manifest.read_text()):
+              for package, expected in artifact["packages"].items():
+                  version = artifact["version"].lower()
+                  package = package.lower()
+                  archive = root / package / version / f"{package}.{version}.nupkg"
+                  actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+                  if actual != expected:
+                      raise SystemExit(f"Unexpected restored bytes for {archive.name}")
+                  print(f"Verified restored package {archive.name} at {actual}")
+          PYTHON
+            fi
             app=$(find "$checkout/src/Honua.Field.App/bin/Debug/net11.0-ios/$FIELD_RUNTIME" -maxdepth 1 -name '*.app' -type d)
             test -d "$app"
             revision=$FIELD_PREVIOUS
