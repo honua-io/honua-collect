@@ -237,6 +237,7 @@ Repo docs:
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
+| [Public NuGet package qualification](docs/verification/e2e/README.md#public-nuget-package-qualification) | Verify stock and assigned-work pilot restores against NuGet.org. |
 | [Device and server verification](docs/verification/e2e/README.md) | Reproduce the Android, iOS and live Honua Server checks and inspect their artifacts. |
 | [Mutation testing](docs/mutation-testing.md) | Stryker.NET setup and how the Core mutation score is measured. |
 
