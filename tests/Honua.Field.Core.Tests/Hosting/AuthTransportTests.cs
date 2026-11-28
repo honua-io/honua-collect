@@ -16,6 +16,40 @@ public class AuthTransportTests
     };
 
     [Fact]
+    public async Task Published_replay_cannot_cross_accounts_or_servers()
+    {
+        var sessions = new AuthSessionStore("development-key");
+        sessions.Set(Session("worker-a-token"));
+        var submission = new Honua.Field.Core.Forms.PublishedFormSubmission(
+            "inspection", """{"formVersion":1,"idempotencyKey":"retained-key","attachments":[]}""", [], "https://field.example/")
+        {
+            ReplayPrincipal = AuthHeaderHandler.CaptureReplayPrincipal(sessions)
+        };
+        var inner = new CapturingInner();
+        using var http = new HttpClient(new AuthHeaderHandler(sessions) { InnerHandler = inner })
+        {
+            BaseAddress = new Uri("https://field.example/")
+        };
+        using var wrongServer = new HttpClient(new AuthHeaderHandler(sessions) { InnerHandler = inner })
+        {
+            BaseAddress = new Uri("https://other.example/")
+        };
+        Assert.False((await submission.UploadForReplayAsync(wrongServer)).Success);
+        Assert.False((await (submission with { ReplayPrincipal = null }).UploadForReplayAsync(http)).Success);
+        sessions.Set(Session("worker-b-token") with { UserId = "u2" });
+        Assert.False((await submission.UploadForReplayAsync(http)).Success);
+        sessions.Set(null);
+        Assert.False((await submission.UploadForReplayAsync(http)).Success);
+        Assert.Null(inner.Last);
+
+        sessions.Set(Session("refreshed-token"));
+        await submission.UploadForReplayAsync(http);
+        Assert.NotNull(inner.Last);
+        Assert.Equal("refreshed-token", inner.Last.Headers.Authorization?.Parameter);
+        Assert.False(inner.Last.Headers.Contains("X-Honua-Local-Replay-Principal"));
+    }
+
+    [Fact]
     public void Store_exposes_session_and_fallback_independently()
     {
         var store = new AuthSessionStore("demo-key");

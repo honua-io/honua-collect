@@ -3,6 +3,7 @@
 
 using Honua.Field.App.Capture;
 using Honua.Field.App.Services;
+using Honua.Field.Core.Records;
 using Honua.Field.Core.Enterprise;
 using Honua.Field.Core.History;
 using Honua.Field.Core.Storage;
@@ -17,6 +18,7 @@ public partial class RecordsPage : ContentPage
     private readonly RecordBook _book;
     private readonly PublishedInspectionPages _inspections;
     private readonly AppSettings _settings;
+    private readonly PublishedOutboxReplay _publishedReplay;
     private readonly IRecordHistoryStore _historyStore;
     private readonly RecordRevertService _revertService;
     private readonly IAuthSessionStore _sessionStore;
@@ -29,7 +31,8 @@ public partial class RecordsPage : ContentPage
         IAuthSessionStore sessionStore,
         IDeviceAuthorization authorization,
         PublishedInspectionPages inspections,
-        AppSettings settings)
+        AppSettings settings,
+        PublishedOutboxReplay publishedReplay)
     {
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _historyStore = historyStore ?? throw new ArgumentNullException(nameof(historyStore));
@@ -38,6 +41,7 @@ public partial class RecordsPage : ContentPage
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
         _inspections = inspections;
         _settings = settings;
+        _publishedReplay = publishedReplay;
         InitializeComponent();
     }
 
@@ -46,6 +50,15 @@ public partial class RecordsPage : ContentPage
         base.OnAppearing();
         await _book.InitializeAsync();
         BindingContext = new RecordBoxViewModel(_book.All);
+    }
+
+    private Task<bool> ConfirmLegacyOwnerAsync(string title, string action)
+    {
+        var account = _sessionStore.Current?.UserId ?? (string.IsNullOrEmpty(_sessionStore.FallbackApiKey)
+            ? "anonymous access" : "the configured access key");
+        return DisplayAlert(title,
+            $"This inspection was saved before Field recorded its owner. Continue only if {account} is the original account or credential.",
+            action, "Cancel");
     }
 
     private async void OnRecordSelected(object? sender, SelectionChangedEventArgs e)
@@ -60,13 +73,54 @@ public partial class RecordsPage : ContentPage
             return;
         }
 
+        if (row.Entry.IsPendingUpload && row.Entry.PublishedSubmission is { ReplayPrincipal: null } oldSubmission)
+        {
+            try
+            {
+                var principal = AuthHeaderHandler.CaptureReplayPrincipal(_sessionStore);
+                if (!Uri.TryCreate(oldSubmission.ServerBaseUrl, UriKind.Absolute, out var source)
+                    || source != _settings.BaseUri)
+                {
+                    await DisplayAlert("Recover saved inspection",
+                        "Sign in to the original server and account to recover this inspection.", "OK");
+                    return;
+                }
+
+                if (!await ConfirmLegacyOwnerAsync("Retry saved inspection", "Retry"))
+                {
+                    return;
+                }
+
+                var replayed = await _publishedReplay.ReplayAsync(row.Entry, CancellationToken.None, principal);
+                BindingContext = new RecordBoxViewModel(_book.All);
+                await DisplayAlert("Recover saved inspection",
+                    replayed ? "The server confirmed this inspection." : row.Entry.LastError ?? "This inspection remains saved on this device.", "OK");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Recover saved inspection", ex.Message, "OK");
+            }
+
+            return;
+        }
+
         if (row.Entry.CanOpenPublishedEditor && row.Entry.PublishedDraft is { } draft)
         {
             try
             {
-                var (package, session) = draft.Open(row.Entry.Record.FormId, row.RecordId, _settings.BaseUri, CaptureFiles.MediaDirectory);
+                var server = _settings.BaseUri;
+                var (package, session) = draft.Open(row.Entry.Record.FormId, row.RecordId, server, CaptureFiles.MediaDirectory);
+                var principal = draft.ReplayPrincipal;
+                if (principal is null)
+                {
+                    principal = AuthHeaderHandler.CaptureReplayPrincipal(_sessionStore);
+                    if (!await ConfirmLegacyOwnerAsync("Open saved inspection", "Open draft"))
+                    {
+                        return;
+                    }
+                }
                 var isCorrection = draft.ReplacesRejectedSubmission || row.Entry.SyncState == Core.Records.RecordSyncState.SubmissionRejected;
-                await Navigation.PushAsync(_inspections.Create(package, session, isCorrection: isCorrection));
+                await Navigation.PushAsync(_inspections.Create(package, session, server, isCorrection: isCorrection, draftPrincipal: principal));
             }
             catch (Exception ex)
             {

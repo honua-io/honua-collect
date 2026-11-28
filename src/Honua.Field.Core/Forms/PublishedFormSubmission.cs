@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
-using System.Net;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Honua.Field.Core.Enterprise;
 using Honua.Field.Core.Field.Forms;
 using Honua.Field.Core.Sync;
 using Honua.Sdk.Field.Forms;
@@ -20,9 +18,26 @@ public sealed record SubmissionFile(string PartName, string LocalPath, string Co
 /// <summary>The versioned request and evidence captured before the first upload.</summary>
 public sealed record PublishedFormSubmission(string FormId, string RequestJson, IReadOnlyList<SubmissionFile> Files, string? ServerBaseUrl = null)
 {
-    /// <summary>Locates the frozen evidence in the current app installation while preserving the wire request.</summary>
+    /// <summary>The local identity authorized to upload this request.</summary>
+    public string? ReplayPrincipal { get; init; }
+
+    /// <summary>Locates captured evidence in this installation without changing the request or its key.</summary>
     public PublishedFormSubmission ResolveMediaPaths(string mediaDirectory) =>
-        this with { Files = Files.Select(file => file with { LocalPath = CapturedMediaPath.Resolve(file.LocalPath, mediaDirectory) }).ToArray() };
+        this with { Files = Files.Select(file => file with
+            { LocalPath = CapturedMediaPath.Resolve(file.LocalPath, mediaDirectory) }).ToArray() };
+
+    /// <summary>Uploads through a dedicated named client configured with Field authentication.</summary>
+    public Task<FeatureSyncResult> UploadForReplayAsync(HttpClient http, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(ServerBaseUrl) || string.IsNullOrWhiteSpace(ReplayPrincipal))
+        {
+            return Task.FromResult(FeatureSyncResult.Fail(
+                "Review this saved inspection in Records before retrying it."));
+        }
+
+        AuthHeaderHandler.BindReplayClient(http, ReplayPrincipal);
+        return UploadAsync(http, cancellationToken);
+    }
 
     /// <summary>Freezes the request, destination, and evidence references for replay.</summary>
     public static PublishedFormSubmission Capture(PublishedFormPackage package, FormSession session, Uri serverBaseUri,
@@ -97,98 +112,73 @@ public sealed record PublishedFormSubmission(string FormId, string RequestJson, 
             return FeatureSyncResult.Fail("Reconnect to the server where this inspection was captured.");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/forms/{Uri.EscapeDataString(FormId)}/submissions");
-        var json = new StringContent(RequestJson, Encoding.UTF8, "application/json");
-        request.Content = json;
-        if (Files.Count > 0)
-        {
-            var parts = new MultipartFormDataContent();
-            request.Content = parts;
-            parts.Add(json, "submission");
-            foreach (var file in Files)
-            {
-                var contentType = MediaTypeHeaderValue.Parse(file.ContentType);
-                var content = new StreamContent(File.OpenRead(file.LocalPath));
-                parts.Add(content, file.PartName, file.FileName);
-                content.Headers.ContentType = contentType;
-            }
-        }
+        using var sent = JsonDocument.Parse(RequestJson);
+        var expected = sent.RootElement.GetProperty("attachments").EnumerateArray()
+            .Select(a => a.GetProperty("clientAttachmentId").GetString()).ToHashSet(StringComparer.Ordinal);
+        var parts = Files.Select(file => new PublishedFormPart(
+            file.PartName, file.FileName, file.ContentType, () => File.OpenRead(file.LocalPath))).ToArray();
 
-        // Multipart content has a known length because the evidence streams are seekable.
-        // Include the envelope and all evidence in the budget for this single request.
-        using var deadline = request.Content is MultipartFormDataContent multipart
-            ? UploadDeadline.Start(multipart.Headers.ContentLength!.Value, cancellationToken)
-            : null;
-        var requestToken = deadline?.Token ?? cancellationToken;
-        HttpResponseMessage response;
+        PublishedFormSubmissionReceipt receipt;
         try
         {
-            // The default completion option also buffers the receipt within the deadline.
-            response = await http.SendAsync(request, requestToken).ConfigureAwait(false);
+            var submission = new Honua.Sdk.Field.Forms.PublishedFormSubmission
+            {
+                FormId = FormId,
+                RequestJson = RequestJson,
+                Files = parts,
+                CreateUploadDeadline = bytes => UploadDeadline.Start(bytes, cancellationToken)
+            };
+            receipt = await new PublishedFormSubmissionClient(http).SubmitAsync(submission, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return FeatureSyncResult.Fail("The form submission timed out before the server receipt was confirmed.");
         }
-
-        using var received = response;
-        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.BadRequest)
-        {
-            return FeatureSyncResult.Fail($"Form submission returned HTTP {(int)response.StatusCode}.", (int)response.StatusCode);
-        }
-
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-        }
         catch (JsonException)
         {
-            return FeatureSyncResult.Fail("The server returned an unreadable submission receipt.", (int)response.StatusCode);
+            return FeatureSyncResult.Fail("The server returned an unreadable or mismatched submission receipt.");
+        }
+        catch (PublishedReplayIdentityException exception)
+        {
+            return FeatureSyncResult.Fail(exception.Message);
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode is { } statusCode)
+        {
+            return FeatureSyncResult.Fail($"Form submission returned HTTP {(int)statusCode}.", (int)statusCode);
         }
 
-        using var result = document;
-        using var sent = JsonDocument.Parse(RequestJson);
-        var root = result.RootElement;
-        var expected = sent.RootElement.GetProperty("attachments").EnumerateArray()
-            .Select(a => a.GetProperty("clientAttachmentId").GetString()).ToHashSet(StringComparer.Ordinal);
-        var matchesVersion = root.ValueKind == JsonValueKind.Object
-            && root.TryGetProperty("formId", out var id) && id.ValueKind == JsonValueKind.String && id.GetString() == FormId
-            && root.TryGetProperty("formVersion", out var version) && version.ValueKind == JsonValueKind.Number
-            && version.TryGetInt32(out var number) && number == sent.RootElement.GetProperty("formVersion").GetInt32();
-        var status = matchesVersion && root.TryGetProperty("status", out var state) && state.ValueKind == JsonValueKind.String
-            ? state.GetString() : null;
-        if (matchesVersion && status == "rejected"
-            && (!root.TryGetProperty("targetFeatureId", out var target) || target.ValueKind == JsonValueKind.Null)
-            && (!root.TryGetProperty("editOutcome", out var edit) || edit.ValueKind == JsonValueKind.Null)
-            && root.TryGetProperty("retry", out var retry) && retry.ValueKind == JsonValueKind.Object
-            && retry.TryGetProperty("retryable", out var retryable) && retryable.ValueKind == JsonValueKind.False)
+        var responseCode = (int)receipt.HttpStatusCode;
+        var success = responseCode is >= 200 and <= 299;
+        if (receipt.Status == "rejected" && receipt.TargetFeatureId is null && receipt.EditOutcome is null
+            && receipt.Retry?.Retryable is false)
         {
-            var message = root.TryGetProperty("validationIssues", out var issues) && issues.ValueKind == JsonValueKind.Array
-                ? issues.EnumerateArray().Select(issue => issue.GetProperty("message").GetString())
-                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
-                : null;
+            var message = receipt.ValidationIssues?.Select(issue => issue?.Message)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
             return FeatureSyncResult.Fail(message ?? "Correct the rejected inspection before submitting it again.",
-                response.IsSuccessStatusCode ? null : (int)response.StatusCode) with { CanCorrectSubmission = true };
+                success ? null : responseCode) with { CanCorrectSubmission = true };
         }
 
-        if (!response.IsSuccessStatusCode)
+        if (!success)
         {
-            return FeatureSyncResult.Fail($"Form submission returned HTTP {(int)response.StatusCode}.", (int)response.StatusCode);
+            return FeatureSyncResult.Fail($"Form submission returned HTTP {responseCode}.", responseCode);
         }
 
-        if (!matchesVersion || status != "accepted"
-            || !root.GetProperty("editOutcome").GetProperty("succeeded").GetBoolean()
-            || !root.GetProperty("targetFeatureId").TryGetInt64(out var objectId))
+        if (receipt.Status != "accepted" || receipt.EditOutcome?.Succeeded != true
+            || receipt.TargetFeatureId is not { } objectId)
         {
             return FeatureSyncResult.Fail("The server did not confirm the requested form version and feature edit.");
         }
 
-        foreach (var outcome in root.GetProperty("attachmentOutcomes").EnumerateArray())
+        if (receipt.AttachmentOutcomes is null)
         {
-            if (outcome.GetProperty("status").GetString() != "accepted"
-                || !outcome.GetProperty("attachmentId").TryGetInt64(out _)
-                || !expected.Remove(outcome.GetProperty("clientAttachmentId").GetString()))
+            return FeatureSyncResult.Fail("The server omitted the attachment receipts.");
+        }
+
+        foreach (var outcome in receipt.AttachmentOutcomes)
+        {
+            if (outcome?.Status != "accepted" || outcome.AttachmentId is null
+                || !expected.Remove(outcome.ClientAttachmentId))
             {
                 return FeatureSyncResult.Fail("The server did not confirm the captured evidence.");
             }

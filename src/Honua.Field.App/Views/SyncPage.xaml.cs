@@ -19,7 +19,7 @@ namespace Honua.Field.App.Views;
 /// </summary>
 public partial class SyncPage : ContentPage
 {
-    private readonly IHttpClientFactory _clients;
+    private readonly PublishedOutboxReplay _publishedReplay;
     private readonly AppSettings _settings;
     private readonly RecordBook _book;
     private readonly Func<GeoServicesFeatureSync> _syncFactory;
@@ -30,13 +30,13 @@ public partial class SyncPage : ContentPage
     public SyncPage(
         AppSettings settings,
         RecordBook book,
-        IHttpClientFactory clients,
+        PublishedOutboxReplay publishedReplay,
         Func<GeoServicesFeatureSync> syncFactory,
         IInboxPullProgressStore pullProgressStore,
         ILogger<SyncCenterViewModel>? logger = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _clients = clients ?? throw new ArgumentNullException(nameof(clients));
+        _publishedReplay = publishedReplay;
         _book = book ?? throw new ArgumentNullException(nameof(book));
         _syncFactory = syncFactory ?? throw new ArgumentNullException(nameof(syncFactory));
         _pullProgressStore = pullProgressStore ?? throw new ArgumentNullException(nameof(pullProgressStore));
@@ -74,6 +74,7 @@ public partial class SyncPage : ContentPage
             PullAsync, SampleForms.FieldSite(), _book.SaveAsync,
             (entries, cancellationToken) => BatchUploadAsync(entries, target, cancellationToken),
             logger: _logger,
+            replayPublished: (entry, ct) => _publishedReplay.ReplayAsync(entry, ct),
             canDispatchOrdinaryAdd: HasNetworkAccess,
             replayOrdinaryPhotos: ReplayOrdinaryPhotosAsync,
             canDispatchOrdinaryRecord: entry => entry.OrdinaryPhotos.All(photo => photo.Target == target));
@@ -124,19 +125,6 @@ public partial class SyncPage : ContentPage
     private async Task<FeatureSyncResult> UploadAsync(
         Core.Records.FieldRecordEntry entry, GeoServicesTarget target, CancellationToken cancellationToken)
     {
-        if (entry.PublishedSubmission is { } submission)
-        {
-            if (entry.Record.Status == Honua.Sdk.Field.Records.RecordStatus.Deleted || entry.RemoteId is not null)
-            {
-                return FeatureSyncResult.Fail("This published form submission only supports creation.");
-            }
-
-            using var http = _clients.CreateClient(submission.Files.Count > 0
-                ? MauiProgram.UploadHttpClient
-                : MauiProgram.ServerHttpClient);
-            return await submission.ResolveMediaPaths(CaptureFiles.MediaDirectory).UploadAsync(http, cancellationToken);
-        }
-
         var sync = _syncFactory();
 
         // Route by the record's transport state and review status:

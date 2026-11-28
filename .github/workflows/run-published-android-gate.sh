@@ -129,6 +129,8 @@ elif ! "${upgrade[@]}" verify "$apk"; then
     fail_gate "In-place Android upgrade failed"
 elif ! "${upgrade[@]}" recover-key; then
     fail_gate "Installed Android key recovery failed"
+elif ! "${upgrade[@]}" recover-outbox "$working_dir/admin-key"; then
+    fail_gate "Historical Android outbox recovery failed"
 fi
 
 # Use the candidate even if the upgrade failed before installing it. A failed

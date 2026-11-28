@@ -89,6 +89,7 @@ public sealed class SyncCenterViewModel : ObservableObject
     private readonly FormDefinition? _form;
     private readonly FeaturePullService _pullService = new();
     private readonly ILogger<SyncCenterViewModel> _logger;
+    private readonly Func<FieldRecordEntry, CancellationToken, Task<bool>>? _replayPublished;
     private SyncSummary _summary;
     private bool _isSyncing;
     private bool _isPulling;
@@ -134,6 +135,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         BatchRecordUploader? batchUploader = null,
         int batchSize = DefaultBatchSize,
         ILogger<SyncCenterViewModel>? logger = null,
+        Func<FieldRecordEntry, CancellationToken, Task<bool>>? replayPublished = null,
         Func<bool>? canDispatchOrdinaryAdd = null,
         Func<FieldRecordEntry, Task<bool>>? replayOrdinaryPhotos = null,
         Func<FieldRecordEntry, bool>? canDispatchOrdinaryRecord = null)
@@ -148,6 +150,7 @@ public sealed class SyncCenterViewModel : ObservableObject
         _canDispatchOrdinaryRecord = canDispatchOrdinaryRecord;
         _puller = puller;
         _form = form;
+        _replayPublished = replayPublished;
         _canDispatchOrdinaryAdd = canDispatchOrdinaryAdd;
         _logger = logger ?? NullLogger<SyncCenterViewModel>.Instance;
         _entries = entries.ToList();
@@ -407,6 +410,30 @@ public sealed class SyncCenterViewModel : ObservableObject
         var synced = 0;
         foreach (var entry in entries)
         {
+            if (entry.PublishedSubmission is not null)
+            {
+                try
+                {
+                    if (_replayPublished is null)
+                    {
+                        throw new InvalidOperationException("Published outbox replay has not been configured.");
+                    }
+
+                    if (await _replayPublished(entry, cancellationToken))
+                    {
+                        synced++;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(
+                        "Published outbox replay failed for record {RecordId} with {ExceptionType}.",
+                        entry.Record.RecordId, ex.GetType().Name);
+                }
+
+                continue;
+            }
+
             var ordinaryAdd = entry.IsOrdinaryAdd;
             if (ordinaryAdd)
             {
@@ -523,14 +550,7 @@ public sealed class SyncCenterViewModel : ObservableObject
             return true;
         }
 
-        if (entry.PublishedSubmission is not null && result.CanCorrectSubmission)
-        {
-            entry.MarkSubmissionRejected(result.FailureDescription);
-        }
-        else
-        {
-            entry.MarkFailed(result.FailureDescription);
-        }
+        entry.MarkFailed(result.FailureDescription);
 
         return false;
     }

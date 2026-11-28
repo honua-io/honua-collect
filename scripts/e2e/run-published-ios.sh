@@ -64,7 +64,8 @@ run_flow() {
                  --test-output-dir "$output" --debug-output "$output")
     fi
     "${maestro[@]}" test ${options[@]+"${options[@]}"} -e "INSPECTION_NAME=$name" \
-        -e "FORM_VERSION=$version" "$script_dir/maestro/$flow.yaml"
+        -e "FORM_VERSION=$version" -e "LEGACY_REVIEW=${legacy_review:-false}" -e "LEGACY_ROW=${legacy_row:-}" \
+        "$script_dir/maestro/$flow.yaml"
 }
 
 launch_and_run_flow() {
@@ -271,6 +272,7 @@ if [[ -n ${HONUA_E2E_IOS_UPGRADE_APP:-} ]]; then
     fi
 fi
 if [[ $upgrade_state == draft ]]; then
+    if [[ -n ${HONUA_E2E_IOS_UPGRADE_APP:-} ]]; then legacy_review=true; fi
     launch_and_run_flow resume-draft-ios
     "${simctl[@]}" terminate "$device" "$app"
 fi
@@ -279,7 +281,11 @@ cmp "$data/Library/media/$attachment" "$working_dir/attachment"
 
 touch "$working_dir/lose-receipt"
 rm -- "$working_dir/offline"
-run_flow retry-outbox
+if [[ $upgrade_state == outbox && -n ${HONUA_E2E_IOS_UPGRADE_APP:-} ]]; then
+    legacy_row="Ready to send" run_flow recover-legacy-outbox-ios
+else
+    run_flow retry-outbox
+fi
 if [[ ! -f "$working_dir/withheld" ]]; then
     echo "The server did not accept the first submission through the lost-receipt proxy." >&2
     exit 1
@@ -287,7 +293,11 @@ fi
 "${simctl[@]}" terminate "$device" "$app"
 launch_and_run_flow verify-outbox-ios
 rm -- "$working_dir/lose-receipt"
-run_flow sync
+if [[ $upgrade_state == outbox && -n ${HONUA_E2E_IOS_UPGRADE_APP:-} ]]; then
+    legacy_row="Failed — .*" run_flow recover-legacy-outbox-ios
+else
+    run_flow sync
+fi
 
 readback_report=()
 if [[ -n $report ]]; then
