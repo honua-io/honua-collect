@@ -169,8 +169,17 @@ record. Enable offline use when publishing the form so workers can open it after
 disconnecting or restarting Field. **Save draft** keeps the inspection in
 **Records** with its original form version. **Submit** queues it for upload.
 
-**Sample Inspection Demo** opens the bundled form. The [sample definitions](src/Honua.Field.App/SampleForms.cs)
-can also be used to exercise the capture widgets without downloading a form.
+**Sample Inspection Demo** opens the bundled feature-layer form. To try offline
+photo collection, enter a site name, choose a status, tap **Add photo**, then
+**Submit**. You can close Field while the inspection is in the outbox. Once
+connected, open **Sync** and tap **Sync now**. If Honua Server accepts the
+feature first, the inspection stays in **Outbox** with the status **Feature
+sent. Photos still need sync.** Tap **Sync now** again on the original layer.
+If the server refuses the upload because the worker lacks access, restore
+access and tap **Sync now** again. If the upload outcome is unknown, Field
+checks the attachment name and SHA-256 on the original feature. The inspection
+stays in **Outbox** until every photo is confirmed.
+[Sample form](src/Honua.Field.App/SampleForms.cs) · [Photo sync verification](docs/verification/e2e/README.md#ordinary-feature-photos-on-android)
 
 ### Basemap
 

@@ -1,0 +1,37 @@
+appId: io.honua.collect
+---
+- launchApp
+- addMedia:
+    - inspection.png
+- extendedWaitUntil:
+    visible: Sample Inspection Demo
+    timeout: 90000
+- tapOn: Sample Inspection Demo
+- tapOn:
+    id: '(.*:id/)?site_name'
+- inputText: ${INSPECTION_NAME}
+- hideKeyboard
+- tapOn:
+    id: '(.*:id/)?status'
+- tapOn: New
+- scrollUntilVisible:
+    element: Add photo
+- tapOn: Add photo
+- tapOn: Choose from gallery
+- tapOn:
+    id: '.*:id/(icon_thumbnail|thumbnail)'
+    index: 0
+- tapOn: Skip
+- assertVisible: 1 attached
+- scrollUntilVisible:
+    element: Submit
+- tapOn: Submit
+- runFlow:
+    when:
+      visible: Submit
+    commands:
+      - back
+- tapOn: Sync
+- extendedWaitUntil:
+    visible: 'Outbox 1 · Conflicts 0 · Sent 0 · Failed 0'
+    timeout: 15000
