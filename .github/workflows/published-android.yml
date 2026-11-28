@@ -2,32 +2,6 @@ name: Published forms on Android
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/published-android.yml
-      - .github/workflows/run-published-android-gate.sh
-      - scripts/e2e/**
-      - tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs
-      - tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
-      - src/**
-      - Directory.Build.*
-      - Directory.Packages.props
-      - NuGet.config
-      - global.json
-  push:
-    branches: [trunk]
-    paths:
-      - .github/workflows/published-android.yml
-      - .github/workflows/run-published-android-gate.sh
-      - scripts/e2e/**
-      - tests/Honua.Field.Core.Tests/Sync/FeatureSyncE2ETests.cs
-      - tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
-      - src/**
-      - Directory.Build.*
-      - Directory.Packages.props
-      - NuGet.config
-      - global.json
-
 permissions:
   actions: read
   contents: read
@@ -47,6 +21,9 @@ jobs:
       MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
       POSTGIS_IMAGE: postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
     steps:
+      - name: Isolate the candidate NuGet cache
+        shell: bash
+        run: printf "NUGET_PACKAGES=%s/field-candidate-packages\nNUGET_HTTP_CACHE_PATH=%s/field-candidate-http\n" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -108,6 +85,8 @@ jobs:
       - name: Build historical standalone .NET 11 Debug APK
         working-directory: field-previous
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-historical-packages
+          NUGET_HTTP_CACHE_PATH: ${{ runner.temp }}/field-historical-http
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
@@ -127,12 +106,100 @@ jobs:
       - name: Publish server candidate
         working-directory: server-candidate
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-server-packages
+          NUGET_HTTP_CACHE_PATH: ${{ runner.temp }}/field-server-http
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/server-dotnet/dotnet" publish src/Honua.Server/Honua.Server.csproj \
-            --runtime linux-x64 --self-contained true --configuration Debug \
+            --runtime linux-x64 --self-contained true --configuration Debug -p:RestoreConfigFile="$PWD/NuGet.config" \
             -p:PublishAot=false -p:PublishTrimmed=false -p:PublishSingleFile=false \
             --output "$RUNNER_TEMP/published-server"
+
+      - name: Verify restored inputs and record APK checksums
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 - <<'PYTHON' | tee "$RUNNER_TEMP/package-provenance.txt"
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          candidate = "b32f2df91af3b56f55c5d9994d8e1943f0b522b0"
+          historical = "6e3db0b0c48c63d1bdb6fd1d7f00c2030dc33c46"
+          server = "ea127fc0916f2bce70596deb7e4f11784ce9f7d1"
+          runner = Path(os.environ["RUNNER_TEMP"])
+          print(f"candidate={candidate} historical={historical} server={server}")
+          for repo, revision in ((".", candidate), ("field-previous", historical), ("server-candidate", server)):
+              actual = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"], text=True).strip()
+              if repo == ".":
+                  subprocess.run(["git", "diff", "--exit-code", revision, "HEAD", "--", ".", ":(exclude).github/workflows/published-android.yml"], check=True)
+              else:
+                  assert actual == revision, (repo, actual, revision)
+              print(f"{repo} checkout={actual}")
+
+          signed, = json.loads(Path(".github/actions/mobile-validation-feed/artifacts.json").read_text())
+          print(f"mobile tag={signed['tag']} revision={signed['revision']} archive={signed['id']} sha256={signed['sha256']}")
+
+          for repo, revision, cache, sdk_version in (
+              (".", candidate, Path(os.environ["NUGET_PACKAGES"]), "5.2.0"),
+              ("field-previous", historical, runner / "field-historical-packages", "2.2.0"),
+          ):
+              dependencies = {}
+              paths = subprocess.check_output(["git", "-C", repo, "ls-tree", "-r", "--name-only", revision], text=True).splitlines()
+              for path in paths:
+                  if not path.endswith(("/packages.lock.json", "/packages.assigned-work.lock.json")):
+                      continue
+                  data = json.loads(subprocess.check_output(["git", "-C", repo, "show", f"{revision}:{path}"]))
+                  for framework in data["dependencies"].values():
+                      for name, detail in framework.items():
+                          if name.startswith("Honua.Mobile.") or name == "Honua.Sdk.Field":
+                              key = name.lower(), detail["resolved"]
+                              digest = detail["contentHash"]
+                              assert dependencies.setdefault(key, digest) == digest, key
+
+              assets = json.loads((Path(repo) / "src/Honua.Field.App/obj/project.assets.json").read_text())
+              assert set(map(Path, assets["packageFolders"])) == {cache}, assets["packageFolders"]
+              installed = [tuple(key.lower().split("/")) for key in assets["libraries"]]
+              mobile = {name for name, version in installed if name.startswith("honua.mobile.")}
+              if repo == ".":
+                  assert mobile == {name.lower() for name in signed["packages"]}, mobile
+              else:
+                  assert mobile == {"honua.mobile.sdk", "honua.mobile.offline", "honua.mobile.field", "honua.mobile.maui"}, mobile
+              assert ("honua.sdk.field", sdk_version) in installed, (repo, sdk_version)
+
+              for name, version in installed:
+                  if name not in mobile and name != "honua.sdk.field":
+                      continue
+                  folder = cache / name / version
+                  package = (folder / f"{name}.{version}.nupkg").read_bytes()
+                  sha256 = hashlib.sha256(package).hexdigest()
+                  digest = base64.b64encode(hashlib.sha512(package).digest()).decode()
+                  source = json.loads((folder / ".nupkg.metadata").read_text())["source"]
+                  if (name, version) in dependencies:
+                      assert digest == dependencies[name, version], (repo, name, "archived lock hash mismatch")
+                  else:
+                      assert name == "honua.mobile.maui", (repo, name, "no archived lock hash")
+                  if repo == "." and name in mobile:
+                      assert version == signed["version"]
+                      assert sha256 == {key.lower(): value for key, value in signed["packages"].items()}[name], name
+                      assert Path(source).parent == runner and Path(source).name.startswith("honua-validation-feed."), name
+                  if repo == "field-previous":
+                      assert source == "https://nuget.pkg.github.com/honua-io/index.json", (repo, name)
+                  print(f"{repo} {name}/{version} sha256={sha256} sha512={digest} source={source}")
+
+          server_assets = json.loads(Path("server-candidate/src/Honua.Server/obj/project.assets.json").read_text())
+          assert set(map(Path, server_assets["packageFolders"])) == {runner / "field-server-packages"}
+          assert not any(key.lower().startswith("honua.mobile.") for key in server_assets["libraries"])
+          for name, settings in sorted(server_assets["libraries"].items()):
+              if name.lower().startswith("honua.sdk."):
+                  print(f"server {name} sha512={settings['sha512']}")
+          for filename in ("honua-field.apk", "honua-field-previous.apk"):
+              with (runner / filename).open("rb") as apk:
+                  print(f"{filename} sha256={hashlib.file_digest(apk, 'sha256').hexdigest()}")
+          PYTHON
 
       - name: Install Maestro 2.12.1
         run: |
@@ -165,6 +232,7 @@ jobs:
         with:
           name: published-android-results
           path: |
+            ${{ runner.temp }}/package-provenance.txt
             ${{ runner.temp }}/published-android-report/*/failure.png
             ${{ runner.temp }}/published-android-report/*/server-readback.json
             ${{ runner.temp }}/published-android-report/*/correction-ledger.json
