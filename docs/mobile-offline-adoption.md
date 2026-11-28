@@ -32,25 +32,33 @@ journey. It is a test script, not evidence that the migration has shipped.
 
 ### Migration order
 
-1. **Protect pending records during storage migration.** Field currently uses
-   [SqliteRecordStore](../src/Honua.Field.Core/Storage/SqliteRecordStore.cs).
-   Switch its persistence adapter only after the encrypted upgrade and
-   interrupted-replay checks below pass on populated data.
+1. **Protect pending records during storage migration.** The app registers
+   [MobileRecordStore](../src/Honua.Field.Core/Storage/MobileRecordStore.cs)
+   for drafts, queued records and sent records. It opens the existing encrypted
+   database, reads legacy records through
+   [SqliteRecordStore](../src/Honua.Field.Core/Storage/SqliteRecordStore.cs)
+   and imports them once into the Mobile GeoPackage document collection in the
+   same file. Field still reads related records and history from their own tables.
+   Verify upgrades and interrupted replay with a populated database.
    [Field #173](https://github.com/honua-io/honua-field/issues/173)
-2. **Consolidate feature and attachment transport.** Replace hand-built requests in
+2. **Consolidate feature and attachment transport.** Ordinary feature-layer
+   inspections still use Field's single-feature, batch and attachment paths in
    [GeoServicesFeatureSync](../src/Honua.Field.Core/Sync/GeoServicesFeatureSync.cs)
-   with typed SDK operations. Preserve the distinction between a rejected add
+   while published XLSForm submissions use the shared SDK client. Migrate the
+   remaining requests to typed SDK operations. Preserve the distinction between a rejected add
    and one with an unknown outcome. Field decides how the worker verifies an
    uncertain upload before sending again.
    [SDK GlobalID support](https://github.com/honua-io/honua-sdk-dotnet/pull/601),
    [Field #209](https://github.com/honua-io/honua-field/issues/209) and
    [Field #214](https://github.com/honua-io/honua-field/issues/214)
-3. **Adopt shared expression evaluation.** XLSForm authoring uses the
+3. **Share published XLSForm semantics.** XLSForm authoring uses the
    [SDK workbook converter](https://github.com/honua-io/honua-sdk-dotnet/blob/trunk/src/Honua.Sdk.Field/Forms/Authoring/XlsFormConverter.cs).
-   Compare Field's [published-expression adapter](../src/Honua.Field.Core/Forms/PublishedXlsFormExpressions.cs)
-   with the SDK evaluator on the same answers, including restored drafts and
-   repeat rows. Switch callers once the pinned SDK handles each rule. Field
-   keeps widget selection and draft display.
+   Field already evaluates rules through the SDK. Its
+   [published-expression adapter](../src/Honua.Field.Core/Forms/PublishedXlsFormExpressions.cs)
+   still normalizes expressions and prepares answers for multi-select fields and
+   repeat rows. Before moving those rules into the SDK, check restored drafts
+   and parent and child answers against the same fixtures. Field keeps widget
+   selection and draft display.
    [SDK expression support](https://github.com/honua-io/honua-sdk-dotnet/pull/603) and
    [Field #169](https://github.com/honua-io/honua-field/issues/169)
 4. **Reuse geometry primitives.** When snapping is enabled, the capture session
@@ -86,8 +94,8 @@ key must fail closed without replacing the existing database.
 | Failed and conflicted records | Preserve failure details and the local/server comparison needed for explicit resolution. |
 | Assignments, history, related records and preferences | Inventory and preserve these app-owned records in the shared store; do not delete their source tables while they are still read. |
 
-Before switching the app, the published SDK must support encryption with one
-native provider, atomic record/queue writes and durable acknowledgement of
+Qualify each dependency update against the encrypted store with one native
+provider. Verify atomic record and queue writes and durable acknowledgement of
 server-assigned identifiers. A successful upload cannot remove the sole queued
 copy before its receipt and identity association are durable. An interrupted
 migration must resume without duplicate operations or records. Keep the source

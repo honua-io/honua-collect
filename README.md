@@ -165,8 +165,10 @@ python3 scripts/e2e/run-installed-android-upgrade.py emulator-5554 Collect.apk F
 
 The harness creates a queued inspection and a separate sketch in Collect,
 upgrades in place, opens Field, and checks the app UID, record ID and sketch
-hash. The [offline adoption journey](docs/mobile-offline-adoption.md) covers
-the broader migration, including drafts, assignments and sync history.
+hash. Field imports existing records into the Mobile SDK's GeoPackage store in
+the same encrypted database file. Related records and history retain their own
+tables. The [offline adoption journey](docs/mobile-offline-adoption.md) covers
+upgrade checks for drafts, assignments, photos and sync history.
 
 ### Server connection
 
