@@ -105,6 +105,7 @@ jobs:
       - name: Build historical Field iOS simulator app
         working-directory: field-previous
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-previous
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
@@ -112,6 +113,8 @@ jobs:
             -p:RestoreConfigFile="$PWD/NuGet.config" \
             --configuration Debug --disable-build-servers
       - name: Build candidate Field iOS simulator app
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-candidate
         run: |
           dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
             -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
