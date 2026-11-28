@@ -122,6 +122,10 @@ export APKSIGNER
 test -x "$APKSIGNER"
 adb_device=(adb -s "$serial")
 test "$("${adb_device[@]}" shell getprop ro.kernel.qemu)" = 1
+# The hosted emulator can show a background launcher ANR over the active app.
+"${adb_device[@]}" shell settings put global hide_error_dialogs 1
+"${adb_device[@]}" shell settings put secure anr_show_background 0
+"${adb_device[@]}" shell am force-stop com.google.android.apps.nexuslauncher
 install_result=$("${adb_device[@]}" install --no-streaming -r "$apk")
 grep -Fxq Success <<<"${install_result//$'\r'/}"
 test "$("${adb_device[@]}" shell pm clear io.honua.collect)" = Success
