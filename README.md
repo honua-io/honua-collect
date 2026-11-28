@@ -146,8 +146,10 @@ python3 scripts/e2e/run-installed-android-upgrade.py emulator-5554 Collect.apk F
 
 The harness creates a queued inspection and a separate sketch in Collect,
 upgrades in place, opens Field, and checks the app UID, record ID and sketch
-hash. The [offline adoption journey](docs/mobile-offline-adoption.md) covers
-the broader migration, including drafts, assignments and sync history.
+hash. Field imports existing records into the Mobile SDK's GeoPackage store in
+the same encrypted database file. Related records and history retain their own
+tables. The [offline adoption journey](docs/mobile-offline-adoption.md) covers
+upgrade checks for drafts, assignments, photos and sync history.
 
 ### Server connection
 
@@ -237,6 +239,7 @@ Repo docs:
 | [Data residency & self-host posture](docs/data-residency-and-self-host.md) | Where records live and how the connection is secured. |
 | [Migrating external forms](docs/migration-from-external-forms.md) | XLSForm import and protocol reuse for existing forms and data. |
 | [Chain of custody & provenance](docs/chain-of-custody.md) | Ed25519-signed capture manifests: what they prove and current limits. |
+| [Public NuGet package qualification](docs/verification/e2e/README.md#public-nuget-package-qualification) | Verify stock and assigned-work pilot restores against NuGet.org. |
 | [Device and server verification](docs/verification/e2e/README.md) | Reproduce the Android, iOS and live Honua Server checks and inspect their artifacts. |
 | [Mutation testing](docs/mutation-testing.md) | Stryker.NET setup and how the Core mutation score is measured. |
 

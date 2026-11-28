@@ -4,6 +4,33 @@ Proof that a form filled in the Honua Field app on an Android emulator is
 submitted over HTTP to a running Honua server and persisted as a row in
 PostgreSQL — the full capture → sync → store loop.
 
+## Public NuGet package qualification
+
+Field consumes the `Honua.Sdk.*` 5.2.0 release and Honua Mobile
+0.1.0-alpha.1 from NuGet.org. The Mobile packages are `Honua.Mobile.Sdk`,
+`Honua.Mobile.Offline`, `Honua.Mobile.Maui` and `Honua.Mobile.Offline.Tasks`.
+The assigned-work pilot selects `Honua.Mobile.Offline.Tasks` and has its own
+lock files. The app build exercises the MAUI package.
+
+To check both locked dependency graphs and run the platform-neutral suites,
+use the .NET SDK version in `global.json`. Run from the repository root
+with an empty package cache to verify the configured public source.
+
+```bash
+export NUGET_PACKAGES="$(mktemp -d)"
+for suite in Core Presentation; do
+  project="tests/Honua.Field.$suite.Tests/Honua.Field.$suite.Tests.csproj"
+  dotnet restore "$project" --configfile NuGet.config --locked-mode
+  dotnet test "$project" --no-restore --configuration Release
+  dotnet restore "$project" --configfile NuGet.config --locked-mode -p:EnableAssignedWorkPilot=true
+  dotnet test "$project" --no-restore --configuration Release -p:EnableAssignedWorkPilot=true
+done
+```
+
+The [Field CI workflow](../../../.github/workflows/ci.yml) checks the app build
+and unit test coverage. The device workflows below verify the installed
+Android and iOS apps against Honua Server.
+
 ## Published XLSForm Android gate
 
 The [Published forms on Android workflow](../../../.github/workflows/published-android.yml) builds two signed Debug APKs, starts the pinned Honua Server revision with PostGIS and publishes the inspection workbook. Maestro drives the native Field screens on Android API 33 under a layer-scoped worker account.
