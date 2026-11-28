@@ -24,9 +24,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # full history so gitleaks can scan every commit
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
 
       - name: Secret scan (gitleaks, full history)
         run: |
@@ -38,14 +35,6 @@ jobs:
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-
-      - name: Authenticate package feed
-        run: >-
-          dotnet nuget update source github-honua
-          --username ${{ github.actor }}
-          --password ${{ secrets.GITHUB_TOKEN }}
-          --store-password-in-clear-text
-          --configfile NuGet.config
 
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -101,9 +90,6 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
 
       - name: Verify upgrade identity
         run: python3 scripts/check-upgrade-identity.py
@@ -119,15 +105,6 @@ jobs:
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-
-      # The Honua.Sdk.* packages come from the private github-honua feed.
-      - name: Authenticate package feed
-        run: >-
-          dotnet nuget update source github-honua
-          --username ${{ github.actor }}
-          --password ${{ secrets.GITHUB_TOKEN }}
-          --store-password-in-clear-text
-          --configfile NuGet.config
 
       # Coverage gate: coverlet (MSBuild integration) collects line + branch
       # coverage and FAILS the build below the threshold. The per-type list maps
@@ -182,21 +159,10 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-
-      - name: Authenticate package feed
-        run: >-
-          dotnet nuget update source github-honua
-          --username ${{ github.actor }}
-          --password ${{ secrets.GITHUB_TOKEN }}
-          --store-password-in-clear-text
-          --configfile NuGet.config
 
       - name: Install Stryker.NET
         run: dotnet tool install dotnet-stryker --tool-path tools
@@ -215,21 +181,10 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
 
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
-
-      - name: Authenticate package feed
-        run: >-
-          dotnet nuget update source github-honua
-          --username ${{ github.actor }}
-          --password ${{ secrets.GITHUB_TOKEN }}
-          --store-password-in-clear-text
-          --configfile NuGet.config
 
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:

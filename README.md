@@ -55,36 +55,17 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 
 ## Quick start
 
-Install the .NET 11 SDK pinned in [global.json](global.json). Published Honua
-packages use GitHub Packages. This branch also pins SDK and Mobile validation
-packages to specific GitHub Actions artifacts. Authenticate `gh` with upstream
-Actions read access and GitHub Packages read access.
+Install the .NET 11 SDK version pinned in `global.json`. Field restores its NuGet packages from NuGet.org.
 
-From the repository root, prepare a temporary NuGet configuration and restore
-the two test projects. The verifier checks each archive and package against
-the [recorded checksums](.github/actions/mobile-validation-feed/artifacts.json).
+The logic and presentation layers build and test with the standard SDK — no
+Android toolchain needed:
 
 ```bash
-export HONUA_GITHUB_PACKAGES_USER="$(gh api user --jq .login)"
-export HONUA_GITHUB_PACKAGES_TOKEN="$(gh auth token)"
-feed_dir=$(mktemp -d)
-validator="$PWD/.github/actions/mobile-validation-feed/restore.py"
-cp NuGet.config "$feed_dir/NuGet.config"
-(cd "$feed_dir" && RUNNER_TEMP="$feed_dir" python3 "$validator")
-dotnet nuget update source github-honua --configfile "$feed_dir/NuGet.config" \
-  --username '%HONUA_GITHUB_PACKAGES_USER%' --password '%HONUA_GITHUB_PACKAGES_TOKEN%' \
-  --store-password-in-clear-text
-for project in Core Presentation; do
-  test_project="tests/Honua.Field.$project.Tests/Honua.Field.$project.Tests.csproj"
-  dotnet restore "$test_project" --configfile "$feed_dir/NuGet.config"
-  dotnet test "$test_project" --no-restore
-done
+dotnet test tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj
+dotnet test tests/Honua.Field.Presentation.Tests/Honua.Field.Presentation.Tests.csproj
 ```
 
-The temporary configuration stores the environment variable names. Keep those
-variables set for subsequent builds. These tests run with the standard .NET SDK.
-See the [offline runtime guide](docs/mobile-offline-adoption.md#assigned-work-pilot)
-for the pilot build switch and release package requirements.
+See the [offline runtime guide](docs/mobile-offline-adoption.md#assigned-work-pilot) for the pilot build switch.
 
 ### Run the app on an Android emulator
 
@@ -98,14 +79,14 @@ export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$
 
 dotnet workload install maui-android
 dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
-  -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True -p:RestoreConfigFile="$feed_dir/NuGet.config" \
+  -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True \
   -p:AndroidSdkDirectory=$ANDROID_HOME -p:JavaSdkDirectory=$JAVA_HOME
 
 emulator -avd honua -no-window -gpu swiftshader_indirect &
 adb wait-for-device
 
 # Debug deploy to the running emulator:
-dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android -t:Install -p:RestoreConfigFile="$feed_dir/NuGet.config" \
+dotnet build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android -t:Install \
   -p:AndroidSdkDirectory=$ANDROID_HOME -p:JavaSdkDirectory=$JAVA_HOME \
   -p:AdbTarget="-s emulator-5554"
 adb shell monkey -p io.honua.collect -c android.intent.category.LAUNCHER 1
