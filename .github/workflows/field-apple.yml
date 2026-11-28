@@ -83,6 +83,7 @@ jobs:
       - name: Capture and undo a polygon on ${{ matrix.family }}
         env:
           FAMILY: ${{ matrix.family }}
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "180000"
         run: |
           app=$(find src/Honua.Field.App/bin/Debug/net11.0-ios/iossimulator-arm64 -maxdepth 1 -name '*.app' -type d)
           test -d "$app"
