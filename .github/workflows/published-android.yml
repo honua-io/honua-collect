@@ -26,7 +26,7 @@ jobs:
         run: printf "NUGET_PACKAGES=%s/field-candidate-packages\nNUGET_HTTP_CACHE_PATH=%s/field-candidate-http\n" "$RUNNER_TEMP" "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 3 # two workflow commits plus the exact candidate
+          fetch-depth: 0 # include the exact candidate beneath the workflow commits
           persist-credentials: false
       - uses: ./.github/actions/mobile-validation-feed
         with:
@@ -163,7 +163,7 @@ jobs:
 
               assets = json.loads((Path(repo) / "src/Honua.Field.App/obj/project.assets.json").read_text())
               assert set(map(Path, assets["packageFolders"])) == {cache}, assets["packageFolders"]
-              installed = [tuple(key.lower().split("/")) for key in assets["libraries"]]
+              installed = {tuple(key.lower().split("/")): details for key, details in assets["libraries"].items()}
               mobile = {name for name, version in installed if name.startswith("honua.mobile.")}
               if repo == ".":
                   assert mobile == {name.lower() for name in signed["packages"]}, mobile
@@ -171,25 +171,38 @@ jobs:
                   assert mobile == {"honua.mobile.sdk", "honua.mobile.offline", "honua.mobile.field", "honua.mobile.maui"}, mobile
               assert ("honua.sdk.field", sdk_version) in installed, (repo, sdk_version)
 
-              for name, version in installed:
+              for (name, version), asset in installed.items():
                   if name not in mobile and name != "honua.sdk.field":
                       continue
                   folder = cache / name / version
                   package = (folder / f"{name}.{version}.nupkg").read_bytes()
                   sha256 = hashlib.sha256(package).hexdigest()
-                  digest = base64.b64encode(hashlib.sha512(package).digest()).decode()
-                  source = json.loads((folder / ".nupkg.metadata").read_text())["source"]
+                  byte_hash = base64.b64encode(hashlib.sha512(package).digest()).decode()
+                  metadata = json.loads((folder / ".nupkg.metadata").read_text())
+                  source = metadata["source"]
+                  content_hash = metadata["contentHash"]
+                  # NuGet hashes the content of signed packages without their repository signature.
+                  assert content_hash == asset["sha512"], (repo, name, "NuGet content hash differs from restored assets")
                   if (name, version) in dependencies:
-                      assert digest == dependencies[name, version], (repo, name, "archived lock hash mismatch")
+                      assert content_hash == dependencies[name, version], (repo, name, "archived lock content hash mismatch")
                   else:
                       assert name == "honua.mobile.maui", (repo, name, "no archived lock hash")
                   if repo == "." and name in mobile:
                       assert version == signed["version"]
+                      assert byte_hash == content_hash, (name, "signed-release Mobile nupkg bytes differ from content hash")
                       assert sha256 == {key.lower(): value for key, value in signed["packages"].items()}[name], name
                       assert Path(source).parent == runner and Path(source).name.startswith("honua-validation-feed."), (name, source)
+                  if repo == "." and name == "honua.sdk.field":
+                      assert source == "https://api.nuget.org/v3/index.json", (name, source)
                   if repo == "field-previous":
                       assert source == "https://nuget.pkg.github.com/honua-io/index.json", (repo, name, source)
-                  print(f"{repo} {name}/{version} sha256={sha256} sha512={digest} source={source}")
+                      if name in mobile:
+                          assert version == "0.1.0-alpha.1", (name, version)
+                          assert byte_hash == content_hash, (name, "historical Mobile nupkg bytes differ from content hash")
+                          if name == "honua.mobile.maui":
+                              # The historical app has no Maui lock entry. Pin the bytes independently restored from GitHub Packages.
+                              assert sha256 == "4eb5d5ad815b402bce9e0dd77bf28d509cd45417c1b142739fdf2a01937d053d", name
+                  print(f"{repo} {name}/{version} sha256={sha256} byteSha512={byte_hash} nugetContentHash={content_hash} source={source}")
 
           server_assets = json.loads(Path("server-candidate/src/Honua.Server/obj/project.assets.json").read_text())
           assert set(map(Path, server_assets["packageFolders"])) == {runner / "field-server-packages"}, server_assets["packageFolders"]
