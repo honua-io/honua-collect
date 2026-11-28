@@ -105,7 +105,8 @@ jobs:
                private async Task CaptureVideoAsync(FieldViewModel field)
           PATCH
             fi
-            (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            packages=$(mktemp -d "$RUNNER_TEMP/field-nuget.XXXXXX")
+            (cd "$checkout" && NUGET_PACKAGES="$packages" dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
               -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier="$FIELD_RUNTIME" \
               -p:RestoreConfigFile="$PWD/NuGet.config" "${pilot[@]}" "${signing[@]}" \
               --configuration Debug --disable-build-servers)

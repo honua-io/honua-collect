@@ -83,12 +83,15 @@ jobs:
       # The APK restore writes Android RID lock entries to the shared projects.
       - name: Build ordinary feature sync integration tests
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-candidate
           MSBuildEnableWorkloadResolver: "false"
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
             -c Release -p:RestoreLockedMode=true
 
       - name: Build current standalone .NET 11 Debug APK with assigned work
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-candidate
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
@@ -105,6 +108,7 @@ jobs:
       - name: Build historical standalone .NET 11 Debug APK
         working-directory: field-previous
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/field-nuget-previous
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
