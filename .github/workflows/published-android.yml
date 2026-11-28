@@ -46,9 +46,10 @@ jobs:
         id: server
         shell: bash
         run: |
-          revision=$(cat staged-harness/scripts/e2e/fixtures/server-revision.txt)
+          revision=$(cat field-under-test/scripts/e2e/fixtures/server-revision.txt)
           [[ $revision =~ ^[a-f0-9]{40}$ ]]
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          cp field-under-test/scripts/e2e/fixtures/server-revision.txt staged-harness/scripts/e2e/fixtures/server-revision.txt
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         id: server-checkout
         with:
