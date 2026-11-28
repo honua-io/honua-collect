@@ -50,15 +50,7 @@ picture, kept current in [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md):
 
 ## Quick start
 
-Prerequisites: .NET 11 SDK (pinned in `global.json`). The `Honua.Sdk.*` / `Honua.Mobile.*` packages come
-from the github-honua NuGet feed, which requires an authenticated GitHub token
-with `read:packages`:
-
-```bash
-gh auth refresh -s read:packages
-export HONUA_GITHUB_PACKAGES_USER="$(gh api user --jq .login)"
-export HONUA_GITHUB_PACKAGES_TOKEN="$(gh auth token)"
-```
+Install the .NET 11 SDK version pinned in `global.json`. Field restores its NuGet packages from NuGet.org.
 
 The logic and presentation layers build and test with the standard SDK — no
 Android toolchain needed:

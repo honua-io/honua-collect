@@ -46,9 +46,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
       - name: Check out the previous Field Android version
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -83,14 +80,11 @@ jobs:
       - name: Build ordinary feature sync integration tests
         env:
           MSBuildEnableWorkloadResolver: "false"
-          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
             -c Release -p:RestoreLockedMode=true
 
       - name: Build current standalone .NET 11 Debug APK
-        env:
-          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
