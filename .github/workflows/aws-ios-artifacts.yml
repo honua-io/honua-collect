@@ -26,7 +26,7 @@ permissions:
   packages: read
 jobs:
   apps:
-    runs-on: xcode-27
+    runs-on: xcode-27-xlarge
     timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
