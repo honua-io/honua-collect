@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - '.github/actions/mobile-validation-feed/**'
       - .github/workflows/field-apple.yml
       - scripts/e2e/maestro/geometry-ios.yaml
       - src/**
@@ -15,7 +14,6 @@ on:
   push:
     branches: [trunk]
     paths:
-      - '.github/actions/mobile-validation-feed/**'
       - .github/workflows/field-apple.yml
       - scripts/e2e/maestro/geometry-ios.yaml
       - src/**
