@@ -102,16 +102,21 @@ jobs:
           echo "$(brew --prefix postgresql@18)/bin" >> "$GITHUB_PATH"
       - name: Install MAUI iOS workload
         run: dotnet workload install maui-ios
-      - name: Build both Field iOS simulator apps
+      - name: Build historical Field iOS simulator app
+        working-directory: field-previous
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
-          for checkout in field-previous .; do
-            (cd "$checkout" && dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
-              -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
-              -p:RestoreConfigFile="$PWD/NuGet.config" \
-              --configuration Debug --disable-build-servers)
-          done
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+            -p:RestoreConfigFile="$PWD/NuGet.config" \
+            --configuration Debug --disable-build-servers
+      - name: Build candidate Field iOS simulator app
+        run: |
+          dotnet build src/Honua.Field.App/Honua.Field.App.csproj \
+            -p:FieldTargetFramework=net11.0-ios -p:RuntimeIdentifier=iossimulator-arm64 \
+            -p:RestoreConfigFile="$PWD/NuGet.config" \
+            --configuration Debug --disable-build-servers
       - name: Publish the candidate server for macOS
         working-directory: server-candidate
         env:
