@@ -1,30 +1,9 @@
-name: Published forms on Android
+name: Field #214 exact-trunk ordinary photo
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/published-android.yml
-      - .github/workflows/run-published-android-gate.sh
-      - scripts/e2e/**
-      - src/**
-      - Directory.Build.*
-      - Directory.Packages.props
-      - NuGet.config
-      - global.json
-  push:
-    branches: [trunk]
-    paths:
-      - .github/workflows/published-android.yml
-      - .github/workflows/run-published-android-gate.sh
-      - scripts/e2e/**
-      - src/**
-      - Directory.Build.*
-      - Directory.Packages.props
-      - NuGet.config
-      - global.json
-
 permissions:
+  actions: read
   contents: read
   packages: read
 
@@ -36,6 +15,8 @@ jobs:
     timeout-minutes: 60
     env:
       HONUA_E2E_HTTP_PORT: '5189'
+      HONUA_E2E_FIELD_REVISION: eae4e684b52ef938093b9a0a347e378973b03b28
+      HONUA_E2E_HARNESS_REVISION: 5249a5cfbddb6345d0d5ce34171071b60ad829c3
       HONUA_E2E_PUBLISH_NEXT_VERSION: '1'
       HONUA_E2E_PG_CONTAINER: honua-field-xlsform-pg
       MAESTRO_CLI_NO_ANALYTICS: '1'
@@ -45,17 +26,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Check out the previous Field Android version
+      - uses: ./.github/actions/mobile-validation-feed
+        with:
+          token: ${{ github.token }}
+      - name: Check out pinned ordinary-photo harness
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: fb16d0bccaba7c48c6982f3bea4c0c013e5b31b1 # Android versionCode 3
-          path: field-previous
+          ref: ${{ env.HONUA_E2E_HARNESS_REVISION }}
+          path: staged-harness
           persist-credentials: false
+      - name: Check out exact trunk Field source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.HONUA_E2E_FIELD_REVISION }}
+          path: field-under-test
+          persist-credentials: false
+      - name: Verify exact Field and harness revisions
+        run: |
+          test "$(git -C field-under-test rev-parse HEAD)" = "$HONUA_E2E_FIELD_REVISION"
+          test "$(git -C staged-harness rev-parse HEAD)" = "$HONUA_E2E_HARNESS_REVISION"
       - name: Read pinned Honua Server revision
         id: server
         shell: bash
         run: |
-          revision=$(cat scripts/e2e/fixtures/server-revision.txt)
+          revision=$(cat staged-harness/scripts/e2e/fixtures/server-revision.txt)
           [[ $revision =~ ^[a-f0-9]{40}$ ]]
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -69,56 +63,23 @@ jobs:
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '17'
-      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-previous-dotnet
-        with:
-          dotnet-version: '10.0.403'
-      - name: Build historical standalone .NET 10 Debug APK
-        env:
-          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd field-previous
-          printf '%s\n' '{"sdk":{"version":"10.0.403","rollForward":"disable"}}' > global.json
-          field_dotnet="$RUNNER_TEMP/field-previous-dotnet/dotnet"
-          "$field_dotnet" workload install maui-android
-          "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
-            -f net10.0-android -c Debug -t:SignAndroidPackage \
-            -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
-            -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
-          mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net10.0-android -type f -name '*-Signed.apk' -print0)
-          test "${#apks[@]}" -eq 1
-          cp "${apks[0]}" "$RUNNER_TEMP/honua-field-previous.apk"
-
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          distribution: temurin
           java-version: '21'
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         env:
           DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
         with:
-          global-json-file: global.json
-      # The APK restore writes Android RID lock entries to the shared projects.
-      - name: Build ordinary feature sync integration tests
-        env:
-          MSBuildEnableWorkloadResolver: "false"
-          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
-        run: |
-          "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
-            -c Release -p:RestoreLockedMode=true
-
-      - name: Build current standalone .NET 11 Debug APK
+          global-json-file: field-under-test/global.json
+      - name: Build exact-trunk standalone .NET 11 Debug APK with assigned work
+        working-directory: field-under-test
         env:
           NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
           "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj -f net11.0-android \
-            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True
+            -t:InstallAndroidDependencies -p:AcceptAndroidSDKLicenses=True -p:EnableAssignedWorkPilot=true
           "$field_dotnet" build src/Honua.Field.App/Honua.Field.App.csproj \
-            -f net11.0-android -c Debug -t:SignAndroidPackage \
+            -f net11.0-android -c Debug -t:SignAndroidPackage -p:EnableAssignedWorkPilot=true \
             -p:AndroidPackageFormats=apk -p:AndroidKeyStore=false \
             -p:EmbedAssembliesIntoApk=true -p:RuntimeIdentifier=android-x64
           mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net11.0-android -type f -name '*-Signed.apk' -print0)
@@ -150,7 +111,7 @@ jobs:
           printf 'MAESTRO=%s/maestro/bin/maestro\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Enable emulator hardware acceleration
         run: sudo chmod a+rw /dev/kvm
-      - name: Run offline published inspection gate
+      - name: Run exact-trunk ordinary photo gate
         uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
         env:
           HONUA_E2E_SERVER_REVISION: ${{ steps.server-checkout.outputs.commit }}
@@ -164,23 +125,11 @@ jobs:
           disable-animations: true
           disable-spellchecker: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics -camera-back none
-          script: bash .github/workflows/run-published-android-gate.sh
+          script: bash .github/workflows/run-214-ordinary-photo-validation.sh
       - name: Upload emulator test results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: published-android-results
-          path: |
-            ${{ runner.temp }}/published-android-report/*/failure.png
-            ${{ runner.temp }}/published-android-report/*/server-readback.json
-            ${{ runner.temp }}/published-android-report/*/correction-ledger.json
-            ${{ runner.temp }}/published-android-report/*/[0-9]-*.xml
-            ${{ runner.temp }}/published-android-report/upgrade/*.xml
-            ${{ runner.temp }}/published-android-report/adaptive/*
-            ${{ runner.temp }}/published-android-report/gps-geometry/*
-            ${{ runner.temp }}/published-android-report/upgrade/failure-state.json
-            ${{ runner.temp }}/published-android-report/upgrade/before.json
-            ${{ runner.temp }}/published-android-report/upgrade/after.json
-            ${{ runner.temp }}/published-android-report/upgrade/recovered-key.json
-          if-no-files-found: ignore
-          retention-days: 7
+          name: field-214-exact-trunk-ordinary-photo
+          path: ${{ runner.temp }}/published-android-report/ordinary-photo/
+          if-no-files-found: error
