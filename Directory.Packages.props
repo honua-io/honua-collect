@@ -4,8 +4,8 @@
     PackageReference items in the csproj files carry no Version. This is the
     lockfile-compatible configuration (it replaces the MSBuild property-valued
     PackageReference versions that previously blocked RestorePackagesWithLockFile
-    with NU1015). The SDK-train properties below come from Directory.Build.props,
-    which is imported before this file — keep bumping the train there (see #31).
+    with NU1015). Update the SDK and Mobile package trains below, then
+    regenerate the lock files for both assigned-work configurations.
   -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
@@ -19,23 +19,21 @@
     in #31), then re-run restore to refresh the lockfiles.
   -->
   <PropertyGroup>
-    <!-- Validation only. Replace both pins with signed published versions and remove the artifact feed before merge. -->
-    <HonuaSdkDotNetTrainVersion>5.1.1-fieldcombined.1</HonuaSdkDotNetTrainVersion>
-    <HonuaSdkOrdinaryClientVersion>2.2.0</HonuaSdkOrdinaryClientVersion>
-    <HonuaMobileVersion>0.1.0-fieldcombined.45975064870.1</HonuaMobileVersion>
+    <HonuaSdkDotNetTrainVersion>5.2.0</HonuaSdkDotNetTrainVersion>
+    <HonuaMobileVersion>0.1.0-alpha.1</HonuaMobileVersion>
     <MauiVersion>11.0.10</MauiVersion>
   </PropertyGroup>
 
-  <!-- First-party Honua platform packages (private github-honua feed). -->
+  <!-- First-party Honua platform packages. -->
   <ItemGroup>
     <PackageVersion Include="Honua.Sdk.Field" Version="$(HonuaSdkDotNetTrainVersion)" />
-    <PackageVersion Include="Honua.Sdk.GeoServices" Version="$(HonuaSdkOrdinaryClientVersion)" />
-    <PackageVersion Include="Honua.Sdk.Geometry" Version="$(HonuaSdkOrdinaryClientVersion)" />
+    <PackageVersion Include="Honua.Sdk.GeoServices" Version="$(HonuaSdkDotNetTrainVersion)" />
+    <PackageVersion Include="Honua.Sdk.Geometry" Version="$(HonuaSdkDotNetTrainVersion)" />
     <PackageVersion Include="Honua.Mobile.Sdk" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline" Version="$(HonuaMobileVersion)" />
     <PackageVersion Include="Honua.Mobile.Offline.Tasks" Version="$(HonuaMobileVersion)" Condition="'$(EnableAssignedWorkPilot)' == 'true'" />
     <PackageVersion Include="Honua.Mobile.Maui" Version="$(HonuaMobileVersion)" />
-    <PackageVersion Include="Geospatial.Grpc" Version="1.0.2" />
+    <PackageVersion Include="Geospatial.Grpc" Version="1.5.0" />
   </ItemGroup>
 
   <!--

@@ -52,9 +52,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
       - name: Check out the previous Field Android version
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -85,9 +82,15 @@ jobs:
           DOTNET_INSTALL_DIR: ${{ runner.temp }}/field-dotnet
         with:
           global-json-file: global.json
-      - name: Build current standalone .NET 11 Debug APK with assigned work
+      # The APK restore writes Android RID lock entries to the shared projects.
+      - name: Build ordinary feature sync integration tests
         env:
-          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+          MSBuildEnableWorkloadResolver: "false"
+        run: |
+          "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests/Honua.Field.Core.Tests.csproj \
+            -c Release -p:RestoreLockedMode=true
+
+      - name: Build current standalone .NET 11 Debug APK with assigned work
         run: |
           field_dotnet="$RUNNER_TEMP/field-dotnet/dotnet"
           "$field_dotnet" workload install maui-android
@@ -100,12 +103,6 @@ jobs:
           mapfile -d '' apks < <(find src/Honua.Field.App/bin/Debug/net11.0-android -type f -name '*-Signed.apk' -print0)
           test "${#apks[@]}" -eq 1
           cp "${apks[0]}" "$RUNNER_TEMP/honua-field.apk"
-
-      - name: Build Field feature sync integration tests
-        env:
-          NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
-        run: |
-          "$RUNNER_TEMP/field-dotnet/dotnet" build tests/Honua.Field.Core.Tests
 
       - name: Build historical standalone .NET 11 Debug APK
         working-directory: field-previous

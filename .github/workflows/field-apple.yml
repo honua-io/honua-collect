@@ -40,14 +40,10 @@ jobs:
         family: [iPhone, iPad]
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
-      NuGetPackageSourceCredentials_github-honua: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: ./.github/actions/mobile-validation-feed
-        with:
-          token: ${{ github.token }}
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
