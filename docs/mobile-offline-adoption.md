@@ -169,13 +169,11 @@ acceptance.
 ## Assigned-work pilot
 
 Build with `-p:EnableAssignedWorkPilot=true` to compile the assigned-work lifecycle
-integration. Restore this build using a NuGet configuration with the versioned
-candidate packages from Mobile PR #456 (`0.1.0-fieldtasks.45963856191.1`) and SDK PR #596
-(`5.1.1-fieldtasks.3`), alongside the normal public dependencies. Default builds
-exclude the pilot and its package dependencies. The pilot adds no Today screen.
-The hosted Assigned work pilot job verifies the package archive digests recorded
-in `.github/actions/assigned-work-validation-feed/artifacts.json`. These
-validation artifacts expire and require replacement by approved packages before rollout.
+integration. The pilot restores the published Mobile 0.1.0-alpha.1 packages,
+including `Honua.Mobile.Offline.Tasks`, and `Honua.Sdk.Field` 5.2.0 from
+nuget.org. Default builds exclude the pilot and its task adapter. The hosted
+Assigned work pilot job tests the opt-in graph and verifies assignment behavior
+on an installed Android app.
 
 The pilot restores the saved authenticated session after encrypted storage opens.
 Use the canonical service ID from server metadata and the authenticated user ID
@@ -187,5 +185,4 @@ versions, and persist receipts or terminal conflict evidence in the account's
 encrypted store.
 
 The host integration tests exercise the versioned packages and encrypted store
-with controlled HTTP responses. A pilot rollout also requires those dependencies
-on a trusted feed and verification with a deployed server and installed app.
+with controlled HTTP responses. A pilot rollout also requires verification with a deployed server and installed app.
